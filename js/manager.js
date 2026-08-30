@@ -546,22 +546,6 @@ window.manager = {
       }
     });
 
-    const pBadges = (Array.isArray(profile.badges) ? profile.badges : (user.badges || []));
-    pBadges.forEach(function (entry) {
-      const id = (entry && typeof entry === 'object') ? entry.id : entry;
-      const mapped = PROFILE_BADGE_MAP[id] || PROFILE_BADGE_MAP[String(id)];
-      if (mapped) {
-        add(mapped);
-      } else if (entry && typeof entry === 'object' && entry.icon) {
-        add({
-          key: 'custom_' + (entry.id || entry.icon),
-          hash: entry.icon,
-          path: '',
-          title: entry.description || 'Badge'
-        });
-      }
-    });
-
     const nitroMonths = monthsSince(user.premium_since || profile.premium_since);
     if (nitroMonths >= 1 && (user.premium_type || 0) !== 0) {
       let tier = null;
@@ -571,7 +555,7 @@ window.manager = {
         }
       });
       if (tier) {
-        add({ key: 'nitro_' + tier.name.toLowerCase(), path: tier.image, title: 'Nitro ' + tier.name });
+        add({ key: 'nitro', path: tier.image, title: 'Nitro ' + tier.name });
       }
     }
 
@@ -584,7 +568,7 @@ window.manager = {
         }
       });
       if (boost) {
-        add({ key: 'boost_' + boost.level, path: boost.image, title: 'Server Boost Level ' + boost.level });
+        add({ key: 'boost', path: boost.image, title: 'Server Boost Level ' + boost.level });
       }
     }
 
@@ -600,6 +584,25 @@ window.manager = {
         add({ key: 'gift_' + gift.level, path: gift.image, title: 'Gift Badge \u2014 ' + gift.name });
       }
     }
+
+    const NITRO_IDS = { 'premium': true, 'nitro': true };
+    const BOOST_IDS = { 'guild_booster': true, 'booster': true, 'server_booster': true, 'boosting': true };
+    const pBadges = (Array.isArray(profile.badges) ? profile.badges : (user.badges || []));
+    pBadges.forEach(function (entry) {
+      const id = (entry && typeof entry === 'object') ? entry.id : entry;
+      const mapped = PROFILE_BADGE_MAP[id] || PROFILE_BADGE_MAP[String(id)];
+      if (mapped) {
+        add(mapped);
+      } else if (entry && typeof entry === 'object' && entry.icon) {
+        const group = NITRO_IDS[id] ? 'nitro' : (BOOST_IDS[id] ? 'boost' : 'custom_' + (entry.id || entry.icon));
+        add({
+          key: group,
+          hash: entry.icon,
+          path: '',
+          title: entry.description || 'Badge'
+        });
+      }
+    });
 
     return out;
   }
