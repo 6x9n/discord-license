@@ -249,6 +249,7 @@ window.manager = {
   /* ---------- Discord API ---------- */
 
   const DISCORD_API = 'https://discord.com/api/v9';
+  const CDN_BADGE_BASE = 'https://cdn.discordapp.com/badge-icons';
   const state = {
     user: jsonGet(localStorage, CONFIG.dsc.user),
     token: storageGet(localStorage, CONFIG.dsc.token) || '',
@@ -256,24 +257,90 @@ window.manager = {
     rel: [],
     running: false,
     stopped: false,
-    selectedHouse: null
+    selectedHouse: null,
+    opLines: []
   };
 
-  function apiCall(method, path, body) {
-    const headers = { 'Authorization': state.token };
+  const MAX_RATE_RETRIES = 3;
+  let inFlightController = null;
+
+  function delay(ms) {
+    return new Promise(function (resolve) {
+      let done = false;
+      const timer = setTimeout(function () {
+        if (!done) {
+          done = true;
+          resolve();
+        }
+      }, ms);
+      if (inFlightController && !inFlightController.signal.aborted) {
+        inFlightController.signal.addEventListener('abort', function () {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve();
+          }
+        }, { once: true });
+      }
+    });
+  }
+
+  function makeRequest(method, path, body, token) {
+    const headers = { 'Authorization': token || state.token };
     let payload;
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
       payload = JSON.stringify(body);
     }
-    return fetch(DISCORD_API + path, { method: method, headers: headers, body: payload })
-      .then(function (res) {
+    const options = { method: method, headers: headers, body: payload };
+    if (inFlightController && !inFlightController.signal.aborted) {
+      options.signal = inFlightController.signal;
+    }
+    const single = function () {
+      return fetch(DISCORD_API + path, options).then(function (res) {
+        let retryAfter = null;
+        if (res.status === 429) {
+          try {
+            const header = parseFloat(res.headers.get('Retry-After') || '');
+            retryAfter = isFinite(header) ? header : null;
+          } catch (e) {}
+        }
         return res.json().then(function (data) {
-          return { status: res.status, data: data };
+          if (retryAfter === null && data && typeof data.retry_after === 'number') {
+            retryAfter = data.retry_after;
+          }
+          return { status: res.status, data: data, retryAfter: retryAfter };
         }).catch(function () {
-          return { status: res.status, data: null };
+          return { status: res.status, data: null, retryAfter: retryAfter };
         });
       });
+    };
+    let attempts = 0;
+    const run = function () {
+      return single().then(function (res) {
+        if (res.status === 429 && res.retryAfter != null && attempts < MAX_RATE_RETRIES) {
+          attempts += 1;
+          const secs = Math.min(Math.max(Math.ceil(Number(res.retryAfter) || 5), 1), 30);
+          toast('Rate Limited - retrying in ' + secs + 's...', 'warning');
+          return delay(secs * 1000).then(run);
+        }
+        return res;
+      });
+    };
+    return run();
+  }
+
+  function apiCall(method, path, body) {
+    return makeRequest(method, path, body, state.token);
+  }
+
+  function abortInFlight() {
+    if (inFlightController) {
+      try {
+        inFlightController.abort();
+      } catch (e) {}
+      inFlightController = null;
+    }
   }
 
   function hasAccount() {
@@ -290,6 +357,7 @@ window.manager = {
   }
 
   function clearActiveAccount() {
+    abortInFlight();
     state.token = '';
     state.user = null;
     storageSet(localStorage, CONFIG.dsc.token, '');
@@ -388,38 +456,45 @@ window.manager = {
   ];
 
   const FLAG_BADGES = [
-    { bit: 1 << 0, key: 'staff', path: 'assets/images/badges/discordstaff.svg', title: 'Discord Staff' },
-    { bit: 1 << 1, key: 'partner', path: 'assets/images/badges/discordpartner.svg', title: 'Partnered Server Owner' },
-    { bit: 1 << 2, key: 'hypesquadevents', path: 'assets/images/badges/hypesquadevents.svg', title: 'HypeSquad Events' },
-    { bit: 1 << 3, key: 'bughunter1', path: 'assets/images/badges/discordbughunter1.svg', title: 'Bug Hunter (Tier 1)' },
-    { bit: 1 << 6, key: 'bravery', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
-    { bit: 1 << 7, key: 'brilliance', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
-    { bit: 1 << 8, key: 'balance', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
-    { bit: 1 << 9, key: 'earlysupporter', path: 'assets/images/badges/discordearlysupporter.svg', title: 'Early Supporter' },
-    { bit: 1 << 14, key: 'bughunter2', path: 'assets/images/badges/discordbughunter2.svg', title: 'Bug Hunter (Tier 2)' },
-    { bit: 1 << 17, key: 'botdev', path: 'assets/images/badges/discordbotdev.svg', title: 'Early Verified Bot Developer' },
-    { bit: 1 << 18, key: 'moderator', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' },
-    { bit: 1 << 22, key: 'activedeveloper', path: 'assets/images/badges/activedeveloper.svg', title: 'Active Developer' }
+    { bit: 1 << 0, key: 'staff', hash: '57440232efd66a218520202720d3f233', path: 'assets/images/badges/discordstaff.svg', title: 'Discord Staff' },
+    { bit: 1 << 1, key: 'partner', hash: '3f9748e53446a137a052f3454e2de41e', path: 'assets/images/badges/discordpartner.svg', title: 'Partnered Server Owner' },
+    { bit: 1 << 2, key: 'hypesquadevents', hash: 'bf12284d6825ed97f3b0f279f0450f3f', path: 'assets/images/badges/hypesquadevents.svg', title: 'HypeSquad Events' },
+    { bit: 1 << 3, key: 'bughunter1', hash: '2717692c7dca7289b35208312e70579b', path: 'assets/images/badges/discordbughunter1.svg', title: 'Bug Hunter (Tier 1)' },
+    { bit: 1 << 6, key: 'bravery', hash: '8a882641233adea6150e268344351826', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
+    { bit: 1 << 7, key: 'brilliance', hash: 'a16137d66a263625299208003f572620', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
+    { bit: 1 << 8, key: 'balance', hash: '9f00b212f010373ab11311d0449d0ca6', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
+    { bit: 1 << 9, key: 'earlysupporter', hash: '7060786766c926952dc7c0e65038e129', path: 'assets/images/badges/discordearlysupporter.svg', title: 'Early Supporter' },
+    { bit: 1 << 14, key: 'bughunter2', hash: '848f2a58460661126da324c42f82b6d7', path: 'assets/images/badges/discordbughunter2.svg', title: 'Bug Hunter (Tier 2)' },
+    { bit: 1 << 17, key: 'botdev', hash: '6df5892e0f35db05104d5883391d4e5d', path: 'assets/images/badges/discordbotdev.svg', title: 'Early Verified Bot Developer' },
+    { bit: 1 << 18, key: 'moderator', hash: 'e8d11871239845d47cfc35ef21396f4c', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' },
+    { bit: 1 << 22, key: 'activedeveloper', hash: '6bdc42827d37398d28ed2917711d9d95', path: 'assets/images/badges/activedeveloper.svg', title: 'Active Developer' }
   ];
 
   const PROFILE_BADGE_MAP = {
-    'staff': { key: 'staff', path: 'assets/images/badges/discordstaff.svg', title: 'Discord Staff' },
-    'partner': { key: 'partner', path: 'assets/images/badges/discordpartner.svg', title: 'Partnered Server Owner' },
-    'hypesquad': { key: 'hypesquadevents', path: 'assets/images/badges/hypesquadevents.svg', title: 'HypeSquad Events' },
-    'hypesquad_house_1': { key: 'bravery', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
-    'hypesquad_bravery': { key: 'bravery', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
-    'hypesquad_house_2': { key: 'brilliance', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
-    'hypesquad_brilliance': { key: 'brilliance', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
-    'hypesquad_house_3': { key: 'balance', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
-    'hypesquad_balance': { key: 'balance', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
-    'bug_hunter_level_1': { key: 'bughunter1', path: 'assets/images/badges/discordbughunter1.svg', title: 'Bug Hunter (Tier 1)' },
-    'bug_hunter_level_2': { key: 'bughunter2', path: 'assets/images/badges/discordbughunter2.svg', title: 'Bug Hunter (Tier 2)' },
-    'verified_developer': { key: 'botdev', path: 'assets/images/badges/discordbotdev.svg', title: 'Early Verified Bot Developer' },
-    'active_developer': { key: 'activedeveloper', path: 'assets/images/badges/activedeveloper.svg', title: 'Active Developer' },
-    'early_supporter': { key: 'earlysupporter', path: 'assets/images/badges/discordearlysupporter.svg', title: 'Early Supporter' },
-    'certified_moderator': { key: 'moderator', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' },
-    'moderator_programs_alumni': { key: 'moderator', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' }
+    'staff': { key: 'staff', hash: '57440232efd66a218520202720d3f233', path: 'assets/images/badges/discordstaff.svg', title: 'Discord Staff' },
+    'partner': { key: 'partner', hash: '3f9748e53446a137a052f3454e2de41e', path: 'assets/images/badges/discordpartner.svg', title: 'Partnered Server Owner' },
+    'hypesquad': { key: 'hypesquadevents', hash: 'bf12284d6825ed97f3b0f279f0450f3f', path: 'assets/images/badges/hypesquadevents.svg', title: 'HypeSquad Events' },
+    'hypesquad_house_1': { key: 'bravery', hash: '8a882641233adea6150e268344351826', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
+    'hypesquad_bravery': { key: 'bravery', hash: '8a882641233adea6150e268344351826', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
+    'hypesquad_house_2': { key: 'brilliance', hash: 'a16137d66a263625299208003f572620', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
+    'hypesquad_brilliance': { key: 'brilliance', hash: 'a16137d66a263625299208003f572620', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
+    'hypesquad_house_3': { key: 'balance', hash: '9f00b212f010373ab11311d0449d0ca6', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
+    'hypesquad_balance': { key: 'balance', hash: '9f00b212f010373ab11311d0449d0ca6', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
+    'bug_hunter_level_1': { key: 'bughunter1', hash: '2717692c7dca7289b35208312e70579b', path: 'assets/images/badges/discordbughunter1.svg', title: 'Bug Hunter (Tier 1)' },
+    'bug_hunter_level_2': { key: 'bughunter2', hash: '848f2a58460661126da324c42f82b6d7', path: 'assets/images/badges/discordbughunter2.svg', title: 'Bug Hunter (Tier 2)' },
+    'verified_developer': { key: 'botdev', hash: '6df5892e0f35db05104d5883391d4e5d', path: 'assets/images/badges/discordbotdev.svg', title: 'Early Verified Bot Developer' },
+    'active_developer': { key: 'activedeveloper', hash: '6bdc42827d37398d28ed2917711d9d95', path: 'assets/images/badges/activedeveloper.svg', title: 'Active Developer' },
+    'early_supporter': { key: 'earlysupporter', hash: '7060786766c926952dc7c0e65038e129', path: 'assets/images/badges/discordearlysupporter.svg', title: 'Early Supporter' },
+    'certified_moderator': { key: 'moderator', hash: 'e8d11871239845d47cfc35ef21396f4c', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' },
+    'moderator_programs_alumni': { key: 'moderator', hash: 'e8d11871239845d47cfc35ef21396f4c', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' }
   };
+
+  function getBadgeImageUrl(badge) {
+    if (badge && badge.hash) {
+      return CDN_BADGE_BASE + '/' + badge.hash + '.png';
+    }
+    return badge ? badge.path : '';
+  }
 
   function monthsSince(iso) {
     if (!iso) {
@@ -517,10 +592,16 @@ window.manager = {
     badges.forEach(function (b) {
       const img = document.createElement('img');
       img.className = 'profile-badge-img';
-      img.src = b.path;
+      img.src = getBadgeImageUrl(b);
       img.alt = b.title;
       img.title = b.title;
       img.loading = 'lazy';
+      if (b.hash) {
+        img.onerror = function () {
+          img.onerror = null;
+          img.src = b.path;
+        };
+      }
       host.appendChild(img);
     });
   }
@@ -617,18 +698,7 @@ window.manager = {
 
   function validateToken(rawToken) {
     const token = normalizeToken(rawToken);
-    const headers = {
-      'Authorization': token,
-      'Content-Type': 'application/json'
-    };
-    return fetch(DISCORD_API + '/users/@me', { method: 'GET', headers: headers })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          return { status: res.status, data: data };
-        }).catch(function () {
-          return { status: res.status, data: null };
-        });
-      })
+    return makeRequest('GET', '/users/@me', undefined, token)
       .catch(function (err) {
         const descriptive = !!(err && err.message);
         throw new Error(
@@ -914,6 +984,7 @@ window.manager = {
     li.querySelector('.term-text').textContent = text;
     terminalLog.appendChild(li);
     terminalLog.scrollTop = terminalLog.scrollHeight;
+    state.opLines.push(text);
   }
 
   function updateProgress(cur, total) {
@@ -930,6 +1001,7 @@ window.manager = {
   }
 
   function resetTerminal(title) {
+    state.opLines = [];
     if (terminalTitle) {
       terminalTitle.textContent = title;
     }
@@ -947,11 +1019,56 @@ window.manager = {
     }
   }
 
+  function opHistoryKey() {
+    const uid = state.user && state.user.id;
+    return uid ? 'opHistory_' + uid : '';
+  }
+
+  function getOperationHistory() {
+    const key = opHistoryKey();
+    if (!key) {
+      return [];
+    }
+    return jsonGet(localStorage, key) || [];
+  }
+
+  function recordOperationHistory(customTitle) {
+    if (!state.opLines.length) {
+      return;
+    }
+    const key = opHistoryKey();
+    if (!key) {
+      state.opLines = [];
+      return;
+    }
+    const record = {
+      id: Date.now(),
+      ts: Date.now(),
+      title: customTitle || '',
+      lines: state.opLines.slice()
+    };
+    let history = getOperationHistory();
+    history.unshift(record);
+    if (history.length > 20) {
+      history.length = 20;
+    }
+    history.forEach(function (rec) {
+      if (rec.lines && rec.lines.length > 200) {
+        rec.lines.length = 200;
+      }
+    });
+    jsonSet(localStorage, key, history.slice(0, 20));
+    state.opLines = [];
+  }
+
   function openHistory() {
     openModal();
     const list = byId('historyList');
     const count = byId('historyCount');
-    const history = jsonGet(localStorage, CONFIG.dsc.history) || [];
+    let history = getOperationHistory();
+    if (!history.length) {
+      history = jsonGet(localStorage, CONFIG.dsc.history) || [];
+    }
     if (count) {
       count.textContent = history.length + (history.length === 1 ? ' record' : ' records');
     }
@@ -969,18 +1086,15 @@ window.manager = {
     history.forEach(function (entry) {
       const li = document.createElement('li');
       li.className = 'modal-item';
-      const when = new Date(entry.at).toLocaleString();
+      const when = new Date(entry.ts || entry.at || entry.id).toLocaleString();
+      const detail = Array.isArray(entry.lines)
+        ? entry.lines.length + (entry.lines.length === 1 ? ' line' : ' lines')
+        : entry.items + (entry.items === 1 ? ' item' : ' items');
       li.innerHTML = '<span class="modal-item-main"><strong></strong><span class="modal-item-sub"></span></span>';
       li.querySelector('strong').textContent = entry.title;
-      li.querySelector('.modal-item-sub').textContent = when + ' \u00b7 ' + entry.items + ' item' + (entry.items === 1 ? '' : 's');
+      li.querySelector('.modal-item-sub').textContent = when + ' \u00b7 ' + detail;
       list.appendChild(li);
     });
-  }
-
-  function pushHistory(title, items) {
-    const history = jsonGet(localStorage, CONFIG.dsc.history) || [];
-    history.unshift({ title: title, items: items, at: Date.now() });
-    jsonSet(localStorage, CONFIG.dsc.history, history.slice(0, 50));
   }
 
   function currentDelay() {
@@ -1061,6 +1175,34 @@ window.manager = {
     }];
   }
 
+  const opButtonIds = [
+    'leaveServersBtn',
+    'removeFriendsBtn',
+    'closeDMsBtn',
+    'deleteUserDMsBtn',
+    'allInOneBtn'
+  ];
+
+  function lockOperationButtons() {
+    opButtonIds.forEach(function (id) {
+      const btn = byId(id);
+      if (btn) {
+        btn.classList.add('btn-disabled');
+        btn.disabled = true;
+      }
+    });
+  }
+
+  function unlockOperationButtons() {
+    opButtonIds.forEach(function (id) {
+      const btn = byId(id);
+      if (btn) {
+        btn.classList.remove('btn-disabled');
+        btn.disabled = false;
+      }
+    });
+  }
+
   function runOperation(title, items) {
     if (state.running) {
       toast('An operation is already running.', 'error');
@@ -1072,20 +1214,29 @@ window.manager = {
     }
     state.running = true;
     state.stopped = false;
+    lockOperationButtons();
+    abortInFlight();
+    inFlightController = new AbortController();
 
     resetTerminal(title);
     emitLine('Starting: ' + title);
     emitLine('Delay between calls: ' + currentDelay() + 'ms');
-    pushHistory(title, items.length);
+
+    const finish = function () {
+      state.running = false;
+      recordOperationHistory(title);
+      unlockOperationButtons();
+      abortInFlight();
+    };
 
     let index = 0;
     const step = function () {
       if (state.stopped || !state.running) {
-        state.running = false;
         emitLine('Operation stopped by user.');
         if (opPill) {
           opPill.textContent = 'stopped';
         }
+        finish();
         toast('Operation stopped.', 'info');
         return;
       }
@@ -1097,11 +1248,11 @@ window.manager = {
       }
       updateProgress(index, items.length);
       if (index >= items.length) {
-        state.running = false;
         emitLine('Operation completed (' + items.length + ' items).');
         if (opPill) {
           opPill.textContent = 'done';
         }
+        finish();
         toast('Operation completed.', 'success');
         return;
       }
@@ -1113,6 +1264,17 @@ window.manager = {
   function stopRunning() {
     state.stopped = true;
     state.running = false;
+  }
+
+  function cancelOperationForExit() {
+    const wasRunning = state.running;
+    stopRunning();
+    if (wasRunning && state.opLines.length && state.user && state.user.id) {
+      emitLine('Operation stopped by user.');
+      recordOperationHistory('Operation Stopped');
+    }
+    unlockOperationButtons();
+    abortInFlight();
   }
 
   /* ---------- Modal ---------- */
@@ -1325,7 +1487,7 @@ window.manager = {
 
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function () {
-        stopRunning();
+        cancelOperationForExit();
         clearActiveAccount();
         renderSavedAccounts();
         showView('login');
@@ -1496,7 +1658,6 @@ window.manager = {
     const stopBtn = byId('stopOperationBtn');
     if (backBtn) {
       backBtn.addEventListener('click', function () {
-        stopRunning();
         showView('dashboard');
       });
     }
@@ -1601,7 +1762,7 @@ window.manager = {
         if (!window.confirm('Deactivate the current session and keep saved accounts?')) {
           return;
         }
-        stopRunning();
+        cancelOperationForExit();
         clearActiveAccount();
         renderSavedAccounts();
         showView('login');
@@ -1616,6 +1777,9 @@ window.manager = {
         try {
           Object.keys(localStorage).forEach(function (key) {
             if (key.indexOf('dmt.') === 0) {
+              localStorage.removeItem(key);
+            }
+            if (key.indexOf('opHistory_') === 0) {
               localStorage.removeItem(key);
             }
           });
