@@ -281,9 +281,9 @@ window.manager = {
   }
 
   function setActiveAccount(token, user) {
-    state.token = token;
+    state.token = normalizeToken(token);
     state.user = user;
-    storageSet(localStorage, CONFIG.dsc.token, token);
+    storageSet(localStorage, CONFIG.dsc.token, state.token);
     jsonSet(localStorage, CONFIG.dsc.user, user);
     applyBadge();
   }
@@ -435,8 +435,19 @@ window.manager = {
     return 'Authentication failed.';
   }
 
-  function validateToken(token) {
-    const headers = { 'Authorization': token };
+  function normalizeToken(raw) {
+    return String(raw || '')
+      .trim()
+      .replace(/^["']+|["']+$/g, '')
+      .replace(/[\u200B\u200C\u200D\uFEFF\u00A0\u2060]+/g, '');
+  }
+
+  function validateToken(rawToken) {
+    const token = normalizeToken(rawToken);
+    const headers = {
+      'Authorization': token,
+      'Content-Type': 'application/json'
+    };
     return fetch(DISCORD_API + '/users/@me', { method: 'GET', headers: headers })
       .then(function (res) {
         return res.json().then(function (data) {
@@ -444,6 +455,14 @@ window.manager = {
         }).catch(function () {
           return { status: res.status, data: null };
         });
+      })
+      .catch(function (err) {
+        const descriptive = !!(err && err.message);
+        throw new Error(
+          descriptive
+            ? 'Discord API unreachable from this browser (CORS). Run the Desktop/Electron client or route through a proxy server.'
+            : 'Could not reach Discord\u2019s API. Check your network and try again.'
+        );
       });
   }
 
@@ -1011,12 +1030,11 @@ window.manager = {
     const authBtn = byId('authenticateBtn');
     const toggleTokenBtn = byId('toggleToken');
     const clearSavedBtn = byId('clearSavedBtn');
-    const electronBtn = byId('electronLoginBtn');
     const savedList = byId('savedAccountsList');
 
     if (authBtn) {
       authBtn.addEventListener('click', function () {
-        const token = tokenInput ? tokenInput.value.trim() : '';
+        const token = tokenInput ? normalizeToken(tokenInput.value) : '';
         if (!token) {
           toast('Paste an account token first.', 'error');
           return;
@@ -1053,12 +1071,6 @@ window.manager = {
           eyeOff.setAttribute('display', showing ? '' : 'none');
         }
         tokenInput.focus();
-      });
-    }
-
-    if (electronBtn) {
-      electronBtn.addEventListener('click', function () {
-        toast('Desktop OAuth flow opens in the Electron client.', 'info');
       });
     }
 
