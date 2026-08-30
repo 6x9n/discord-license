@@ -1277,7 +1277,7 @@ window.manager = {
       if (!state.dataLoaded) {
         toast('Could not load account data. Check your network and try again.', 'error');
       } else {
-        toast('No matching targets found \u2014 nothing to do (whitelists apply).', 'error');
+        toast('No matching targets found \u2014 nothing to do.', 'info');
       }
       return;
     }
