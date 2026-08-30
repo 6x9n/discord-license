@@ -141,3 +141,11 @@ Status: **Implemented (deployment env config required)**
 - Set `ADMIN_SECRET` (required) and, for production persistence, `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` as Vercel env vars.
 - Replace `licenseBuyBtn` Telegram placeholder with the real purchase link.
 - Phase 3 candidates: periodic online re-validation of active licenses (true mid-session revocation without waiting for expiry), configurable per-row extend days, Electron wrapper.
+
+## Git / Remote — SHIPPED
+
+- **Repo initialized**: `git init` on `main`, single root commit.
+- **Remote**: `origin → https://github.com/6x9n/discord-license.git` (force-pushed).
+- **Push status**: `SUCCESS` — `[new branch] main -> main`, `git ls-remote` confirms `e04c15dee8fd0f8b57e9111c396ad8520ac8a947 refs/heads/main`. `main` tracks `origin/main` (upstream set).
+- **Branch verification**: local `main` == remote `main` (`## main...origin/main`, working tree clean).
+- **`.gitignore`**: `node_modules/`, `.vercel/`, `.env`, `data/keys.json` (verified ignored via `git check-ignore`; `data/keys.json` not tracked).
