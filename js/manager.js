@@ -753,6 +753,8 @@ window.manager = {
       const url = avatarUrl(user, 128);
       if (url) {
         avatarEl.style.backgroundImage = 'url("' + url + '")';
+      } else {
+        avatarEl.style.backgroundImage = 'url("https://cdn.discordapp.com/embed/avatars/' + (parseInt(user.id, 10) % 5) + '.png")';
       }
     }
     const usernameEl = byId('profileUsername');
@@ -798,10 +800,12 @@ window.manager = {
 
     Promise.all([
       apiCall('GET', '/users/@me/guilds'),
-      apiCall('GET', '/users/@me/relationships')
+      apiCall('GET', '/users/@me/relationships'),
+      apiCall('GET', '/users/@me/channels')
     ]).then(function (results) {
       const guilds = Array.isArray(results[0].data) ? results[0].data : [];
       const rel = Array.isArray(results[1].data) ? results[1].data : [];
+      const channels = Array.isArray(results[2].data) ? results[2].data : [];
 
       state.guilds = guilds;
       state.rel = rel;
@@ -813,8 +817,11 @@ window.manager = {
       const friends = rel.filter(function (r) {
         return r.type === 1;
       }).length;
+      const dms = channels.filter(function (c) {
+        return c.type === 1 || c.type === 3;
+      }).length;
 
-      done(owned, joined, friends, friends);
+      done(owned, joined, friends, dms);
     }).catch(function () {
       done('-', '-', '-', '-');
     });
