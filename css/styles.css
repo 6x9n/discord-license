@@ -2558,3 +2558,34 @@ html[data-theme="light"] .btn-ops:hover {
     height: 260px;
   }
 }
+
+/* ---------- Profile badge images (phase 4.4) ---------- */
+
+.profile-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.profile-badge-img {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  object-fit: contain;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-glass);
+}
+
+@media (max-width: 600px) {
+  .profile-badges {
+    justify-content: center;
+  }
+
+  .profile-badge-img {
+    width: 18px;
+    height: 18px;
+  }
+}

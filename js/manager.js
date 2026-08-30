@@ -283,6 +283,7 @@ window.manager = {
   function setActiveAccount(token, user) {
     state.token = normalizeToken(token);
     state.user = user;
+    state.profileData = (user && typeof user === 'object') ? user : {};
     storageSet(localStorage, CONFIG.dsc.token, state.token);
     jsonSet(localStorage, CONFIG.dsc.user, user);
     applyBadge();
@@ -350,6 +351,178 @@ window.manager = {
   function nitroTier(validHostType) {
     const map = ['None', 'Nitro Classic', 'Nitro', 'Nitro Basic'];
     return map[validHostType] || 'None';
+  }
+
+  /* ---------- Badge dictionaries ---------- */
+
+  const NITRO_TIERS = [
+    { months: 1, name: 'Bronze', image: 'assets/images/badges/nitro_badges/bronze.png' },
+    { months: 3, name: 'Silver', image: 'assets/images/badges/nitro_badges/silver.png' },
+    { months: 6, name: 'Gold', image: 'assets/images/badges/nitro_badges/gold.png' },
+    { months: 12, name: 'Platinum', image: 'assets/images/badges/nitro_badges/platinum.png' },
+    { months: 24, name: 'Diamond', image: 'assets/images/badges/nitro_badges/diamond.png' },
+    { months: 36, name: 'Emerald', image: 'assets/images/badges/nitro_badges/emerald.png' },
+    { months: 60, name: 'Ruby', image: 'assets/images/badges/nitro_badges/ruby.png' },
+    { months: 72, name: 'Opal', image: 'assets/images/badges/nitro_badges/opal.png' }
+  ];
+
+  const BOOST_LEVELS = [
+    { level: 1, months: 1, image: 'assets/images/badges/boost_badges/discordboost1.svg' },
+    { level: 2, months: 2, image: 'assets/images/badges/boost_badges/discordboost2.svg' },
+    { level: 3, months: 3, image: 'assets/images/badges/boost_badges/discordboost3.svg' },
+    { level: 4, months: 6, image: 'assets/images/badges/boost_badges/discordboost4.svg' },
+    { level: 5, months: 9, image: 'assets/images/badges/boost_badges/discordboost5.svg' },
+    { level: 6, months: 12, image: 'assets/images/badges/boost_badges/discordboost6.svg' },
+    { level: 7, months: 15, image: 'assets/images/badges/boost_badges/discordboost7.svg' },
+    { level: 8, months: 18, image: 'assets/images/badges/boost_badges/discordboost8.svg' },
+    { level: 9, months: 24, image: 'assets/images/badges/boost_badges/discordboost9.svg' }
+  ];
+
+  const GIFT_LEVELS = [
+    { level: 1, gifts: 1, name: 'Patron', image: 'assets/images/badges/gift_badges/giftlvl1.png' },
+    { level: 2, gifts: 2, name: 'Champion', image: 'assets/images/badges/gift_badges/giftlvl2.png' },
+    { level: 3, gifts: 3, name: 'Luminary', image: 'assets/images/badges/gift_badges/giftlvl3.png' },
+    { level: 4, gifts: 6, name: 'Icon', image: 'assets/images/badges/gift_badges/giftlvl4.png' },
+    { level: 5, gifts: 10, name: 'Hero', image: 'assets/images/badges/gift_badges/giftlvl5.png' },
+    { level: 6, gifts: 20, name: 'Legend', image: 'assets/images/badges/gift_badges/giftlvl6.png' }
+  ];
+
+  const FLAG_BADGES = [
+    { bit: 1 << 0, key: 'staff', path: 'assets/images/badges/discordstaff.svg', title: 'Discord Staff' },
+    { bit: 1 << 1, key: 'partner', path: 'assets/images/badges/discordpartner.svg', title: 'Partnered Server Owner' },
+    { bit: 1 << 2, key: 'hypesquadevents', path: 'assets/images/badges/hypesquadevents.svg', title: 'HypeSquad Events' },
+    { bit: 1 << 3, key: 'bughunter1', path: 'assets/images/badges/discordbughunter1.svg', title: 'Bug Hunter (Tier 1)' },
+    { bit: 1 << 6, key: 'bravery', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
+    { bit: 1 << 7, key: 'brilliance', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
+    { bit: 1 << 8, key: 'balance', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
+    { bit: 1 << 9, key: 'earlysupporter', path: 'assets/images/badges/discordearlysupporter.svg', title: 'Early Supporter' },
+    { bit: 1 << 14, key: 'bughunter2', path: 'assets/images/badges/discordbughunter2.svg', title: 'Bug Hunter (Tier 2)' },
+    { bit: 1 << 17, key: 'botdev', path: 'assets/images/badges/discordbotdev.svg', title: 'Early Verified Bot Developer' },
+    { bit: 1 << 18, key: 'moderator', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' },
+    { bit: 1 << 22, key: 'activedeveloper', path: 'assets/images/badges/activedeveloper.svg', title: 'Active Developer' }
+  ];
+
+  const PROFILE_BADGE_MAP = {
+    'staff': { key: 'staff', path: 'assets/images/badges/discordstaff.svg', title: 'Discord Staff' },
+    'partner': { key: 'partner', path: 'assets/images/badges/discordpartner.svg', title: 'Partnered Server Owner' },
+    'hypesquad': { key: 'hypesquadevents', path: 'assets/images/badges/hypesquadevents.svg', title: 'HypeSquad Events' },
+    'hypesquad_house_1': { key: 'bravery', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
+    'hypesquad_bravery': { key: 'bravery', path: 'assets/images/badges/hypesquadbravery.svg', title: 'HypeSquad Bravery' },
+    'hypesquad_house_2': { key: 'brilliance', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
+    'hypesquad_brilliance': { key: 'brilliance', path: 'assets/images/badges/hypesquadbrilliance.svg', title: 'HypeSquad Brilliance' },
+    'hypesquad_house_3': { key: 'balance', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
+    'hypesquad_balance': { key: 'balance', path: 'assets/images/badges/hypesquadbalance.svg', title: 'HypeSquad Balance' },
+    'bug_hunter_level_1': { key: 'bughunter1', path: 'assets/images/badges/discordbughunter1.svg', title: 'Bug Hunter (Tier 1)' },
+    'bug_hunter_level_2': { key: 'bughunter2', path: 'assets/images/badges/discordbughunter2.svg', title: 'Bug Hunter (Tier 2)' },
+    'verified_developer': { key: 'botdev', path: 'assets/images/badges/discordbotdev.svg', title: 'Early Verified Bot Developer' },
+    'active_developer': { key: 'activedeveloper', path: 'assets/images/badges/activedeveloper.svg', title: 'Active Developer' },
+    'early_supporter': { key: 'earlysupporter', path: 'assets/images/badges/discordearlysupporter.svg', title: 'Early Supporter' },
+    'certified_moderator': { key: 'moderator', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' },
+    'moderator_programs_alumni': { key: 'moderator', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' }
+  };
+
+  function monthsSince(iso) {
+    if (!iso) {
+      return 0;
+    }
+    const then = new Date(iso).getTime();
+    if (isNaN(then)) {
+      return 0;
+    }
+    return Math.floor((Date.now() - then) / (1000 * 60 * 60 * 24 * 30.44));
+  }
+
+  function getUserBadges(userData, profileData) {
+    const user = userData || {};
+    const profile = profileData || {};
+    const out = [];
+    const seen = {};
+
+    function add(entry) {
+      if (!entry) {
+        return;
+      }
+      const dedupe = entry.key || entry.title || entry.path;
+      if (seen[dedupe]) {
+        return;
+      }
+      seen[dedupe] = true;
+      out.push(entry);
+    }
+
+    const flags = user.flags || user.public_flags || 0;
+    FLAG_BADGES.forEach(function (fb) {
+      if (flags & fb.bit) {
+        add(fb);
+      }
+    });
+
+    const pBadges = (Array.isArray(profile.badges) ? profile.badges : (user.badges || []));
+    pBadges.forEach(function (id) {
+      const mapped = PROFILE_BADGE_MAP[id] || PROFILE_BADGE_MAP[String(id)];
+      if (mapped) {
+        add(mapped);
+      }
+    });
+
+    const nitroMonths = monthsSince(user.premium_since || profile.premium_since);
+    if (nitroMonths >= 1 && (user.premium_type || 0) !== 0) {
+      let tier = null;
+      NITRO_TIERS.forEach(function (t) {
+        if (nitroMonths >= t.months) {
+          tier = t;
+        }
+      });
+      if (tier) {
+        add({ key: 'nitro_' + tier.name.toLowerCase(), path: tier.image, title: 'Nitro ' + tier.name });
+      }
+    }
+
+    const boostMonths = monthsSince(user.premium_guild_since || profile.premium_guild_since);
+    if (boostMonths >= 1) {
+      let boost = null;
+      BOOST_LEVELS.forEach(function (b) {
+        if (boostMonths >= b.months) {
+          boost = b;
+        }
+      });
+      if (boost) {
+        add({ key: 'boost_' + boost.level, path: boost.image, title: 'Server Boost Level ' + boost.level });
+      }
+    }
+
+    const gifts = user.gifts || profile.gifts || 0;
+    if (gifts >= 1) {
+      let gift = null;
+      GIFT_LEVELS.forEach(function (g) {
+        if (gifts >= g.gifts) {
+          gift = g;
+        }
+      });
+      if (gift) {
+        add({ key: 'gift_' + gift.level, path: gift.image, title: 'Gift Badge \u2014 ' + gift.name });
+      }
+    }
+
+    return out;
+  }
+
+  function renderProfileBadges() {
+    const host = byId('profileBadges');
+    if (!host) {
+      return;
+    }
+    const badges = getUserBadges(state.user, state.profileData || {});
+    host.innerHTML = '';
+    badges.forEach(function (b) {
+      const img = document.createElement('img');
+      img.className = 'profile-badge-img';
+      img.src = b.path;
+      img.alt = b.title;
+      img.title = b.title;
+      img.loading = 'lazy';
+      host.appendChild(img);
+    });
   }
 
   /* ---------- Accounts list ---------- */
@@ -504,6 +677,7 @@ window.manager = {
     if (tagEl) {
       tagEl.textContent = 'ID ' + user.id + ' \u00b7 ' + nitroTier(user.premium_type);
     }
+    renderProfileBadges();
   }
 
   function refreshMetrics() {
@@ -568,6 +742,13 @@ window.manager = {
 
   /* ---------- Details view ---------- */
 
+  function badgeTitles() {
+    const badges = getUserBadges(state.user, state.profileData || {});
+    return badges.length ? (badges.map(function (b) {
+      return b.title;
+    }).join(', ')) : 'None';
+  }
+
   function renderDetailsView() {
     const grid = byId('detailsGrid');
     if (!grid) {
@@ -587,7 +768,7 @@ window.manager = {
       ['Profile Effects', '-'],
       ['Name Plates', '-'],
       ['Profile Frames', '-'],
-      ['Profile Badges', flagNames(u.flags)]
+      ['Profile Badges', badgeTitles()]
     ];
     grid.innerHTML = '';
     rows.forEach(function (row) {
