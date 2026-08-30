@@ -257,6 +257,8 @@ window.manager = {
     rel: [],
     channels: [],
     dataLoaded: false,
+    lastDataLoad: 0,
+    lastLoadError: null,
     running: false,
     stopped: false,
     selectedHouse: null,
@@ -496,7 +498,9 @@ window.manager = {
     'active_developer': { key: 'activedeveloper', hash: '6bdc42827d37398d28ed2917711d9d95', path: 'assets/images/badges/activedeveloper.svg', title: 'Active Developer' },
     'early_supporter': { key: 'earlysupporter', hash: '7060786766c926952dc7c0e65038e129', path: 'assets/images/badges/discordearlysupporter.svg', title: 'Early Supporter' },
     'certified_moderator': { key: 'moderator', hash: 'e8d11871239845d47cfc35ef21396f4c', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' },
-    'moderator_programs_alumni': { key: 'moderator', hash: 'e8d11871239845d47cfc35ef21396f4c', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' }
+    'moderator_programs_alumni': { key: 'moderator', hash: 'e8d11871239845d47cfc35ef21396f4c', path: 'assets/images/badges/discordmod.svg', title: 'Moderator Programs Alumni' },
+    'quest_completed': { key: 'quest_completed', hash: '7d9ae358c8c5e118768335dbe68b4fb8', path: 'assets/images/badges/quest_completed.png', title: 'Completed a Quest' },
+    'quest': { key: 'quest_completed', hash: '7d9ae358c8c5e118768335dbe68b4fb8', path: 'assets/images/badges/quest_completed.png', title: 'Completed a Quest' }
   };
 
   function getBadgeImageUrl(badge) {
@@ -543,10 +547,18 @@ window.manager = {
     });
 
     const pBadges = (Array.isArray(profile.badges) ? profile.badges : (user.badges || []));
-    pBadges.forEach(function (id) {
+    pBadges.forEach(function (entry) {
+      const id = (entry && typeof entry === 'object') ? entry.id : entry;
       const mapped = PROFILE_BADGE_MAP[id] || PROFILE_BADGE_MAP[String(id)];
       if (mapped) {
         add(mapped);
+      } else if (entry && typeof entry === 'object' && entry.icon) {
+        add({
+          key: 'custom_' + (entry.id || entry.icon),
+          hash: entry.icon,
+          path: '',
+          title: entry.description || 'Badge'
+        });
       }
     });
 
@@ -601,7 +613,7 @@ window.manager = {
       img.alt = b.title;
       img.title = b.title;
       img.loading = 'lazy';
-      if (b.hash) {
+      if (b.hash && b.path) {
         img.onerror = function () {
           img.onerror = null;
           img.src = b.path;
@@ -788,14 +800,28 @@ window.manager = {
       apiCall('GET', '/users/@me/relationships'),
       apiCall('GET', '/users/@me/channels')
     ]).then(function (results) {
-      const guilds = Array.isArray(results[0].data) ? results[0].data : [];
-      const rel = Array.isArray(results[1].data) ? results[1].data : [];
-      const channels = Array.isArray(results[2].data) ? results[2].data : [];
+      const guildsRes = results[0];
+      const relRes = results[1];
+      const channelsRes = results[2];
+      if (guildsRes.status >= 400 || relRes.status >= 400) {
+        const msg = (guildsRes.data && guildsRes.data.message) ||
+          (relRes.data && relRes.data.message) ||
+          ('Discord data request failed (' + guildsRes.status + '/' + relRes.status + ')');
+        const err = new Error(msg);
+        state.lastLoadError = msg;
+        throw err;
+      }
+
+      const guilds = Array.isArray(guildsRes.data) ? guildsRes.data : [];
+      const rel = Array.isArray(relRes.data) ? relRes.data : [];
+      const channels = Array.isArray(channelsRes.data) ? channelsRes.data : [];
 
       state.guilds = guilds;
       state.rel = rel;
       state.channels = channels;
       state.dataLoaded = true;
+      state.lastDataLoad = Date.now();
+      state.lastLoadError = null;
       return { guilds: guilds, rel: rel, channels: channels };
     });
   }
@@ -1256,13 +1282,19 @@ window.manager = {
       toast('An operation is already running.', 'error');
       return;
     }
-    const ready = state.dataLoaded
-      ? Promise.resolve()
-      : loadAccountData()
+    const MAX_DATA_AGE = 5 * 60 * 1000;
+    const stale = !state.dataLoaded ||
+      !state.lastDataLoad ||
+      (Date.now() - state.lastDataLoad) > MAX_DATA_AGE;
+    const ready = stale
+      ? loadAccountData()
           .then(function (data) {
             updateMetricsFrom(data);
           })
-          .catch(function () {});
+          .catch(function (err) {
+            state.lastLoadError = err && err.message ? err.message : state.lastLoadError;
+          })
+      : Promise.resolve();
     ready.then(function () {
       runOperation(title, buildFn());
     });
@@ -1275,7 +1307,7 @@ window.manager = {
     }
     if (!items.length) {
       if (!state.dataLoaded) {
-        toast('Could not load account data. Check your network and try again.', 'error');
+        toast(state.lastLoadError || 'Could not load account data. Check your network and try again.', 'error');
       } else {
         toast('No matching targets found \u2014 nothing to do.', 'info');
       }
