@@ -1,6 +1,0 @@
-node_modules/
-.vercel/
-.env
-data/keys.json
-**/data/keys.json
-admin-app/
