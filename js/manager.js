@@ -255,6 +255,8 @@ window.manager = {
     token: storageGet(localStorage, CONFIG.dsc.token) || '',
     guilds: [],
     rel: [],
+    channels: [],
+    dataLoaded: false,
     running: false,
     stopped: false,
     selectedHouse: null,
@@ -351,6 +353,10 @@ window.manager = {
     state.token = normalizeToken(token);
     state.user = user;
     state.profileData = (user && typeof user === 'object') ? user : {};
+    state.guilds = [];
+    state.rel = [];
+    state.channels = [];
+    state.dataLoaded = false;
     storageSet(localStorage, CONFIG.dsc.token, state.token);
     jsonSet(localStorage, CONFIG.dsc.user, user);
     applyBadge();
@@ -360,6 +366,10 @@ window.manager = {
     abortInFlight();
     state.token = '';
     state.user = null;
+    state.guilds = [];
+    state.rel = [];
+    state.channels = [];
+    state.dataLoaded = false;
     storageSet(localStorage, CONFIG.dsc.token, '');
     localStorage.removeItem(CONFIG.dsc.user);
     applyBadge();
@@ -772,33 +782,8 @@ window.manager = {
     renderProfileBadges();
   }
 
-  function refreshMetrics() {
-    const ownedEl = byId('metricOwned');
-    const joinedEl = byId('metricJoined');
-    const friendsEl = byId('metricFriends');
-    const dmsEl = byId('metricDMs');
-
-    function done(owned, joined, friends, dms) {
-      if (ownedEl) {
-        ownedEl.textContent = owned;
-      }
-      if (joinedEl) {
-        joinedEl.textContent = joined;
-      }
-      if (friendsEl) {
-        friendsEl.textContent = friends;
-      }
-      if (dmsEl) {
-        dmsEl.textContent = dms;
-      }
-    }
-
-    if (!hasAccount()) {
-      done('-', '-', '-', '-');
-      return;
-    }
-
-    Promise.all([
+  function loadAccountData() {
+    return Promise.all([
       apiCall('GET', '/users/@me/guilds'),
       apiCall('GET', '/users/@me/relationships'),
       apiCall('GET', '/users/@me/channels')
@@ -809,22 +794,58 @@ window.manager = {
 
       state.guilds = guilds;
       state.rel = rel;
-
-      const owned = guilds.filter(function (g) {
-        return !!g.owner;
-      }).length;
-      const joined = guilds.length;
-      const friends = rel.filter(function (r) {
-        return r.type === 1;
-      }).length;
-      const dms = channels.filter(function (c) {
-        return c.type === 1 || c.type === 3;
-      }).length;
-
-      done(owned, joined, friends, dms);
-    }).catch(function () {
-      done('-', '-', '-', '-');
+      state.channels = channels;
+      state.dataLoaded = true;
+      return { guilds: guilds, rel: rel, channels: channels };
     });
+  }
+
+  function setMetrics(owned, joined, friends, dms) {
+    const ownedEl = byId('metricOwned');
+    const joinedEl = byId('metricJoined');
+    const friendsEl = byId('metricFriends');
+    const dmsEl = byId('metricDMs');
+    if (ownedEl) {
+      ownedEl.textContent = owned;
+    }
+    if (joinedEl) {
+      joinedEl.textContent = joined;
+    }
+    if (friendsEl) {
+      friendsEl.textContent = friends;
+    }
+    if (dmsEl) {
+      dmsEl.textContent = dms;
+    }
+  }
+
+  function updateMetricsFrom(data) {
+    const guilds = data.guilds || [];
+    const rel = data.rel || [];
+    const channels = data.channels || [];
+    const owned = guilds.filter(function (g) {
+      return !!g.owner;
+    }).length;
+    const joined = guilds.length;
+    const friends = rel.filter(function (r) {
+      return r.type === 1;
+    }).length;
+    const dms = channels.filter(function (c) {
+      return c.type === 1 || c.type === 3;
+    }).length;
+    setMetrics(owned, joined, friends, dms);
+  }
+
+  function refreshMetrics() {
+    if (!hasAccount()) {
+      setMetrics('-', '-', '-', '-');
+      return;
+    }
+    loadAccountData()
+      .then(updateMetricsFrom)
+      .catch(function () {
+        setMetrics('-', '-', '-', '-');
+      });
   }
 
   function applyAccountState() {
@@ -1230,13 +1251,34 @@ window.manager = {
     });
   }
 
+  function prepareOperation(title, buildFn) {
+    if (state.running) {
+      toast('An operation is already running.', 'error');
+      return;
+    }
+    const ready = state.dataLoaded
+      ? Promise.resolve()
+      : loadAccountData()
+          .then(function (data) {
+            updateMetricsFrom(data);
+          })
+          .catch(function () {});
+    ready.then(function () {
+      runOperation(title, buildFn());
+    });
+  }
+
   function runOperation(title, items) {
     if (state.running) {
       toast('An operation is already running.', 'error');
       return;
     }
     if (!items.length) {
-      toast('No target items found. Check whitelists and refresh metrics.', 'error');
+      if (!state.dataLoaded) {
+        toast('Could not load account data. Check your network and try again.', 'error');
+      } else {
+        toast('No matching targets found \u2014 nothing to do (whitelists apply).', 'error');
+      }
       return;
     }
     state.running = true;
@@ -1526,13 +1568,13 @@ window.manager = {
   function initOps() {
     const handlers = {
       leaveServersBtn: function () {
-        runOperation('Leave Servers', buildLeaveItems());
+        prepareOperation('Leave Servers', buildLeaveItems);
       },
       removeFriendsBtn: function () {
-        runOperation('Remove Friends', buildFriendItems());
+        prepareOperation('Remove Friends', buildFriendItems);
       },
       closeDMsBtn: function () {
-        runOperation('Close DMs', buildDmItems());
+        prepareOperation('Close DMs', buildDmItems);
       },
       deleteUserDMsBtn: function () {
         const target = window.prompt('Delete DM messages with target user ID:', '');
@@ -1543,11 +1585,13 @@ window.manager = {
       },
       allInOneBtn: function () {
         const target = window.prompt('Delete DM messages with target user ID (leave blank to skip):', '');
-        const parts = buildLeaveItems().concat(buildFriendItems()).concat(buildDmItems());
-        if (target !== null && target.trim()) {
-          parts.push.apply(parts, buildDeleteDmItems(target.trim()));
-        }
-        runOperation('All-in-One Cleanup', parts);
+        prepareOperation('All-in-One Cleanup', function () {
+          const parts = buildLeaveItems().concat(buildFriendItems()).concat(buildDmItems());
+          if (target !== null && target.trim()) {
+            parts.push.apply(parts, buildDeleteDmItems(target.trim()));
+          }
+          return parts;
+        });
       },
       badgeActionBtn: function () {
         showView('badges');
