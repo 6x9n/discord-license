@@ -135,7 +135,8 @@
   }
 
   async function validateKey(key) {
-    const res = await fetch('/api/validate', {
+    const base = (CONFIG.apiBase || '').replace(/\/$/, '');
+    const res = await fetch(base + '/api/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key })

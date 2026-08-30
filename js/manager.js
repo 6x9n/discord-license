@@ -1,4 +1,5 @@
 window.CONFIG = {
+  apiBase: '',
   trialDuration: 10 * 60 * 1000,
   offlineGraceMs: 24 * 60 * 60 * 1000,
   storage: {

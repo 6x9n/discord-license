@@ -27,5 +27,10 @@ module.exports = async function (req, res) {
   if (entry.expiresAt <= Date.now()) {
     return res.json({ valid: false, message: 'This license key has expired.' });
   }
-  return res.json({ valid: true, plan: entry.plan, expiresAt: entry.expiresAt });
+  return res.json({
+    valid: true,
+    plan: entry.plan,
+    expiresAt: entry.expiresAt,
+    tag: entry.tag || null
+  });
 };

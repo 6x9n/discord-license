@@ -42,9 +42,6 @@
           <span>Buy a Code</span>
         </a>
         <p id="licenseMsg" class="msg" role="alert" aria-live="polite"></p>
-        <div class="license-footer">
-          <a id="adminLink" class="admin-signin-link" href="#admin">Admin Dashboard</a>
-        </div>
       </div>
     </section>
 
@@ -57,7 +54,6 @@
         <span id="sessionPlan" class="badge"></span>
         <span id="trialCountdown" class="countdown"></span>
         <span class="spacer"></span>
-        <a class="btn btn-ghost btn-small" href="#admin">Admin</a>
         <button id="lockBtn" class="btn btn-ghost btn-small" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           <span>Lock</span>
@@ -72,94 +68,6 @@
           <p>Your manager session is active. This is the Phase 1 shell.</p>
         </div>
       </main>
-    </section>
-
-    <section id="adminView" class="screen">
-      <div class="admin-shell">
-        <header class="app-header">
-          <div class="app-brand">
-            <span class="brand-dot small"></span>
-            <span class="app-brand-name">Admin Dashboard</span>
-          </div>
-          <span id="adminStatus" class="badge">—</span>
-          <span class="spacer"></span>
-          <button id="adminLogoutBtn" class="btn btn-ghost btn-small" type="button">Logout</button>
-          <a class="btn btn-ghost btn-small" href="#license">Back</a>
-        </header>
-
-        <div id="adminLoginModal" class="modal">
-          <div class="modal-card admin-login-card">
-            <div class="modal-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </div>
-            <h2>Restricted Access</h2>
-            <p class="subtitle">Enter the admin password to manage license keys.</p>
-            <div class="field">
-              <label class="field-label" for="adminPasswordInput">Password</label>
-              <input id="adminPasswordInput" type="password" autocomplete="current-password" placeholder="••••••••">
-            </div>
-            <button id="adminLoginBtn" class="btn btn-primary" type="button">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a1 1 0 0 1 1 1v4"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-              <span>Unlock Dashboard</span>
-            </button>
-            <p id="adminLoginMsg" class="msg" role="alert" aria-live="polite"></p>
-          </div>
-        </div>
-
-        <main id="adminPanel" class="admin-main" hidden>
-          <div class="admin-toolbar">
-            <div class="card admin-card admin-gen-card">
-              <span class="field-label">Duration</span>
-              <select id="adminDuration" aria-label="Key duration">
-                <option value="1">1 Day (Trial)</option>
-                <option value="30" selected>30 Days</option>
-                <option value="90">90 Days</option>
-                <option value="365">365 Days</option>
-                <option value="0">Lifetime</option>
-              </select>
-              <span class="field-label">Label (username / Discord ID)</span>
-              <input id="adminNoteInput" class="admin-text-input" type="text" autocomplete="off" placeholder="e.g. @user or Discord#0000">
-              <button id="adminGenBtn" class="btn btn-primary" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                <span>Generate Key</span>
-              </button>
-            </div>
-
-            <div class="card admin-card admin-copy-card">
-              <span class="field-label">Generated Key</span>
-              <div id="adminCopyBox" class="admin-copybox" hidden>
-                <span id="adminCopyText" class="admin-key-copy">—</span>
-                <span class="admin-copy-hint">Click to copy</span>
-              </div>
-            </div>
-
-            <div class="card admin-card admin-filter-card">
-              <label class="field-label" for="adminSearchInput">Search</label>
-              <input id="adminSearchInput" class="admin-text-input" type="search" autocomplete="off" placeholder="Search key or label...">
-              <span class="filter-hint">Instant filter by key or label</span>
-            </div>
-          </div>
-
-          <div class="card admin-card admin-table-card">
-            <div class="table-wrap">
-              <table id="adminKeysTable">
-                <thead>
-                  <tr>
-                    <th>Key</th>
-                    <th>Plan</th>
-                    <th>Created</th>
-                    <th>Expiration</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="adminKeysBody"></tbody>
-              </table>
-            </div>
-            <p id="adminEmptyMsg" class="msg admin-empty"></p>
-          </div>
-        </main>
-      </div>
     </section>
 
     <div id="renewalModal" class="modal">
@@ -183,6 +91,5 @@
 
   <script src="js/manager.js"></script>
   <script src="js/license.js"></script>
-  <script src="js/admin.js"></script>
 </body>
 </html>
