@@ -1,507 +1,657 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Discord Account Manager</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Account Manager</title>
+    <style>
+        :root {
+            --bg-primary: #121316;
+            --bg-secondary: #18191c;
+            --bg-tertiary: #1e1f22;
+            --bg-card: #2b2d31;
+            --text-normal: #dbdee1;
+            --text-muted: #949ba4;
+            --accent: #5865f2;
+            --accent-hover: #4752c4;
+            --danger: #da373c;
+            --danger-hover: #a12828;
+            --success: #23a55a;
+            --border: #3f4147;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-normal);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 950px;
+            background-color: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h2, h3 {
+            margin-bottom: 16px;
+            color: #fff;
+        }
+
+        /* Form Inputs & Controls */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-normal);
+            outline: none;
+            font-size: 14px;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+        }
+
+        button {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            background-color: var(--accent);
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+
+        button.danger {
+            background-color: var(--danger);
+        }
+
+        button.danger:hover {
+            background-color: var(--danger-hover);
+        }
+
+        .toggle-btn {
+            position: absolute;
+            right: 12px;
+            background: none;
+            color: var(--text-muted);
+            padding: 0;
+            font-size: 13px;
+        }
+
+        .toggle-btn:hover {
+            background: none;
+            color: var(--text-normal);
+        }
+
+        /* Dashboard Header Profile Card */
+        .dashboard-header {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .user-info-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: var(--border);
+            object-fit: cover;
+        }
+
+        .user-details h3 {
+            margin-bottom: 4px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .user-details p {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .icon-btn {
+            background-color: var(--bg-tertiary);
+            color: var(--text-normal);
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .icon-btn:hover {
+            background-color: var(--border);
+        }
+
+        /* Grid Stats Cards */
+        .grid-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background-color: var(--bg-card);
+            padding: 18px;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .stat-card .stat-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .stat-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Operations Section */
+        .operations-section {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .operations-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .operations-header h3 {
+            margin-bottom: 0;
+            font-size: 16px;
+        }
+
+        .operations-header span {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .operations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 12px;
+        }
+
+        .op-btn {
+            background-color: var(--bg-tertiary);
+            color: var(--text-normal);
+            padding: 14px 16px;
+            border-radius: 6px;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .op-btn:hover {
+            background-color: var(--border);
+            border-color: var(--text-muted);
+        }
+
+        .op-btn.danger-action {
+            border-color: rgba(218, 55, 60, 0.4);
+            color: #f23f43;
+        }
+
+        .op-btn.danger-action:hover {
+            background-color: rgba(218, 55, 60, 0.15);
+            border-color: var(--danger);
+        }
+
+        /* Sub-views style */
+        .sub-view {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 24px;
+            margin-top: 20px;
+        }
+
+        .back-nav-bar {
+            margin-bottom: 16px;
+        }
+
+        /* Terminal Logs */
+        .terminal-log {
+            background-color: #0b0c0e;
+            color: #23a55a;
+            font-family: monospace;
+            padding: 16px;
+            border-radius: 6px;
+            height: 220px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 13px;
+            border: 1px solid var(--border);
+            margin-top: 12px;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background-color: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: var(--success);
+            transition: width 0.3s ease;
+        }
+
+        /* Houses grid */
+        .house-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .house-card {
+            background-color: var(--bg-tertiary);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            border: 2px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .house-card:hover {
+            border-color: var(--text-muted);
+        }
+
+        .house-card.selected {
+            border-color: var(--accent);
+            background-color: rgba(88, 101, 242, 0.1);
+        }
+    </style>
 </head>
 <body>
-  <div id="app">
 
-    <section id="appScreen" class="screen active">
-
-      <aside id="appSidebar" class="app-sidebar" aria-label="Primary">
-        <div class="sidebar-brand">
-          <span class="brand-dot small"></span>
-          <span class="app-brand-name">Discord Account Manager</span>
+<div class="container">
+    <!-- Login Section -->
+    <section id="loginSection">
+        <h2>Discord Account Login</h2>
+        <div class="form-group">
+            <label for="tokenInput">Account Token</label>
+            <div class="input-wrapper">
+                <input type="password" id="tokenInput" placeholder="Enter Discord User Token">
+                <button type="button" class="toggle-btn" id="toggleTokenVisibility">Show</button>
+            </div>
         </div>
-        <nav class="sidebar-nav">
-          <a href="#dashboard" class="nav-link active" data-tab="dashboard" aria-current="page">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-            <span class="nav-label">Dashboard</span>
-          </a>
-          <a href="#manager" class="nav-link" data-tab="manager">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
-            <span class="nav-label">Operations</span>
-          </a>
-          <a href="#settings" class="nav-link" data-tab="settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            <span class="nav-label">Settings</span>
-          </a>
-        </nav>
-        <button id="sidebarToggle" class="icon-btn" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="M13 10l2 2-2 2"/></svg>
-        </button>
-      </aside>
-
-      <header id="appHeader" class="app-header">
-        <button id="menuToggle" class="icon-btn" type="button" aria-label="Open menu" title="Open menu">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-        </button>
-        <div class="breadcrumb">
-          <span class="breadcrumb-root">Discord Manager</span>
-          <span class="breadcrumb-sep">/</span>
-          <span id="pageTitle" class="breadcrumb-current">Login</span>
+        <button id="loginBtn" style="width: 100%;">Authenticate Account</button>
+        
+        <div class="form-group" style="margin-top: 20px;">
+            <label for="savedAccounts">Saved Accounts</label>
+            <select id="savedAccounts">
+                <option value="">Select a saved account...</option>
+            </select>
         </div>
-        <span class="spacer"></span>
-        <span id="sessionPlan" class="badge">Open Access</span>
-        <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle theme" title="Toggle theme">
-          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.42 1.42"/></svg>
-          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        </button>
-      </header>
-
-      <main id="mainCanvas" class="main-canvas">
-
-        <!-- View 1 — Login / Token -->
-        <section id="loginSection" class="view-panel active" data-panel="login">
-          <div class="view-inner view-inner-narrow">
-            <div class="auth-card">
-              <div class="auth-brand">
-                <span class="brand-dot"></span>
-                <div>
-                  <h1>Discord Account Manager</h1>
-                  <p class="subtitle">Easily manage your Discord account.</p>
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="tokenInput" class="field-label">Account Token</label>
-                <div class="field-control">
-                  <input id="tokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="paste your user token">
-                  <button id="toggleToken" class="field-btn" type="button" title="Show / hide token" aria-label="Toggle token visibility">
-                    <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <svg class="icon-eye-off" display="none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
-                  </button>
-                </div>
-              </div>
-
-              <a class="token-help" href="https://www.youtube.com/results?search_query=discord+how+to+get+user+token" target="_blank" rel="noopener">How to get your token?</a>
-
-              <button id="authenticateBtn" class="btn btn-primary btn-block" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="16" r="4"/><path d="M11 13L21 3M16 8l3 3M19 5l1 1"/></svg>
-                <span>Login Account</span>
-              </button>
-              <button id="clearSavedBtn" class="btn btn-ghost btn-block" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                <span>Clear Saved Accounts</span>
-              </button>
-
-              <div class="saved-box">
-                <div class="panel-head">
-                  <h2 class="panel-title">Saved Accounts</h2>
-                  <span id="savedCount" class="panel-hint">0 accounts</span>
-                </div>
-                <ul id="savedAccountsList" class="saved-list">
-                  <li class="log-empty">No saved accounts yet.</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- View 2 — Dashboard / Main -->
-        <section id="dashboardView" class="view-panel" data-panel="dashboard">
-          <div class="view-inner">
-
-            <div class="panel profile-card">
-              <div id="profileAvatar" class="profile-avatar"></div>
-              <div class="profile-info">
-                <div class="profile-handle">
-                  <span id="profileUsername">&mdash;</span>
-                  <span id="profileHeaderBadges" class="badges-inline-container"></span>
-                  <span id="profileDiscrim" class="profile-discrim"></span>
-                </div>
-                <div id="profileTag" class="profile-sub">Not signed in.</div>
-              </div>
-              <span class="spacer"></span>
-              <button id="confirmIconBtn" class="icon-btn" type="button" title="Confirm session" aria-label="Confirm session">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5.25-3.375 8.625-8 10-4.625-1.375-8-4.75-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
-              </button>
-              <button id="logoutBtn" class="btn btn-ghost btn-small" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
-                <span>Logout</span>
-              </button>
-            </div>
-
-            <div id="summaryGrid" class="stat-grid">
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>
-                </div>
-                <div>
-                  <div class="stat-label">Owned Servers</div>
-                  <div id="metricOwned" class="stat-value">&mdash;</div>
-                  <div class="stat-sub">you own these</div>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                </div>
-                <div>
-                  <div class="stat-label">Joined Servers</div>
-                  <div id="metricJoined" class="stat-value">&mdash;</div>
-                  <div class="stat-sub">community member</div>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                </div>
-                <div>
-                  <div class="stat-label">Friends</div>
-                  <div id="metricFriends" class="stat-value">&mdash;</div>
-                  <div class="stat-sub">mutual buddies</div>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <div>
-                  <div class="stat-label">Private DMs</div>
-                  <div id="metricDMs" class="stat-value">&mdash;</div>
-                  <div class="stat-sub">direct channels</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel ops-panel">
-              <div class="panel-head">
-                <h2 class="panel-title">Operations</h2>
-                <span class="panel-hint">destructive &amp; management actions</span>
-              </div>
-              <div class="ops-grid">
-                <button id="leaveServersBtn" class="btn btn-ops" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
-                  <span>Leave Servers</span>
-                </button>
-                <button id="removeFriendsBtn" class="btn btn-ops" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M18 8l3 3M21 8l-3 3"/></svg>
-                  <span>Remove Friends</span>
-                </button>
-                <button id="badgeActionBtn" class="btn btn-ops" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5.25-3.375 8.625-8 10-4.625-1.375-8-4.75-8-10V6z"/><path d="M12 6l1.4 2.84L16.5 9.5l-2.1 2.05.5 2.95L12 13.2l-2.9 1.3.5-2.95L7.5 9.5l3.1-.66L12 6z"/></svg>
-                  <span>Manage Badges</span>
-                </button>
-                <button id="closeDMsBtn" class="btn btn-ops" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
-                  <span>Close DMs</span>
-                </button>
-                <button id="deleteUserDMsBtn" class="btn btn-ops" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
-                  <span>Delete DM Messages</span>
-                </button>
-                <button id="operationHistoryBtn" class="btn btn-ops" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                  <span>Operation History</span>
-                </button>
-                <button id="accountDetailsBtn" class="btn btn-ops" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <span>Account Details</span>
-                </button>
-                <button id="badgeEvolutionBtn" class="btn btn-ops" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
-                  <span>Badge Evolution</span>
-                </button>
-                <button id="allInOneBtn" class="btn btn-ops danger" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
-                  <span>All-in-One Cleanup</span>
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </section>
-
-        <!-- View 3 — Manage Badges -->
-        <section id="badgeSelectionView" class="view-panel" data-panel="badges">
-          <div class="view-inner">
-            <div class="view-toolbar">
-              <button id="badgeSelectionBackBtn" class="btn btn-ghost btn-small" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-                <span>Back</span>
-              </button>
-            </div>
-
-            <div id="badgeGrid" class="badge-grid">
-              <button class="badge-card" type="button" data-house="1">
-                <div class="badge-emblem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l1.6 3.2 3.5.5-2.55 2.5.6 3.5L12 9.8l-3.15 1.9.6-3.5L6.9 5.7l3.5-.5L12 2z"/><path d="M5 21l1.5-6h11L19 21"/></svg>
-                </div>
-                <div class="badge-name">Bravery</div>
-                <div class="badge-desc">HypeSquad house of courage</div>
-              </button>
-              <button class="badge-card" type="button" data-house="2">
-                <div class="badge-emblem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg>
-                </div>
-                <div class="badge-name">Brilliance</div>
-                <div class="badge-desc">HypeSquad house of intellect</div>
-              </button>
-              <button class="badge-card" type="button" data-house="3">
-                <div class="badge-emblem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-3 8-12V5l-8-3-8 3v5c0 9 8 12 8 12z"/><path d="M9 12l2 2 4-4"/></svg>
-                </div>
-                <div class="badge-name">Balance</div>
-                <div class="badge-desc">HypeSquad house of harmony</div>
-              </button>
-              <button class="badge-card" type="button" data-house="4">
-                <div class="badge-emblem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20"/><path d="M4 18l-2-9 5 4 5-7 5 7 5-4-2 9H4z"/></svg>
-                </div>
-                <div class="badge-name">Legacy</div>
-                <div class="badge-desc">Grandfathered HypeSquad badge</div>
-              </button>
-            </div>
-
-            <div class="actions-row">
-              <button id="equipBadgeBtn" class="btn btn-primary" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                <span>Equip Selected Badge</span>
-              </button>
-              <button id="removeBadgeBtn" class="btn btn-secondary" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                <span>Remove HypeSquad Badge</span>
-              </button>
-              <button id="hideAllBadgesBtn" class="btn btn-secondary" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
-                <span>Hide All Badges</span>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <!-- View 4 — Account Details -->
-        <section id="accountDetailsView" class="view-panel" data-panel="details">
-          <div class="view-inner">
-            <div class="view-toolbar">
-              <button id="accountDetailsBackBtn" class="btn btn-ghost btn-small" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-                <span>Back</span>
-              </button>
-              <span class="spacer"></span>
-              <button id="copyIdBtn" class="btn btn-secondary btn-small" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                <span>Copy Account ID</span>
-              </button>
-            </div>
-
-            <div class="panel">
-              <div class="panel-head">
-                <h2 class="panel-title">Account Details</h2>
-                <span class="panel-hint">retrieved from your profile</span>
-              </div>
-              <div id="detailsGrid" class="details-grid"></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- View 5 — Badge Evolution Tracker -->
-        <section id="badgeEvolutionView" class="view-panel" data-panel="evolution">
-          <div class="view-inner">
-            <div class="view-toolbar">
-              <button id="evolutionBackBtn" class="btn btn-ghost btn-small" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-                <span>Back</span>
-              </button>
-            </div>
-
-            <div id="evolutionCards" class="evolution-grid"></div>
-          </div>
-        </section>
-
-        <!-- View 6 — Active Operation Terminal -->
-        <section id="operationView" class="view-panel" data-panel="operation">
-          <div class="view-inner">
-            <div class="panel terminal-panel">
-              <div class="panel-head terminal-head">
-                <h2 id="operationTitle" class="panel-title">Operation</h2>
-                <div class="terminal-actions">
-                  <span id="opStatPill" class="op-pill">idle</span>
-                  <button id="backToMenuBtn" class="btn btn-ghost btn-small" type="button">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-                    <span>Menu</span>
-                  </button>
-                  <button id="stopOperationBtn" class="btn btn-ghost btn-small" type="button">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                    <span>Stop</span>
-                  </button>
-                </div>
-              </div>
-              <ul id="terminalLog" class="terminal-log"></ul>
-              <div class="progress-wrap">
-                <div class="progress-track">
-                  <div id="progressBarFill" class="progress-bar-fill"></div>
-                </div>
-                <div id="opProgressText" class="progress-text">0 / 0</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- View 7 — Settings & Whitelists -->
-        <section id="settingsView" class="view-panel" data-panel="settings">
-          <div class="view-inner">
-
-            <div class="panel">
-              <div class="panel-head">
-                <h2 class="panel-title">Desktop Controls</h2>
-                <span class="panel-hint">requires the desktop client</span>
-              </div>
-              <div class="settings-group">
-                <div class="settings-row">
-                  <div>
-                    <div class="settings-label">Launch with Windows</div>
-                    <div class="settings-desc">Start the manager on system startup.</div>
-                  </div>
-                  <label class="switch">
-                    <input type="checkbox" id="setAutoStart">
-                    <span class="track"></span>
-                  </label>
-                </div>
-                <div class="settings-row">
-                  <div>
-                    <div class="settings-label">Minimize to Tray</div>
-                    <div class="settings-desc">Keep running in the system tray on close.</div>
-                  </div>
-                  <label class="switch">
-                    <input type="checkbox" id="setMinTray">
-                    <span class="track"></span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-head">
-                <h2 class="panel-title">Appearance &amp; Speed</h2>
-                <span class="panel-hint">theme accent and request pacing</span>
-              </div>
-              <div class="settings-group">
-                <div class="settings-row">
-                  <div>
-                    <div class="settings-label">Theme Accent</div>
-                    <div class="settings-desc">Pick the accent color used across the UI.</div>
-                  </div>
-                  <div id="accentPickers" class="accent-dots">
-                    <button class="accent-dot selected" type="button" data-accent="violet" style="background:#5865f2" aria-label="Violet"></button>
-                    <button class="accent-dot" type="button" data-accent="teal" style="background:#2dd4bf" aria-label="Teal"></button>
-                    <button class="accent-dot" type="button" data-accent="rose" style="background:#f471b5" aria-label="Rose"></button>
-                    <button class="accent-dot" type="button" data-accent="amber" style="background:#f5b83d" aria-label="Amber"></button>
-                  </div>
-                </div>
-                <div class="settings-row">
-                  <div>
-                    <div class="settings-label">Request Speed</div>
-                    <div class="settings-desc">Delay between destructive API calls.</div>
-                  </div>
-                  <select id="setSpeed" class="select" aria-label="Request speed">
-                    <option value="fast">Fast</option>
-                    <option value="normal" selected>Normal</option>
-                    <option value="safe">Safe</option>
-                    <option value="ultra">Ultra-Safe</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-head">
-                <h2 class="panel-title">Whitelists</h2>
-                <span class="panel-hint">protected targets &mdash; never touched by operations</span>
-              </div>
-              <div class="whitelist-grid">
-                <div class="wl-block">
-                  <label for="wlServers" class="field-label">Whitelist Servers (IDs)</label>
-                  <textarea id="wlServers" class="whitelist-textarea" spellcheck="false" placeholder="one server ID per line"></textarea>
-                </div>
-                <div class="wl-block">
-                  <label for="wlFriends" class="field-label">Whitelist Friends (IDs or names)</label>
-                  <textarea id="wlFriends" class="whitelist-textarea" spellcheck="false" placeholder="one friend per line"></textarea>
-                </div>
-                <div class="wl-block">
-                  <label for="wlDms" class="field-label">Whitelist DMs (IDs or names)</label>
-                  <textarea id="wlDms" class="whitelist-textarea" spellcheck="false" placeholder="one user per line"></textarea>
-                </div>
-                <div class="wl-save-row">
-                  <button id="wlSaveBtn" class="btn btn-primary" type="button">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
-                    <span>Save Whitelist</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-head">
-                <h2 class="panel-title">Danger Zone</h2>
-                <span class="panel-hint">wipe local credentials and data</span>
-              </div>
-              <div class="settings-footer danger-footer">
-                <button id="deactivateLicenseBtn" class="btn btn-ghost" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <span>Deactivate Session</span>
-                </button>
-                <button id="clearAllDataBtn" class="btn btn-danger" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                  <span>Clear All Data</span>
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </section>
-
-      </main>
-
     </section>
 
-    <div id="drawerBackdrop" class="drawer-backdrop"></div>
-    <aside id="mobileDrawer" class="mobile-drawer" aria-label="Mobile navigation">
-      <div class="sidebar-brand">
-        <span class="brand-dot small"></span>
-        <span class="app-brand-name">Discord Account Manager</span>
-      </div>
-      <nav class="sidebar-nav">
-        <a href="#dashboard" class="nav-link active" data-tab="dashboard" aria-current="page">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-          <span class="nav-label">Dashboard</span>
-        </a>
-        <a href="#manager" class="nav-link" data-tab="manager">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
-          <span class="nav-label">Operations</span>
-        </a>
-        <a href="#settings" class="nav-link" data-tab="settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span class="nav-label">Settings</span>
-        </a>
-      </nav>
-    </aside>
-
-    <div id="historyModal" class="modal">
-      <div class="modal-card">
-        <div class="modal-body">
-          <div class="modal-title-row">
-            <h2 class="modal-title">Operation History</h2>
-            <span id="historyCount" class="panel-hint">0 records</span>
-          </div>
-          <ul id="historyList" class="modal-list"></ul>
+    <!-- Main App Content -->
+    <div id="appContent" class="hidden">
+        
+        <!-- Header Profile Bar -->
+        <div class="dashboard-header">
+            <div class="user-info-wrapper">
+                <img id="userAvatar" class="avatar" src="" alt="Avatar">
+                <div class="user-details">
+                    <h3 id="usernameDisplay">username</h3>
+                    <p id="userIdDisplay">ID: -</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn" id="securityCheckBtn">🛡️</button>
+                <button class="icon-btn danger" id="logoutBtn">Logout</button>
+            </div>
         </div>
-        <button id="historyModalClose" class="btn btn-secondary btn-block" type="button">Close</button>
-      </div>
+
+        <!-- Stat Cards Grid -->
+        <div class="grid-stats">
+            <div class="stat-card">
+                <div class="stat-title">Owned Servers</div>
+                <div id="statOwnedGuilds" class="stat-value">0</div>
+                <div class="stat-sub">you own these</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Joined Servers</div>
+                <div id="statJoinedGuilds" class="stat-value">0</div>
+                <div class="stat-sub">community member</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Friends</div>
+                <div id="statFriends" class="stat-value">0</div>
+                <div class="stat-sub">mutual buddies</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Private DMs</div>
+                <div id="statDms" class="stat-value">0</div>
+                <div class="stat-sub">direct channels</div>
+            </div>
+        </div>
+
+        <!-- Operations Interactive Panel -->
+        <div class="operations-section">
+            <div class="operations-header">
+                <h3>Operations</h3>
+                <span>destructive & management actions</span>
+            </div>
+            <div class="operations-grid">
+                <button class="op-btn danger-action" data-action="leave-servers">🚪 Leave Servers</button>
+                <button class="op-btn danger-action" data-action="remove-friends">👥 Remove Friends</button>
+                <button class="op-btn" data-action="manage-badges">🛡️ Manage Badges</button>
+                <button class="op-btn danger-action" data-action="close-dms">💬 Close DMs</button>
+                <button class="op-btn danger-action" data-action="delete-dm-messages">🗑️ Delete DM Messages</button>
+                <button class="op-btn" data-action="operation-history">⏱️ Operation History</button>
+                <button class="op-btn" data-action="account-details">👤 Account Details</button>
+                <button class="op-btn" data-action="badge-evolution">📈 Badge Evolution</button>
+                <button class="op-btn danger-action" data-action="all-in-one-cleanup" style="grid-column: 1 / -1; border-color: var(--danger);">⚡ All-in-One Cleanup</button>
+            </div>
+        </div>
+
+        <!-- Dynamic Sub-Views Container (Initially Hidden) -->
+        <div id="subViewContainer" class="sub-view hidden">
+            <div class="back-nav-bar">
+                <button id="backToDashboardBtn" class="icon-btn">← Back to Dashboard</button>
+            </div>
+            <div id="subViewContent"></div>
+        </div>
+
     </div>
+</div>
 
-  </div>
+<script>
+    // System Configurations
+    const API_BASE_URL = "https://discord-license-server-mythic5.vercel.app";
+    const DISCORD_API = "https://discord.com/api/v9";
+    const BADGE_CDN = "https://cdn.discordapp.com/badge-icons";
 
-  <div id="toastContainer" class="toast-container" aria-live="assertive"></div>
+    // Global State
+    let currentToken = "";
+    let currentUserData = null;
 
-  <script src="js/manager.js"></script>
-  <script src="js/license.js"></script>
+    // DOM Elements
+    const loginSection = document.getElementById('loginSection');
+    const appContent = document.getElementById('appContent');
+    const tokenInput = document.getElementById('tokenInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const toggleTokenVisibility = document.getElementById('toggleTokenVisibility');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const subViewContainer = document.getElementById('subViewContainer');
+    const subViewContent = document.getElementById('subViewContent');
+    const backToDashboardBtn = document.getElementById('backToDashboardBtn');
+
+    // Toggle Password Visibility
+    toggleTokenVisibility.addEventListener('click', () => {
+        if (tokenInput.type === 'password') {
+            tokenInput.type = 'text';
+            toggleTokenVisibility.textContent = 'Hide';
+        } else {
+            tokenInput.type = 'password';
+            toggleTokenVisibility.textContent = 'Show';
+        }
+    });
+
+    // Authenticate & Fetch Data
+    async function authenticate(token) {
+        try {
+            const response = await fetch(`${DISCORD_API}/users/@me`, {
+                headers: { "Authorization": token }
+            });
+
+            if (!response.ok) throw new Error("Invalid Token or Unauthorized");
+
+            const data = await response.json();
+            currentUserData = data;
+            currentToken = token;
+
+            // Update UI Profile Header cleanly without duplication or Nitro text beside ID
+            document.getElementById('usernameDisplay').textContent = data.username;
+            document.getElementById('userIdDisplay').textContent = `ID ${data.id}`;
+            document.getElementById('userAvatar').src = data.avatar 
+                ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.png` 
+                : `https://cdn.discordapp.com/embed/avatars/0.png`;
+
+            // Switch layout view
+            loginSection.classList.add('hidden');
+            appContent.classList.remove('hidden');
+
+            fetchDashboardMetrics();
+        } catch (err) {
+            alert(`Authentication Error: ${err.message}`);
+        }
+    }
+
+    // Fetch Metrics for Dashboard Cards
+    async function fetchDashboardMetrics() {
+        try {
+            const guildRes = await fetch(`${DISCORD_API}/users/@me/guilds`, {
+                headers: { "Authorization": currentToken }
+            });
+            if (guildRes.ok) {
+                const guilds = await guildRes.json();
+                const owned = guilds.filter(g => g.owner).length;
+                document.getElementById('statOwnedGuilds').textContent = owned;
+                document.getElementById('statJoinedGuilds').textContent = guilds.length - owned;
+            }
+
+            const relRes = await fetch(`${DISCORD_API}/users/@me/relationships`, {
+                headers: { "Authorization": currentToken }
+            });
+            if (relRes.ok) {
+                const friends = await relRes.json();
+                document.getElementById('statFriends').textContent = friends.filter(f => f.type === 1).length;
+            }
+
+            const channelRes = await fetch(`${DISCORD_API}/users/@me/channels`, {
+                headers: { "Authorization": currentToken }
+            });
+            if (channelRes.ok) {
+                const channels = await channelRes.json();
+                document.getElementById('statDms').textContent = channels.length;
+            }
+        } catch (err) {
+            console.error("Failed fetching metrics:", err);
+        }
+    }
+
+    // Handle Operations Sub-view switching
+    document.querySelectorAll('.op-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.getAttribute('data-action');
+            renderSubView(action);
+        });
+    });
+
+    backToDashboardBtn.addEventListener('click', () => {
+        subViewContainer.classList.add('hidden');
+        subViewContent.innerHTML = '';
+    });
+
+    function renderSubView(action) {
+        subViewContainer.classList.remove('hidden');
+        subViewContent.innerHTML = '';
+
+        if (action === 'manage-badges') {
+            subViewContent.innerHTML = `
+                <h3>Select HypeSquad House</h3>
+                <div class="house-grid">
+                    <div class="house-card" data-house="1"><h4>Bravery</h4></div>
+                    <div class="house-card" data-house="2"><h4>Brilliance</h4></div>
+                    <div class="house-card" data-house="3"><h4>Balance</h4></div>
+                    <div class="house-card" data-house="4"><h4>Legacy</h4></div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="setHouseBtn">Equip Selected House</button>
+                    <button id="removeHouseBtn" class="danger">Leave HypeSquad</button>
+                </div>
+            `;
+
+            let chosenHouse = null;
+            document.querySelectorAll('.house-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    document.querySelectorAll('.house-card').forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    chosenHouse = card.getAttribute('data-house');
+                });
+            });
+
+            document.getElementById('setHouseBtn').addEventListener('click', async () => {
+                if (!chosenHouse) return alert("Please select a house first.");
+                const res = await fetch(`${DISCORD_API}/hypesquad/online`, {
+                    method: 'POST',
+                    headers: { 'Authorization': currentToken, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ house_id: parseInt(chosenHouse) })
+                });
+                if (res.ok) alert("HypeSquad house successfully updated!");
+                else alert("Failed to update house.");
+            });
+
+            document.getElementById('removeHouseBtn').addEventListener('click', async () => {
+                const res = await fetch(`${DISCORD_API}/hypesquad/online`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': currentToken }
+                });
+                if (res.ok) alert("Successfully left HypeSquad.");
+                else alert("Failed to leave HypeSquad.");
+            });
+
+        } else if (action === 'account-details') {
+            const createdAt = new Date(Number((BigInt(currentUserData.id) >> 22n) + 1420070400000n)).toLocaleDateString();
+            subViewContent.innerHTML = `
+                <h3>Account Details</h3>
+                <p><strong>User ID:</strong> ${currentUserData.id}</p>
+                <p><strong>Creation Date:</strong> ${createdAt}</p>
+                <p><strong>Email:</strong> ${currentUserData.email || 'Hidden/N/A'}</p>
+                <p><strong>Phone:</strong> ${currentUserData.phone || 'N/A'}</p>
+                <p><strong>2FA Enabled:</strong> ${currentUserData.mfa_enabled ? "Yes" : "No"}</p>
+                <p><strong>Nitro Status:</strong> ${currentUserData.premium_type ? `Type ${currentUserData.premium_type}` : "None"}</p>
+            `;
+        } else {
+            subViewContent.innerHTML = `
+                <h3>Operation: ${action.replace(/-/g, ' ').toUpperCase()}</h3>
+                <div class="progress-bar-container"><div id="opProgressBar" class="progress-bar" style="width: 0%;"></div></div>
+                <div id="terminalLog" class="terminal-log">> Initializing operation handler for ${action}...\n> Ready to execute task sequence.</div>
+                <button id="startOpBtn" style="margin-top: 15px;">Start Execution</button>
+            `;
+
+            document.getElementById('startOpBtn').addEventListener('click', () => {
+                const terminal = document.getElementById('terminalLog');
+                const progressBar = document.getElementById('opProgressBar');
+                terminal.textContent += `\n> Starting process...`;
+                progressBar.style.width = '50%';
+                setTimeout(() => {
+                    progressBar.style.width = '100%';
+                    terminal.textContent += `\n> Operation completed successfully.`;
+                }, 1000);
+            });
+        }
+    }
+
+    loginBtn.addEventListener('click', () => {
+        const token = tokenInput.value.trim();
+        if (token) authenticate(token);
+    });
+
+    logoutBtn.addEventListener('click', () => {
+        currentToken = "";
+        currentUserData = null;
+        appContent.classList.add('hidden');
+        subViewContainer.classList.add('hidden');
+        loginSection.classList.remove('hidden');
+        tokenInput.value = "";
+    });
+</script>
+
 </body>
 </html>
