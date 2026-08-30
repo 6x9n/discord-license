@@ -582,16 +582,11 @@ window.manager = {
     return out;
   }
 
-  function renderProfileBadges() {
-    const host = byId('profileBadges');
-    if (!host) {
-      return;
-    }
-    const badges = getUserBadges(state.user, state.profileData || {});
+  function renderBadgeImages(host, badges) {
     host.innerHTML = '';
     badges.forEach(function (b) {
       const img = document.createElement('img');
-      img.className = 'profile-badge-img';
+      img.className = 'inline-badge';
       img.src = getBadgeImageUrl(b);
       img.alt = b.title;
       img.title = b.title;
@@ -604,6 +599,31 @@ window.manager = {
       }
       host.appendChild(img);
     });
+  }
+
+  function fetchProfileBadges(host) {
+    if (!state.user || !state.user.id) {
+      return;
+    }
+    makeRequest('GET', '/users/' + state.user.id + '/profile')
+      .then(function (res) {
+        if (res && res.data && typeof res.data === 'object' && Array.isArray(res.data.badges)) {
+          state.profileData = res.data;
+          renderBadgeImages(host, getUserBadges(state.user, res.data));
+          renderDetailsView();
+        }
+      })
+      .catch(function () {});
+  }
+
+  function renderProfileBadges() {
+    const host = byId('profileHeaderBadges') || byId('profileBadges');
+    if (!host) {
+      return;
+    }
+    const badges = getUserBadges(state.user, state.profileData || {});
+    renderBadgeImages(host, badges);
+    fetchProfileBadges(host);
   }
 
   /* ---------- Accounts list ---------- */

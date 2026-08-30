@@ -2576,6 +2576,21 @@ html[data-theme="light"] .btn-ops:hover {
 
 /* ---------- Profile badge images (phase 4.4) ---------- */
 
+.badges-inline-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.inline-badge {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  object-fit: contain;
+  flex: none;
+}
+
 .profile-badges {
   display: inline-flex;
   align-items: center;
