@@ -206,11 +206,16 @@ POST /api/validate
 
 ---
 
-## Git / Remote — SHIPPED
+## Git / Remote — SHIPPED (two repos)
 
-- **Repo initialized**: `git init` on `main`, single root commit.
-- **Remote**: `origin → https://github.com/6x9n/discord-license.git` (force-pushed).
-- **Push status**: `SUCCESS` — `[new branch] main -> main`, `git ls-remote` confirms `e04c15dee8fd0f8b57e9111c396ad8520ac8a947 refs/heads/main`. `main` tracks `origin/main` (upstream set).
-- **Branch verification**: local `main` == remote `main` (`## main...origin/main`, working tree clean).
-- **`.gitignore`**: `node_modules/`, `.vercel/`, `.env`, `data/keys.json` (verified ignored via `git check-ignore`; `data/keys.json` and `admin-app/data/keys.json` both matched by the pattern, not tracked).
-- **Phase 3 status**: the `admin-app/` extraction, client cleanup, and this doc update are **uncommitted** — pending commit + push (`git add -A && git commit && git push origin main`).
+### Client app (repo root) — `discord-license`
+- **Remote**: `origin → https://github.com/6x9n/discord-license.git`, branch `main` tracks `origin/main`.
+- **History**: `e04c15d` (initial) → `e3f8b95` (docs) → **`1d964d0`** `refactor: separate admin panel into server repo and strip client to pure license consumer`.
+- **Push status**: `SUCCESS` — `git ls-remote origin main` → `1d964d0f1ee26401e4cfc7c00953287326aadb2d refs/heads/main`; local `main` == remote (`## main...origin/main`, working tree clean).
+- **`.gitignore`**: `node_modules/`, `.vercel/`, `.env`, `data/keys.json`, `**/data/keys.json`, `admin-app/` (nested standalone repo excluded — no submodule tracking).
+
+### Standalone Admin Server (`admin-app/`) — `discord-license-server`
+- **Remote**: `origin → https://github.com/6x9n/discord-license-server.git`, branch `main` tracks `origin/main` (initialized in `admin-app`, force-pushed over the prior scaffold `ad8cb4c`).
+- **Head commit**: **`2af6d3b`** `feat: complete standalone admin server and license management backend` (15 files: portal, theme, portal JS, 7 API routes, libs, `vercel.json`, `package.json`, `.gitignore`).
+- **Push status**: `SUCCESS` — `git ls-remote origin main` → `2af6d3bb2ad5a84098a61fbc95a1158be975be54 refs/heads/main`; local `main` == remote, working tree clean.
+- **`.gitignore`** (admin-app): `node_modules/`, `.vercel/`, `.env`, `**/data/keys.json` — `admin-app/data/keys.json` confirmed ignored, not tracked.
