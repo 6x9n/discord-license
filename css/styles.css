@@ -1806,3 +1806,755 @@ html[data-theme="light"] #managerTable tbody tr:hover {
 html[data-theme="light"] .density-option span {
   background: rgba(255, 255, 255, 0.6);
 }
+
+/* ============================================================
+   Phase 4 — Discord Account Manager
+   ============================================================ */
+
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.view-inner-narrow {
+  max-width: 480px;
+}
+
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(20px, 5vw, 34px);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-1), var(--shadow-2);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 6px;
+}
+
+.auth-brand h1 {
+  font-size: clamp(18px, 3vw, 22px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-glass);
+}
+
+.token-help {
+  color: var(--accent);
+  font-size: 0.84em;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.token-help:hover {
+  text-decoration: underline;
+}
+
+#tokenInput {
+  width: 100%;
+  padding: 13px 48px 13px 15px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.92em;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+#tokenInput:focus {
+  border-color: rgba(88, 101, 242, 0.7);
+  box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.25);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#tokenInput::placeholder {
+  color: var(--muted);
+}
+
+.saved-box {
+  border-top: 1px solid var(--border-glass);
+  padding-top: 4px;
+}
+
+.saved-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 4px 2px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.saved-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+}
+
+.saved-avatar {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.saved-name {
+  font-weight: 700;
+  font-size: 0.86em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.saved-actions .btn {
+  padding: 7px 12px;
+}
+
+/* ---------- Profile card ---------- */
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  flex-wrap: wrap;
+}
+
+.profile-avatar {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--accent-soft);
+  border: 2px solid rgba(88, 101, 242, 0.55);
+  box-shadow: 0 0 22px rgba(88, 101, 242, 0.3);
+}
+
+.profile-info {
+  min-width: 0;
+}
+
+.profile-handle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 1.15em;
+  letter-spacing: -0.01em;
+  min-width: 0;
+}
+
+#profileUsername {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-discrim {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8em;
+  flex-shrink: 0;
+}
+
+.profile-sub {
+  color: var(--muted);
+  font-size: 0.8em;
+  margin-top: 2px;
+}
+
+/* ---------- Operations grid ---------- */
+
+.ops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.btn-ops {
+  justify-content: flex-start;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-color: var(--border-glass);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), var(--shadow-1);
+}
+
+.btn-ops:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-ops.danger {
+  color: var(--error);
+  border-color: rgba(242, 63, 67, 0.35);
+}
+
+.btn-ops.danger:hover {
+  background: rgba(242, 63, 67, 0.12);
+  border-color: rgba(242, 63, 67, 0.55);
+  box-shadow: 0 10px 30px rgba(242, 63, 67, 0.22);
+}
+
+/* ---------- Badge selection ---------- */
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.badge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-glass);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+  color: var(--text);
+  font-family: var(--font);
+  cursor: pointer;
+  transition: transform 0.2s var(--spring), border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.badge-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-glass-strong);
+}
+
+.badge-card.selected {
+  border-color: rgba(88, 101, 242, 0.65);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px rgba(88, 101, 242, 0.4), 0 12px 34px rgba(88, 101, 242, 0.22);
+  transform: translateY(-2px);
+}
+
+.badge-emblem {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(88, 101, 242, 0.35);
+}
+
+.badge-emblem svg {
+  width: 26px;
+  height: 26px;
+}
+
+.badge-name {
+  font-weight: 800;
+  font-size: 0.98em;
+}
+
+.badge-desc {
+  color: var(--muted);
+  font-size: 0.78em;
+  text-align: center;
+}
+
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---------- Account details ---------- */
+
+.details-grid {
+  padding: 6px 0;
+}
+
+.details-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.details-row:last-child {
+  border-bottom: none;
+}
+
+.details-label {
+  color: var(--muted);
+  font-size: 0.84em;
+  font-weight: 600;
+}
+
+.details-value {
+  font-weight: 700;
+  font-size: 0.88em;
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Badge evolution ---------- */
+
+.evolution-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.evolution-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+
+.evo-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.evo-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(88, 101, 242, 0.35);
+}
+
+.evo-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.evo-title {
+  font-weight: 800;
+  font-size: 1.02em;
+}
+
+.evo-sub {
+  color: var(--muted);
+  font-size: 0.78em;
+  margin-top: 1px;
+}
+
+.evo-avatar {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.evo-avatar svg {
+  width: 24px;
+  height: 24px;
+}
+
+.evo-tier {
+  font-size: 1.1em;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.evo-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evo-step {
+  display: flex;
+  gap: 8px;
+  font-size: 0.84em;
+  color: var(--muted);
+}
+
+.evo-step.done {
+  color: var(--text);
+}
+
+.evo-step-mark {
+  width: 16px;
+  flex-shrink: 0;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.evo-bar-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.78em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.evo-remaining {
+  color: var(--muted);
+  font-size: 0.8em;
+}
+
+/* ---------- Terminal ---------- */
+
+.terminal-head {
+  gap: 12px;
+}
+
+.terminal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.op-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.76em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(88, 101, 242, 0.4);
+  white-space: nowrap;
+}
+
+.terminal-log {
+  list-style: none;
+  height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 10px 12px;
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+  font-size: 0.8em;
+}
+
+.term-line {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+  color: var(--text-2);
+}
+
+.term-line.error {
+  color: var(--error);
+}
+
+.term-time {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.term-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.progress-wrap {
+  padding: 12px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #6b76ff);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  text-align: right;
+  font-size: 0.78em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Whitelists ---------- */
+
+.whitelist-grid {
+  display: grid;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.wl-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.whitelist-textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+  font-size: 0.84em;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.whitelist-textarea:focus {
+  border-color: rgba(88, 101, 242, 0.7);
+  box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.25);
+}
+
+.wl-save-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.danger-footer {
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Accent pickers ---------- */
+
+.accent-dots {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.accent-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.accent-dot:hover {
+  transform: scale(1.12);
+}
+
+.accent-dot.selected {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 12px currentColor;
+}
+
+/* ---------- Operation history modal ---------- */
+
+.modal-body {
+  width: 100%;
+}
+
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-glass);
+  margin-bottom: 6px;
+}
+
+.modal-title {
+  font-size: 1.05em;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.modal-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px 0 12px;
+}
+
+.modal-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  font-size: 0.86em;
+}
+
+.modal-item-sub {
+  color: var(--muted);
+  font-size: 0.78em;
+}
+
+/* ---------- Accent themes ---------- */
+
+html[data-accent="teal"] {
+  --accent: #2dd4bf;
+  --accent-strong: #0ea5a4;
+  --accent-soft: rgba(45, 212, 191, 0.16);
+}
+
+html[data-accent="rose"] {
+  --accent: #f471b5;
+  --accent-strong: #ec4899;
+  --accent-soft: rgba(244, 113, 181, 0.16);
+}
+
+html[data-accent="amber"] {
+  --accent: #f5b83d;
+  --accent-strong: #f59e0b;
+  --accent-soft: rgba(245, 184, 61, 0.16);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+}
+
+.badge-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 12px 34px var(--accent-soft);
+}
+
+/* ---------- Light theme refinements (phase 4) ---------- */
+
+html[data-theme="light"] .auth-card,
+html[data-theme="light"] .terminal-log {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+html[data-theme="light"] .terminal-log {
+  color: var(--text-2);
+}
+
+html[data-theme="light"] .whitelist-textarea,
+html[data-theme="light"] #tokenInput {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+html[data-theme="light"] .saved-item,
+html[data-theme="light"] .modal-item {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+html[data-theme="light"] .btn-ops {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+html[data-theme="light"] .btn-ops:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* ---------- Responsive (phase 4) ---------- */
+
+@media (max-width: 600px) {
+  .profile-card {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .profile-info {
+    width: 100%;
+  }
+
+  .profile-handle {
+    justify-content: center;
+  }
+
+  .profile-card .spacer {
+    display: none;
+  }
+
+  .terminal-log {
+    height: 260px;
+  }
+}

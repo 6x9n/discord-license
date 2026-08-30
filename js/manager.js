@@ -15,6 +15,16 @@ window.CONFIG = {
   prefs: {
     key: 'dmt.prefs',
     startedAt: 'dmt.startedAt'
+  },
+  dsc: {
+    token: 'dmt.dsc.token',
+    user: 'dmt.dsc.user',
+    accounts: 'dmt.dsc.accounts',
+    history: 'dmt.dsc.history',
+    whitelists: 'dmt.dsc.whitelists',
+    speed: 'dmt.dsc.speed',
+    accent: 'dmt.dsc.accent',
+    electron: 'dmt.dsc.electron'
   }
 };
 
@@ -71,23 +81,16 @@ window.manager = {
   }
 };
 
-/* ---------------- Phase 2 — Responsive Web Shell & Navigation ---------------- */
+/* ============================================================
+   Discord Account Manager
+   ============================================================ */
 
 (function () {
   const CONFIG = window.CONFIG;
-  const root = document.getElementById('appScreen');
-  const pageTitle = document.getElementById('pageTitle');
-  const menuToggle = document.getElementById('menuToggle');
-  const sidebarToggle = document.getElementById('sidebarToggle');
-  const themeToggle = document.getElementById('themeToggle');
-  const drawerBackdrop = document.getElementById('drawerBackdrop');
-  const mainCanvas = document.getElementById('mainCanvas');
 
-  const TABS = {
-    dashboard: { title: 'Dashboard', panel: 'viewDashboard' },
-    manager: { title: 'Manager', panel: 'viewManager' },
-    settings: { title: 'Settings', panel: 'viewSettings' }
-  };
+  function byId(id) {
+    return document.getElementById(id);
+  }
 
   function storageGet(store, key) {
     try {
@@ -103,130 +106,20 @@ window.manager = {
     } catch (e) {}
   }
 
-  function setActiveTab(name, opts) {
-    const tab = Object.prototype.hasOwnProperty.call(TABS, name) ? name : 'dashboard';
-    const spec = TABS[tab];
-    const navLinks = document.querySelectorAll('.nav-link[data-tab]');
-    const panels = document.querySelectorAll('.view-panel');
-
-    panels.forEach(function (panel) {
-      panel.classList.toggle('active', panel.id === spec.panel);
-    });
-    navLinks.forEach(function (link) {
-      const active = link.getAttribute('data-tab') === tab;
-      link.classList.toggle('active', active);
-      if (active) {
-        link.setAttribute('aria-current', 'page');
-      } else {
-        link.removeAttribute('aria-current');
-      }
-    });
-    if (pageTitle) {
-      pageTitle.textContent = spec.title;
+  function jsonGet(store, key) {
+    const raw = storageGet(store, key);
+    if (!raw) {
+      return null;
     }
-    if (mainCanvas) {
-      mainCanvas.scrollTop = 0;
-    }
-    if (!opts || opts.persist !== false) {
-      storageSet(sessionStorage, CONFIG.nav.tabKey, tab);
-    }
-  }
-
-  function openDrawer() {
-    document.body.classList.add('drawer-open');
-  }
-
-  function closeDrawer() {
-    document.body.classList.remove('drawer-open');
-  }
-
-  function toggleTheme() {
-    const htmlEl = document.documentElement;
-    const next = htmlEl.getAttribute('data-theme') === 'light' ? '' : 'light';
-    if (next) {
-      htmlEl.setAttribute('data-theme', 'light');
-    } else {
-      htmlEl.removeAttribute('data-theme');
-    }
-    storageSet(localStorage, CONFIG.nav.themeKey, next);
-  }
-
-  function applyTheme() {
-    if (storageGet(localStorage, CONFIG.nav.themeKey) === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-    }
-  }
-
-  function applySidebar() {
-    if (root && storageGet(localStorage, CONFIG.nav.sidebarKey) === '1') {
-      root.classList.add('sidebar-collapsed');
-    }
-  }
-
-  document.addEventListener('click', function (e) {
-    if (!(e.target && e.target.closest)) {
-      return;
-    }
-    const tabLink = e.target.closest('.nav-link[data-tab]');
-    if (tabLink) {
-      e.preventDefault();
-      setActiveTab(tabLink.getAttribute('data-tab'));
-      closeDrawer();
-    }
-  });
-
-  if (menuToggle) {
-    menuToggle.addEventListener('click', openDrawer);
-  }
-  if (drawerBackdrop) {
-    drawerBackdrop.addEventListener('click', closeDrawer);
-  }
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && document.body.classList.contains('drawer-open')) {
-      closeDrawer();
-    }
-  });
-
-  if (sidebarToggle && root) {
-    sidebarToggle.addEventListener('click', function () {
-      const collapsed = root.classList.toggle('sidebar-collapsed');
-      storageSet(localStorage, CONFIG.nav.sidebarKey, collapsed ? '1' : '0');
-    });
-  }
-
-  if (themeToggle) {
-    themeToggle.addEventListener('click', toggleTheme);
-  }
-
-  window.appNav = { setActiveTab: setActiveTab };
-
-  applyTheme();
-  applySidebar();
-  setActiveTab(storageGet(sessionStorage, CONFIG.nav.tabKey) || 'dashboard');
-})();
-
-/* ---------------- Phase 3 — Dashboard, Manager Workspace, Settings ---------------- */
-
-(function () {
-  const CONFIG = window.CONFIG;
-
-  function byId(id) {
-    return document.getElementById(id);
-  }
-
-  function storageGet(store, key, fallback) {
     try {
-      const raw = store.getItem(key);
-      return raw === null || raw === undefined ? fallback : raw;
+      return JSON.parse(raw);
     } catch (e) {
-      return fallback;
+      return null;
     }
   }
 
-  function storageSet(store, key, value) {
-    try {
-      store.setItem(key, value);
-    } catch (e) {}
+  function jsonSet(store, key, value) {
+    storageSet(store, key, JSON.stringify(value));
   }
 
   function toast(message, kind) {
@@ -235,387 +128,1296 @@ window.manager = {
     }
   }
 
-  /* ---------- Activity log ---------- */
+  /* ---------- View navigation ---------- */
 
-  const logEl = byId('dashboardActivityLog');
-  const logCountEl = byId('logCount');
-  const LOG_MAX = 60;
+  const VIEWS = {
+    login: { panel: 'loginSection', title: 'Login' },
+    dashboard: { panel: 'dashboardView', title: 'Dashboard', tab: 'dashboard' },
+    badges: { panel: 'badgeSelectionView', title: 'Manage Badges' },
+    details: { panel: 'accountDetailsView', title: 'Account Details' },
+    evolution: { panel: 'badgeEvolutionView', title: 'Badge Evolution' },
+    operation: { panel: 'operationView', title: 'Operation', tab: 'manager' },
+    settings: { panel: 'settingsView', title: 'Settings', tab: 'settings' }
+  };
 
-  function renderActivityLog(event, kind) {
-    if (!logEl) {
+  const pageTitle = byId('pageTitle');
+  const mainCanvas = byId('mainCanvas');
+
+  function showView(name, opts) {
+    const meta = Object.prototype.hasOwnProperty.call(VIEWS, name) ? VIEWS[name] : VIEWS.dashboard;
+    const panels = document.querySelectorAll('.view-panel');
+    panels.forEach(function (panel) {
+      panel.classList.toggle('active', panel.id === meta.panel);
+    });
+
+    const navLinks = document.querySelectorAll('.nav-link[data-tab]');
+    navLinks.forEach(function (link) {
+      const active = meta.tab && link.getAttribute('data-tab') === meta.tab;
+      link.classList.toggle('active', !!active);
+      if (active) {
+        link.setAttribute('aria-current', 'page');
+      } else {
+        link.removeAttribute('aria-current');
+      }
+    });
+
+    if (pageTitle) {
+      pageTitle.textContent = meta.title;
+    }
+    if (mainCanvas) {
+      mainCanvas.scrollTop = 0;
+    }
+    if (opts && opts.persist && meta.tab) {
+      storageSet(sessionStorage, CONFIG.nav.tabKey, meta.tab);
+    }
+  }
+
+  window.appNav = { showView: showView, setActiveTab: function (name) { showView(name, { persist: true }); } };
+
+  /* ---------- Shell & prefs (phase 2 / 3) ---------- */
+
+  function storageGet2(store, key, fallback) {
+    const raw = storageGet(store, key);
+    return raw === null || raw === undefined ? fallback : raw;
+  }
+
+  const root = byId('appScreen');
+  const themeToggle = byId('themeToggle');
+
+  document.addEventListener('click', function (e) {
+    if (!(e.target && e.target.closest)) {
       return;
     }
-    const empty = logEl.querySelector('.log-empty');
-    if (empty) {
-      empty.remove();
+    const tabLink = e.target.closest('.nav-link[data-tab]');
+    if (tabLink) {
+      e.preventDefault();
+      window.appNav.setActiveTab(tabLink.getAttribute('data-tab'));
+      document.body.classList.remove('drawer-open');
+    }
+  });
+
+  const menuToggle = byId('menuToggle');
+  const drawerBackdrop = byId('drawerBackdrop');
+  if (menuToggle) {
+    menuToggle.addEventListener('click', function () {
+      document.body.classList.add('drawer-open');
+    });
+  }
+  if (drawerBackdrop) {
+    drawerBackdrop.addEventListener('click', function () {
+      document.body.classList.remove('drawer-open');
+    });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && document.body.classList.contains('drawer-open')) {
+      document.body.classList.remove('drawer-open');
+    }
+  });
+
+  const sidebarToggle = byId('sidebarToggle');
+  if (sidebarToggle && root) {
+    sidebarToggle.addEventListener('click', function () {
+      const collapsed = root.classList.toggle('sidebar-collapsed');
+      storageSet(localStorage, CONFIG.nav.sidebarKey, collapsed ? '1' : '0');
+    });
+  }
+  if (root && storageGet2(localStorage, CONFIG.nav.sidebarKey, '') === '1') {
+    root.classList.add('sidebar-collapsed');
+  }
+
+  function applyTheme() {
+    if (storageGet2(localStorage, CONFIG.nav.themeKey, '') === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }
+
+  if (themeToggle) {
+    themeToggle.addEventListener('click', function () {
+      const htmlEl = document.documentElement;
+      const next = htmlEl.getAttribute('data-theme') === 'light' ? '' : 'light';
+      if (next) {
+        htmlEl.setAttribute('data-theme', 'light');
+      } else {
+        htmlEl.removeAttribute('data-theme');
+      }
+      storageSet(localStorage, CONFIG.nav.themeKey, next);
+    });
+  }
+
+  applyTheme();
+
+  /* ---------- Discord API ---------- */
+
+  const DISCORD_API = 'https://discord.com/api/v9';
+  const state = {
+    user: jsonGet(localStorage, CONFIG.dsc.user),
+    token: storageGet(localStorage, CONFIG.dsc.token) || '',
+    guilds: [],
+    rel: [],
+    running: false,
+    stopped: false,
+    selectedHouse: null
+  };
+
+  function apiCall(method, path, body) {
+    const headers = { 'Authorization': state.token };
+    let payload;
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      payload = JSON.stringify(body);
+    }
+    return fetch(DISCORD_API + path, { method: method, headers: headers, body: payload })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        }).catch(function () {
+          return { status: res.status, data: null };
+        });
+      });
+  }
+
+  function hasAccount() {
+    return !!state.token && !!state.user;
+  }
+
+  function setActiveAccount(token, user) {
+    state.token = token;
+    state.user = user;
+    storageSet(localStorage, CONFIG.dsc.token, token);
+    jsonSet(localStorage, CONFIG.dsc.user, user);
+    applyBadge();
+  }
+
+  function clearActiveAccount() {
+    state.token = '';
+    state.user = null;
+    storageSet(localStorage, CONFIG.dsc.token, '');
+    localStorage.removeItem(CONFIG.dsc.user);
+    applyBadge();
+  }
+
+  function applyBadge() {
+    const badge = byId('sessionPlan');
+    if (badge) {
+      badge.textContent = state.user ? state.user.username : 'Not Logged In';
+    }
+  }
+
+  function avatarUrl(user, size) {
+    if (!user || !user.avatar) {
+      return '';
+    }
+    const ext = user.avatar.indexOf('a_') === 0 ? 'gif' : 'png';
+    return 'https://cdn.discordapp.com/avatars/' + user.id + '/' + user.avatar + '.' + ext + '?size=' + (size || 128);
+  }
+
+  function snowflakeDate(id) {
+    if (!id) {
+      return '';
+    }
+    const ms = (parseInt(id, 10) / 4194304) + 1420070400000;
+    return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function flagNames(flags) {
+    if (!flags) {
+      return 'None';
+    }
+    const bits = [
+      [0, 'Staff'],
+      [1, 'Partner'],
+      [2, 'HypeSquad Events'],
+      [3, 'Bug Hunter L1'],
+      [6, 'HypeSquad Bravery'],
+      [7, 'HypeSquad Brilliance'],
+      [8, 'HypeSquad Balance'],
+      [9, 'Early Supporter'],
+      [14, 'Bug Hunter L2'],
+      [16, 'Verified Bot Dev'],
+      [17, 'Certified Moderator'],
+      [18, 'HTTP Interactions'],
+      [22, 'Active Developer']
+    ];
+    const names = [];
+    bits.forEach(function (bit) {
+      if (flags & (1 << bit[0])) {
+        names.push(bit[1]);
+      }
+    });
+    return names.length ? names.join(', ') : 'None';
+  }
+
+  function nitroTier(validHostType) {
+    const map = ['None', 'Nitro Classic', 'Nitro', 'Nitro Basic'];
+    return map[validHostType] || 'None';
+  }
+
+  /* ---------- Accounts list ---------- */
+
+  function loadAccounts() {
+    return jsonGet(localStorage, CONFIG.dsc.accounts) || [];
+  }
+
+  function saveAccounts(list) {
+    jsonSet(localStorage, CONFIG.dsc.accounts, list);
+    renderSavedAccounts();
+  }
+
+  function renderSavedAccounts() {
+    const list = byId('savedAccountsList');
+    const count = byId('savedCount');
+    const accounts = loadAccounts();
+    if (count) {
+      count.textContent = accounts.length + (accounts.length === 1 ? ' account' : ' accounts');
+    }
+    if (!list) {
+      return;
+    }
+    list.innerHTML = '';
+    if (!accounts.length) {
+      const empty = document.createElement('li');
+      empty.className = 'log-empty';
+      empty.textContent = 'No saved accounts yet.';
+      list.appendChild(empty);
+      return;
+    }
+    accounts.forEach(function (acc) {
+      const li = document.createElement('li');
+      li.className = 'saved-item';
+
+      const avatar = document.createElement('span');
+      avatar.className = 'saved-avatar';
+      const url = avatarUrl(acc.user, 64);
+      if (url) {
+        avatar.style.backgroundImage = 'url("' + url + '")';
+      } else {
+        avatar.textContent = (acc.user.username || '?').slice(0, 1).toUpperCase();
+      }
+
+      const name = document.createElement('span');
+      name.className = 'saved-name';
+      name.textContent = acc.user.username + (acc.user.discriminator && acc.user.discriminator !== '0' ? '#' + acc.user.discriminator : '');
+
+      const actions = document.createElement('span');
+      actions.className = 'saved-actions';
+
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'btn btn-primary btn-small';
+      useBtn.textContent = 'Use';
+      useBtn.setAttribute('data-use', acc.user.id);
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn btn-ghost btn-small';
+      delBtn.textContent = 'Delete';
+      delBtn.setAttribute('data-del', acc.user.id);
+
+      actions.appendChild(useBtn);
+      actions.appendChild(delBtn);
+
+      li.appendChild(avatar);
+      li.appendChild(name);
+      li.appendChild(actions);
+      list.appendChild(li);
+    });
+  }
+
+  /* ---------- Auth ---------- */
+
+  function handleAuthError(res) {
+    if (res && typeof res.message === 'string') {
+      if (res.message.toLowerCase().indexOf('unauthorized') !== -1 || res.message.toLowerCase().indexOf('401') !== -1) {
+        return 'Invalid token. Check it and try again.';
+      }
+      return res.message;
+    }
+    return 'Authentication failed.';
+  }
+
+  function validateToken(token) {
+    const headers = { 'Authorization': token };
+    return fetch(DISCORD_API + '/users/@me', { method: 'GET', headers: headers })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        }).catch(function () {
+          return { status: res.status, data: null };
+        });
+      });
+  }
+
+  function loginWithToken(token) {
+    return validateToken(token).then(function (res) {
+      if (!res.data || !res.data.id) {
+        throw new Error(handleAuthError(res.data || {}));
+      }
+      return res.data;
+    });
+  }
+
+  function upsertAccount(token, user) {
+    const accounts = loadAccounts();
+    const existing = accounts.filter(function (acc) {
+      return acc.user.id !== user.id;
+    });
+    existing.unshift({ token: token, user: user, savedAt: Date.now() });
+    saveAccounts(existing.slice(0, 20));
+  }
+
+  function renderProfile(user) {
+    const avatarEl = byId('profileAvatar');
+    if (avatarEl) {
+      const url = avatarUrl(user, 128);
+      if (url) {
+        avatarEl.style.backgroundImage = 'url("' + url + '")';
+      }
+    }
+    const usernameEl = byId('profileUsername');
+    const discrimEl = byId('profileDiscrim');
+    const tagEl = byId('profileTag');
+    if (usernameEl) {
+      usernameEl.textContent = user.username || 'Unknown';
+    }
+    if (discrimEl) {
+      discrimEl.textContent = user.discriminator && user.discriminator !== '0' ? '#' + user.discriminator : '';
+    }
+    if (tagEl) {
+      tagEl.textContent = 'ID ' + user.id + ' \u00b7 ' + nitroTier(user.premium_type);
+    }
+  }
+
+  function refreshMetrics() {
+    const ownedEl = byId('metricOwned');
+    const joinedEl = byId('metricJoined');
+    const friendsEl = byId('metricFriends');
+    const dmsEl = byId('metricDMs');
+
+    function done(owned, joined, friends, dms) {
+      if (ownedEl) {
+        ownedEl.textContent = owned;
+      }
+      if (joinedEl) {
+        joinedEl.textContent = joined;
+      }
+      if (friendsEl) {
+        friendsEl.textContent = friends;
+      }
+      if (dmsEl) {
+        dmsEl.textContent = dms;
+      }
+    }
+
+    if (!hasAccount()) {
+      done('-', '-', '-', '-');
+      return;
+    }
+
+    Promise.all([
+      apiCall('GET', '/users/@me/guilds'),
+      apiCall('GET', '/users/@me/relationships')
+    ]).then(function (results) {
+      const guilds = Array.isArray(results[0].data) ? results[0].data : [];
+      const rel = Array.isArray(results[1].data) ? results[1].data : [];
+
+      state.guilds = guilds;
+      state.rel = rel;
+
+      const owned = guilds.filter(function (g) {
+        return !!g.owner;
+      }).length;
+      const joined = guilds.length;
+      const friends = rel.filter(function (r) {
+        return r.type === 1;
+      }).length;
+
+      done(owned, joined, friends, friends);
+    }).catch(function () {
+      done('-', '-', '-', '-');
+    });
+  }
+
+  function applyAccountState() {
+    if (!hasAccount()) {
+      return;
+    }
+    renderProfile(state.user);
+    renderDetailsView();
+    renderEvolutionView();
+    refreshMetrics();
+  }
+
+  /* ---------- Details view ---------- */
+
+  function renderDetailsView() {
+    const grid = byId('detailsGrid');
+    if (!grid) {
+      return;
+    }
+    const u = state.user || {};
+    const rows = [
+      ['Account ID', u.id || '-'],
+      ['Email', u.email || '-'],
+      ['Phone', u.phone || 'Not linked'],
+      ['2FA Enabled', u.mfa_enabled ? 'Yes' : 'No'],
+      ['Verified', u.verified ? 'Yes' : 'No'],
+      ['Creation Date', snowflakeDate(u.id) || '-'],
+      ['Nitro Tier', nitroTier(u.premium_type)],
+      ['Orbs Balance', '-'],
+      ['Avatar Decorations', '-'],
+      ['Profile Effects', '-'],
+      ['Name Plates', '-'],
+      ['Profile Frames', '-'],
+      ['Profile Badges', flagNames(u.flags)]
+    ];
+    grid.innerHTML = '';
+    rows.forEach(function (row) {
+      const div = document.createElement('div');
+      div.className = 'details-row';
+      const label = document.createElement('span');
+      label.className = 'details-label';
+      label.textContent = row[0];
+      const value = document.createElement('span');
+      value.className = 'details-value';
+      value.textContent = row[1];
+      div.appendChild(label);
+      div.appendChild(value);
+      grid.appendChild(div);
+    });
+  }
+
+  /* ---------- Badge evolution ---------- */
+
+  function renderEvolutionView() {
+    const wrap = byId('evolutionCards');
+    if (!wrap) {
+      return;
+    }
+    const u = state.user || {};
+    const tierIndex = Math.max(0, Math.min(3, u.premium_type || 0));
+
+    const categories = [
+      {
+        key: 'nitro',
+        title: 'Nitro Badge',
+        sub: 'Subscription tier progression',
+        tiers: ['No Nitro', 'Nitro Basic', 'Nitro Classic', 'Nitro'],
+        current: tierIndex,
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8"/><path d="M12 8c-3 0-4-1.5-3.5-3S12 4 12 4s3-1 3.5 1-.5 3-3.5 3z"/></svg>'
+      },
+      {
+        key: 'boost',
+        title: 'Server Boost',
+        sub: 'Server boosting progression',
+        tiers: ['No Boosts', '1 Boost', '2 Boosts', '3+ Boosts'],
+        current: 0,
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>'
+      }
+    ];
+
+    wrap.innerHTML = '';
+    categories.forEach(function (cat) {
+      const dayLeft = 30 - new Date().getDate();
+      const pct = Math.max(4, Math.min(97, Math.round(((30 - dayLeft) / 30) * 100)));
+      const card = document.createElement('div');
+      card.className = 'evolution-card panel';
+
+      const header = document.createElement('div');
+      header.className = 'evo-header';
+      const icon = document.createElement('div');
+      icon.className = 'evo-icon';
+      icon.innerHTML = cat.icon;
+      const headTxt = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'evo-title';
+      title.textContent = cat.title;
+      const sub = document.createElement('div');
+      sub.className = 'evo-sub';
+      sub.textContent = cat.sub;
+      headTxt.appendChild(title);
+      headTxt.appendChild(sub);
+      header.appendChild(icon);
+      header.appendChild(headTxt);
+      card.appendChild(header);
+
+      const avatar = document.createElement('div');
+      avatar.className = 'evo-avatar';
+      avatar.innerHTML = cat.icon;
+      card.appendChild(avatar);
+
+      const tierName = document.createElement('div');
+      tierName.className = 'evo-tier';
+      tierName.textContent = cat.tiers[cat.current] || cat.tiers[0];
+      card.appendChild(tierName);
+
+      const timeline = document.createElement('div');
+      timeline.className = 'evo-timeline';
+      cat.tiers.forEach(function (t, i) {
+        const step = document.createElement('div');
+        step.className = 'evo-step' + (i <= cat.current ? ' done' : '');
+        step.innerHTML = '<span class="evo-step-mark">' + (i <= cat.current ? '\u2713' : '\u00b7') + '</span><span>' + t + '</span>';
+        if (i === cat.current) {
+          step.innerHTML = '<span class="evo-step-mark">' + (i <= cat.current ? '\u2713' : '\u00b7') + '</span><span><strong>' + t + '</strong> (active)</span>';
+        }
+        timeline.appendChild(step);
+      });
+      card.appendChild(timeline);
+
+      const barLabel = document.createElement('div');
+      barLabel.className = 'evo-bar-label';
+      barLabel.innerHTML = '<span>' + pct + '% complete</span><span>' + dayLeft + 'd until refresh</span>';
+      card.appendChild(barLabel);
+
+      const track = document.createElement('div');
+      track.className = 'progress-track';
+      const fill = document.createElement('div');
+      fill.className = 'progress-bar-fill';
+      fill.style.width = pct + '%';
+      track.appendChild(fill);
+      card.appendChild(track);
+
+      const remaining = document.createElement('div');
+      remaining.className = 'evo-remaining';
+      remaining.textContent = cat.current >= 3 ? 'Maximum tier reached.' : 'Estimated ~' + dayLeft + ' days remaining at current rate.';
+      card.appendChild(remaining);
+
+      wrap.appendChild(card);
+    });
+  }
+
+  /* ---------- Operation terminal ---------- */
+
+  const SPEED_MS = {
+    fast: 750,
+    normal: 1500,
+    safe: 2600,
+    ultra: 4200
+  };
+
+  const terminalLog = byId('terminalLog');
+  const terminalTitle = byId('operationTitle');
+  const opPill = byId('opStatPill');
+  const progressFill = byId('progressBarFill');
+  const opProgressText = byId('opProgressText');
+
+  function emitLine(text) {
+    if (!terminalLog) {
+      return;
     }
     const now = new Date();
     const pad = function (n) {
       return String(n).padStart(2, '0');
     };
     const li = document.createElement('li');
-    li.className = 'log-item';
-    li.innerHTML =
-      '<span class="log-time">' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds()) + '</span>' +
-      '<span class="log-dot ' + (kind || 'info') + '"></span>' +
-      '<span class="log-msg"></span>';
-    li.querySelector('.log-msg').textContent = event;
-    logEl.insertBefore(li, logEl.firstChild);
-    while (logEl.children.length > LOG_MAX) {
-      logEl.removeChild(logEl.lastChild);
+    li.className = 'term-line';
+    li.innerHTML = '<span class="term-time">' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds()) + '</span><span class="term-text"></span>';
+    li.querySelector('.term-text').textContent = text;
+    terminalLog.appendChild(li);
+    terminalLog.scrollTop = terminalLog.scrollHeight;
+  }
+
+  function updateProgress(cur, total) {
+    const pct = total ? Math.round((cur / total) * 100) : 0;
+    if (opPill) {
+      opPill.textContent = cur + ' / ' + total + ' \u2022 ' + pct + '%';
     }
-    if (logCountEl) {
-      logCountEl.textContent = logEl.children.length + (logEl.children.length === 1 ? ' event' : ' events');
+    if (progressFill) {
+      progressFill.style.width = pct + '%';
+    }
+    if (opProgressText) {
+      opProgressText.textContent = cur + ' / ' + total;
     }
   }
 
-  /* ---------- Dashboard stats ---------- */
-
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
-
-  function jitter(value, minJ, maxJ, minV, maxV) {
-    return clamp(value + Math.floor(minJ + Math.random() * (maxJ - minJ + 1)), minV, maxV);
-  }
-
-  function pad2(n) {
-    return String(n).padStart(2, '0');
-  }
-
-  function fmtUptime(ms) {
-    if (ms <= 0) {
-      return '0s';
+  function resetTerminal(title) {
+    if (terminalTitle) {
+      terminalTitle.textContent = title;
     }
-    const s = Math.floor(ms / 1000);
-    const d = Math.floor(s / 86400);
-    const h = Math.floor((s % 86400) / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    if (d > 0) {
-      return d + 'd ' + pad2(h) + 'h ' + pad2(m) + 'm';
+    if (terminalLog) {
+      terminalLog.innerHTML = '';
     }
-    if (h > 0) {
-      return pad2(h) + ':' + pad2(m) + ':' + pad2(sec);
+    if (opPill) {
+      opPill.textContent = 'idle';
     }
-    return m + ':' + pad2(sec);
-  }
-
-  function startedAtMs() {
-    let raw = NaN;
-    try {
-      raw = Number(sessionStorage.getItem(CONFIG.prefs.startedAt));
-    } catch (e) {}
-    if (!raw) {
-      raw = Date.now();
-      try {
-        sessionStorage.setItem(CONFIG.prefs.startedAt, String(raw));
-      } catch (e) {}
+    if (progressFill) {
+      progressFill.style.width = '0%';
     }
-    return raw;
-  }
-
-  const sim = {
-    sessions: 14,
-    load: 34,
-    latency: 41,
-    upSince: startedAtMs()
-  };
-
-  const statNodes = {
-    sessions: byId('statSessions'),
-    load: byId('statLoad'),
-    latency: byId('statLatency'),
-    uptime: byId('statUptime')
-  };
-
-  function renderDashboardStats() {
-    sim.sessions = jitter(sim.sessions, -2, 3, 4, 48);
-    sim.load = jitter(sim.load, -6, 7, 8, 92);
-    sim.latency = jitter(sim.latency, -9, 11, 12, 140);
-
-    if (statNodes.sessions) {
-      statNodes.sessions.textContent = sim.sessions;
-    }
-    if (statNodes.load) {
-      statNodes.load.textContent = Math.round(sim.load) + '%';
-    }
-    if (statNodes.latency) {
-      statNodes.latency.textContent = Math.round(sim.latency) + ' ms';
-    }
-    if (statNodes.uptime) {
-      statNodes.uptime.textContent = fmtUptime(Date.now() - sim.upSince);
+    if (opProgressText) {
+      opProgressText.textContent = '0 / 0';
     }
   }
 
-  /* ---------- Manager workspace ---------- */
-
-  const STATUS_META = {
-    active: { label: 'Active', cls: 'active' },
-    standby: { label: 'Standby', cls: 'standby' },
-    error: { label: 'Error', cls: 'error' },
-    offline: { label: 'Offline', cls: 'offline' }
-  };
-
-  const ACTION_ICONS = {
-    view: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
-    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
-    remove: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>'
-  };
-
-  const RECORDS = [
-    { id: 'gateway-core-01', name: 'gateway-core-01', type: 'Service', status: 'active', region: 'fra1', updatedAt: -120000 },
-    { id: 'webhooks-relay', name: 'webhooks-relay', type: 'Runner', status: 'active', region: 'iad1', updatedAt: -4000 },
-    { id: 'member-scraper', name: 'member-scraper', type: 'Runner', status: 'standby', region: 'sin1', updatedAt: -660000 },
-    { id: 'token-refresher', name: 'token-refresher', type: 'Service', status: 'active', region: 'fra1', updatedAt: -18000 },
-    { id: 'voicestate-watcher', name: 'voicestate-watcher', type: 'Monitor', status: 'error', region: 'iad1', updatedAt: -240000 },
-    { id: 'role-sync', name: 'role-sync', type: 'Service', status: 'offline', region: 'gru1', updatedAt: -3600000 },
-    { id: 'presence-monitor', name: 'presence-monitor', type: 'Monitor', status: 'standby', region: 'sin1', updatedAt: -1920000 },
-    { id: 'audit-collector', name: 'audit-collector', type: 'Runner', status: 'active', region: 'gru1', updatedAt: -40000 }
-  ];
-
-  const tableBody = byId('managerTableBody');
-  const emptyState = byId('managerEmpty');
-  const searchInput = byId('managerSearch');
-  const statusFilter = byId('managerStatusFilter');
-  const refreshBtn = byId('managerRefreshBtn');
-  const clearBtn = byId('managerClearBtn');
-  const managerWrap = byId('managerTableWrap');
-
-  let searchTimer = null;
-
-  function fmtAgo(msAgo) {
-    const sec = Math.max(0, Math.round(-msAgo / 1000));
-    if (sec < 60) {
-      return sec <= 5 ? 'just now' : sec + 's ago';
+  function openHistory() {
+    openModal();
+    const list = byId('historyList');
+    const count = byId('historyCount');
+    const history = jsonGet(localStorage, CONFIG.dsc.history) || [];
+    if (count) {
+      count.textContent = history.length + (history.length === 1 ? ' record' : ' records');
     }
-    const min = Math.round(sec / 60);
-    if (min < 60) {
-      return min + 'm ago';
-    }
-    const hr = Math.round(min / 60);
-    if (hr < 24) {
-      return hr + 'h ago';
-    }
-    return Math.round(hr / 24) + 'd ago';
-  }
-
-  function renderManagerRows() {
-    if (!tableBody) {
+    if (!list) {
       return;
     }
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
-    const status = statusFilter ? statusFilter.value : 'all';
-
-    const matches = RECORDS.filter(function (rec) {
-      const okStatus = status === 'all' || rec.status === status;
-      const haystack = (rec.name + ' ' + rec.type).toLowerCase();
-      const okQuery = !query || haystack.indexOf(query) !== -1;
-      return okStatus && okQuery;
-    });
-
-    tableBody.innerHTML = '';
-
-    matches.forEach(function (rec) {
-      const meta = STATUS_META[rec.status] || STATUS_META.offline;
-      const tr = document.createElement('tr');
-
-      const nameTd = document.createElement('td');
-      nameTd.className = 'cell-name';
-      nameTd.textContent = rec.name;
-
-      const typeTd = document.createElement('td');
-      typeTd.className = 'cell-type';
-      typeTd.textContent = rec.type;
-
-      const statusTd = document.createElement('td');
-      const badge = document.createElement('span');
-      badge.className = 'status-badge status-' + meta.cls;
-      badge.textContent = meta.label;
-      statusTd.appendChild(badge);
-
-      const regionTd = document.createElement('td');
-      regionTd.className = 'cell-meta';
-      regionTd.textContent = rec.region;
-
-      const updatedTd = document.createElement('td');
-      updatedTd.className = 'cell-meta';
-      updatedTd.textContent = fmtAgo(rec.updatedAt);
-
-      const actionsTd = document.createElement('td');
-      actionsTd.className = 'td-actions';
-      ['view', 'edit', 'remove'].forEach(function (action) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'icon-btn row-btn';
-        btn.setAttribute('aria-label', action + ' ' + rec.name);
-        btn.setAttribute('data-id', rec.id);
-        btn.setAttribute('data-action', action);
-        btn.innerHTML = ACTION_ICONS[action];
-        actionsTd.appendChild(btn);
-      });
-
-      tr.appendChild(nameTd);
-      tr.appendChild(typeTd);
-      tr.appendChild(statusTd);
-      tr.appendChild(regionTd);
-      tr.appendChild(updatedTd);
-      tr.appendChild(actionsTd);
-
-      tableBody.appendChild(tr);
-    });
-
-    if (emptyState) {
-      emptyState.classList.toggle('show', matches.length === 0);
+    list.innerHTML = '';
+    if (!history.length) {
+      const empty = document.createElement('li');
+      empty.className = 'modal-item';
+      empty.textContent = 'No operations have run yet.';
+      list.appendChild(empty);
+      return;
     }
+    history.forEach(function (entry) {
+      const li = document.createElement('li');
+      li.className = 'modal-item';
+      const when = new Date(entry.at).toLocaleString();
+      li.innerHTML = '<span class="modal-item-main"><strong></strong><span class="modal-item-sub"></span></span>';
+      li.querySelector('strong').textContent = entry.title;
+      li.querySelector('.modal-item-sub').textContent = when + ' \u00b7 ' + entry.items + ' item' + (entry.items === 1 ? '' : 's');
+      list.appendChild(li);
+    });
   }
 
-  function refreshRecords() {
-    RECORDS.forEach(function (rec) {
-      rec.updatedAt = -Math.floor(Math.random() * 120000);
-    });
-    const victim = RECORDS[Math.floor(Math.random() * RECORDS.length)];
-    if (victim.status === 'error' || victim.status === 'offline') {
-      victim.status = 'active';
-    } else if (Math.random() < 0.35) {
-      victim.status = victim.status === 'active' ? 'standby' : 'active';
-    }
-    renderManagerRows();
+  function pushHistory(title, items) {
+    const history = jsonGet(localStorage, CONFIG.dsc.history) || [];
+    history.unshift({ title: title, items: items, at: Date.now() });
+    jsonSet(localStorage, CONFIG.dsc.history, history.slice(0, 50));
   }
 
-  function initManagerWorkspace() {
-    const runSearch = function () {
-      renderManagerRows();
-    };
+  function currentDelay() {
+    const speed = storageGet2(localStorage, CONFIG.dsc.speed, 'normal');
+    return SPEED_MS[speed] || SPEED_MS.normal;
+  }
 
-    if (searchInput) {
-      searchInput.addEventListener('input', function () {
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(runSearch, 200);
-      });
-    }
-    if (statusFilter) {
-      statusFilter.addEventListener('change', runSearch);
-    }
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', function () {
-        refreshRecords();
-        renderActivityLog('Manager records refreshed.', 'ok');
-        toast('Manager records refreshed.', 'success');
-      });
-    }
-    if (clearBtn) {
-      clearBtn.addEventListener('click', function () {
-        if (searchInput) {
-          searchInput.value = '';
-        }
-        if (statusFilter) {
-          statusFilter.value = 'all';
-        }
-        renderManagerRows();
-      });
-    }
+  function loadWhitelists() {
+    return jsonGet(localStorage, CONFIG.dsc.whitelists) || { servers: [], friends: [], dms: [] };
+  }
 
-    if (managerWrap && managerWrap.addEventListener) {
-      managerWrap.addEventListener('click', function (e) {
-        if (!(e.target && e.target.closest)) {
-          return;
-        }
-        const btn = e.target.closest('button[data-action]');
-        if (!btn) {
-          return;
-        }
-        const rec = RECORDS.find(function (r) {
-          return r.id === btn.getAttribute('data-id');
+  function inWl(kind, value) {
+    if (!value) {
+      return false;
+    }
+    const wl = loadWhitelists();
+    const list = wl[kind] || [];
+    const needle = String(value).trim().toLowerCase();
+    return list.some(function (entry) {
+      return String(entry || '').trim().toLowerCase() === needle;
+    });
+  }
+
+  function friendName(r) {
+    return r && r.user && (r.user.username || 'user') + ' (' + r.id + ')';
+  }
+
+  function buildLeaveItems() {
+    const items = [];
+    (state.guilds || []).forEach(function (g) {
+      if (!g.owner && !inWl('servers', g.id)) {
+        items.push({
+          label: 'Leave server: ' + (g.name || g.id) + ' (' + g.id + ')',
+          action: function () {
+            return apiCall('DELETE', '/users/@me/guilds/' + g.id);
+          }
         });
-        const action = btn.getAttribute('data-action');
-        renderActivityLog(action + ' ' + (rec ? rec.name : 'record') + '.', 'info');
-        toast(action.charAt(0).toUpperCase() + action.slice(1) + ' requested for ' + (rec ? rec.name : 'record') + '.', 'info');
-      });
-    }
+      }
+    });
+    return items;
+  }
 
-    renderManagerRows();
+  function buildFriendItems() {
+    const items = [];
+    (state.rel || []).forEach(function (r) {
+      if (r.type === 1 && !inWl('friends', r.id) && !inWl('friends', r.user && r.user.username)) {
+        items.push({
+          label: 'Remove friend: ' + friendName(r),
+          action: function () {
+            return apiCall('DELETE', '/users/@me/relationships/' + r.id);
+          }
+        });
+      }
+    });
+    return items;
+  }
+
+  function buildDmItems() {
+    const items = [];
+    (state.rel || []).forEach(function (r) {
+      if (r.type === 1 && !inWl('dms', r.id) && !inWl('dms', r.user && r.user.username)) {
+        items.push({
+          label: 'Close DM: ' + friendName(r),
+          skip: 'no REST endpoint \u2014 logged only'
+        });
+      }
+    });
+    return items;
+  }
+
+  function buildDeleteDmItems(targetId) {
+    if (!targetId) {
+      return [];
+    }
+    return [{
+      label: 'Purge DM messages with user ' + targetId,
+      skip: 'requires client protocol \u2014 logged only'
+    }];
+  }
+
+  function runOperation(title, items) {
+    if (state.running) {
+      toast('An operation is already running.', 'error');
+      return;
+    }
+    if (!items.length) {
+      toast('No target items found. Check whitelists and refresh metrics.', 'error');
+      return;
+    }
+    state.running = true;
+    state.stopped = false;
+
+    resetTerminal(title);
+    emitLine('Starting: ' + title);
+    emitLine('Delay between calls: ' + currentDelay() + 'ms');
+    pushHistory(title, items.length);
+
+    let index = 0;
+    const step = function () {
+      if (state.stopped || !state.running) {
+        state.running = false;
+        emitLine('Operation stopped by user.');
+        if (opPill) {
+          opPill.textContent = 'stopped';
+        }
+        toast('Operation stopped.', 'info');
+        return;
+      }
+      index += 1;
+      const item = items[index - 1];
+      emitLine('[' + index + '/' + items.length + '] ' + item.label + (item.skip ? ' \u2014 ' + item.skip : ''));
+      if (item.action) {
+        item.action().catch(function () {});
+      }
+      updateProgress(index, items.length);
+      if (index >= items.length) {
+        state.running = false;
+        emitLine('Operation completed (' + items.length + ' items).');
+        if (opPill) {
+          opPill.textContent = 'done';
+        }
+        toast('Operation completed.', 'success');
+        return;
+      }
+      setTimeout(step, currentDelay());
+    };
+    step();
+  }
+
+  function stopRunning() {
+    state.stopped = true;
+    state.running = false;
+  }
+
+  /* ---------- Modal ---------- */
+
+  function openModal() {
+    const modal = byId('historyModal');
+    if (modal) {
+      modal.classList.add('active');
+    }
+  }
+
+  function closeModal() {
+    const modal = byId('historyModal');
+    if (modal) {
+      modal.classList.remove('active');
+    }
+  }
+
+  /* ---------- Badge view ---------- */
+
+  function pickHouse(houseId) {
+    state.selectedHouse = houseId;
+    const cards = document.querySelectorAll('.badge-card');
+    cards.forEach(function (card) {
+      card.classList.toggle('selected', card.getAttribute('data-house') === String(houseId));
+    });
+  }
+
+  function resultToast(res, okMsg) {
+    if (res.status >= 200 && res.status < 300) {
+      toast(okMsg, 'success');
+    } else {
+      toast(handleAuthError(res.data || {}), 'error');
+    }
   }
 
   /* ---------- Settings ---------- */
 
-  const prefsNodes = {
-    density: document.querySelectorAll('input[name="density"]'),
-    notifDashboard: byId('notifDashboard'),
-    notifSound: byId('notifSound'),
-    notifEmail: byId('notifEmail'),
-    resetBtn: byId('settingsResetBtn')
-  };
-
-  function loadPrefs() {
-    let prefs = { density: 'comfortable', notif: { dashboard: true, sound: true, email: false } };
-    const raw = storageGet(localStorage, CONFIG.prefs.key, null);
-    if (raw) {
-      try {
-        prefs = Object.assign({}, prefs, JSON.parse(raw));
-      } catch (e) {}
+  function applyAccent(name) {
+    const htmlEl = document.documentElement;
+    if (name) {
+      htmlEl.setAttribute('data-accent', name);
+    } else {
+      htmlEl.removeAttribute('data-accent');
     }
-    return prefs;
-  }
-
-  function savePrefs(prefs) {
-    storageSet(localStorage, CONFIG.prefs.key, JSON.stringify(prefs));
-  }
-
-  function applyPrefs() {
-    const prefs = loadPrefs();
-    document.body.classList.toggle('density-compact', prefs.density === 'compact');
-
-    prefsNodes.density.forEach(function (input) {
-      input.checked = input.value === prefs.density;
+    const dots = document.querySelectorAll('.accent-dot');
+    dots.forEach(function (dot) {
+      dot.classList.toggle('selected', dot.getAttribute('data-accent') === name);
     });
-    if (prefsNodes.notifDashboard) {
-      prefsNodes.notifDashboard.checked = !!prefs.notif.dashboard;
-    }
-    if (prefsNodes.notifSound) {
-      prefsNodes.notifSound.checked = !!prefs.notif.sound;
-    }
-    if (prefsNodes.notifEmail) {
-      prefsNodes.notifEmail.checked = !!prefs.notif.email;
+  }
+
+  function applySpeed() {
+    const sel = byId('setSpeed');
+    if (sel) {
+      sel.value = storageGet2(localStorage, CONFIG.dsc.speed, 'normal');
     }
   }
 
-  function bindSettings() {
-    const syncPrefs = function () {
-      const prefs = loadPrefs();
-      prefsNodes.density.forEach(function (input) {
-        if (input.checked) {
-          prefs.density = input.value;
+  function applyElectron() {
+    const pref = jsonGet(localStorage, CONFIG.dsc.electron) || { autoStart: false, minTray: false };
+    const auto = byId('setAutoStart');
+    const tray = byId('setMinTray');
+    if (auto) {
+      auto.checked = !!pref.autoStart;
+    }
+    if (tray) {
+      tray.checked = !!pref.minTray;
+    }
+  }
+
+  function applySettings() {
+    applyAccent(storageGet2(localStorage, CONFIG.dsc.accent, 'violet'));
+    applySpeed();
+    applyElectron();
+  }
+
+  function applyWhitelists() {
+    const wl = loadWhitelists();
+    const els = {
+      servers: byId('wlServers'),
+      friends: byId('wlFriends'),
+      dms: byId('wlDms')
+    };
+    ['servers', 'friends', 'dms'].forEach(function (kind) {
+      const el = els[kind];
+      if (el) {
+        el.value = (wl[kind] || []).join('\n');
+      }
+    });
+  }
+
+  /* ---------- Wires ---------- */
+
+  function initAuth() {
+    const tokenInput = byId('tokenInput');
+    const authBtn = byId('authenticateBtn');
+    const toggleTokenBtn = byId('toggleToken');
+    const clearSavedBtn = byId('clearSavedBtn');
+    const electronBtn = byId('electronLoginBtn');
+    const savedList = byId('savedAccountsList');
+
+    if (authBtn) {
+      authBtn.addEventListener('click', function () {
+        const token = tokenInput ? tokenInput.value.trim() : '';
+        if (!token) {
+          toast('Paste an account token first.', 'error');
+          return;
+        }
+        setBusy(authBtn, true);
+        loginWithToken(token)
+          .then(function (user) {
+            setActiveAccount(token, user);
+            upsertAccount(token, user);
+            tokenInput.value = '';
+            showView('dashboard');
+            applyAccountState();
+            toast('Logged in as ' + user.username + '.', 'success');
+          })
+          .catch(function (err) {
+            toast(err.message || 'Login failed.', 'error');
+          })
+          .finally(function () {
+            setBusy(authBtn, false);
+          });
+      });
+    }
+
+    if (toggleTokenBtn && tokenInput) {
+      toggleTokenBtn.addEventListener('click', function () {
+        const showing = tokenInput.type === 'text';
+        tokenInput.type = showing ? 'password' : 'text';
+        const eye = toggleTokenBtn.querySelector('.icon-eye');
+        const eyeOff = toggleTokenBtn.querySelector('.icon-eye-off');
+        if (eye) {
+          eye.setAttribute('display', showing ? 'none' : '');
+        }
+        if (eyeOff) {
+          eyeOff.setAttribute('display', showing ? '' : 'none');
+        }
+        tokenInput.focus();
+      });
+    }
+
+    if (electronBtn) {
+      electronBtn.addEventListener('click', function () {
+        toast('Desktop OAuth flow opens in the Electron client.', 'info');
+      });
+    }
+
+    if (clearSavedBtn) {
+      clearSavedBtn.addEventListener('click', function () {
+        if (!window.confirm('Remove all saved accounts from this device?')) {
+          return;
+        }
+        saveAccounts([]);
+        toast('Saved accounts cleared.', 'success');
+      });
+    }
+
+    if (savedList) {
+      savedList.addEventListener('click', function (e) {
+        if (!(e.target && e.target.closest)) {
+          return;
+        }
+        const useBtn = e.target.closest('[data-use]');
+        const delBtn = e.target.closest('[data-del]');
+        const accounts = loadAccounts();
+        if (useBtn) {
+          const acc = accounts.filter(function (a) {
+            return a.user.id === useBtn.getAttribute('data-use');
+          })[0];
+          if (acc) {
+            setActiveAccount(acc.token, acc.user);
+            showView('dashboard');
+            applyAccountState();
+            toast('Switched to ' + acc.user.username + '.', 'success');
+          }
+        }
+        if (delBtn) {
+          const id = delBtn.getAttribute('data-del');
+          const next = accounts.filter(function (a) {
+            return a.user.id !== id;
+          });
+          saveAccounts(next);
+          toast('Removed saved account.', 'success');
         }
       });
-      if (prefsNodes.notifDashboard) {
-        prefs.notif.dashboard = prefsNodes.notifDashboard.checked;
+    }
+  }
+
+  function initDashboard() {
+    const confirmBtn = byId('confirmIconBtn');
+    const logoutBtn = byId('logoutBtn');
+
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function () {
+        setBusy(confirmBtn, true);
+        validateToken(state.token)
+          .then(function (res) {
+            if (res.data && res.data.id) {
+              state.user = res.data;
+              jsonSet(localStorage, CONFIG.dsc.user, res.data);
+              renderProfile(state.user);
+              toast('Session confirmed: ' + res.data.username + '.', 'success');
+            } else {
+              toast(handleAuthError(res.data || {}), 'error');
+            }
+          })
+          .catch(function () {
+            toast('Cannot reach Discord API.', 'error');
+          })
+          .finally(function () {
+            setBusy(confirmBtn, false);
+          });
+      });
+    }
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function () {
+        stopRunning();
+        clearActiveAccount();
+        renderSavedAccounts();
+        showView('login');
+        toast('Logged out.', 'info');
+      });
+    }
+  }
+
+  function initOps() {
+    const handlers = {
+      leaveServersBtn: function () {
+        runOperation('Leave Servers', buildLeaveItems());
+      },
+      removeFriendsBtn: function () {
+        runOperation('Remove Friends', buildFriendItems());
+      },
+      closeDMsBtn: function () {
+        runOperation('Close DMs', buildDmItems());
+      },
+      deleteUserDMsBtn: function () {
+        const target = window.prompt('Delete DM messages with target user ID:', '');
+        if (target === null) {
+          return;
+        }
+        runOperation('Delete DM Messages', buildDeleteDmItems(target.trim()));
+      },
+      allInOneBtn: function () {
+        const target = window.prompt('Delete DM messages with target user ID (leave blank to skip):', '');
+        const parts = buildLeaveItems().concat(buildFriendItems()).concat(buildDmItems());
+        if (target !== null && target.trim()) {
+          parts.push.apply(parts, buildDeleteDmItems(target.trim()));
+        }
+        runOperation('All-in-One Cleanup', parts);
+      },
+      badgeActionBtn: function () {
+        showView('badges');
+      },
+      accountDetailsBtn: function () {
+        showView('details');
+      },
+      badgeEvolutionBtn: function () {
+        showView('evolution');
+      },
+      operationHistoryBtn: function () {
+        openHistory();
       }
-      if (prefsNodes.notifSound) {
-        prefs.notif.sound = prefsNodes.notifSound.checked;
-      }
-      if (prefsNodes.notifEmail) {
-        prefs.notif.email = prefsNodes.notifEmail.checked;
-      }
-      savePrefs(prefs);
-      applyPrefs();
     };
-
-    prefsNodes.density.forEach(function (input) {
-      input.addEventListener('change', syncPrefs);
-    });
-    [prefsNodes.notifDashboard, prefsNodes.notifSound, prefsNodes.notifEmail].forEach(function (input) {
-      if (input) {
-        input.addEventListener('change', function () {
-          syncPrefs();
-          renderActivityLog('Preference updated: ' + (input.id || 'toggle'), 'info');
-        });
+    Object.keys(handlers).forEach(function (id) {
+      const btn = byId(id);
+      if (btn) {
+        btn.addEventListener('click', handlers[id]);
       }
     });
+  }
 
-    if (prefsNodes.resetBtn) {
-      prefsNodes.resetBtn.addEventListener('click', function () {
-        if (!window.confirm('Clear all local settings, caches and preferences? This cannot be undone.')) {
+  function initBadges() {
+    const backBtn = byId('badgeSelectionBackBtn');
+    const grid = byId('badgeGrid');
+    const equipBtn = byId('equipBadgeBtn');
+    const removeBtn = byId('removeBadgeBtn');
+    const hideBtn = byId('hideAllBadgesBtn');
+
+    if (backBtn) {
+      backBtn.addEventListener('click', function () {
+        showView('dashboard');
+      });
+    }
+    if (grid) {
+      grid.addEventListener('click', function (e) {
+        const card = e.target && e.target.closest ? e.target.closest('.badge-card') : null;
+        if (card) {
+          pickHouse(card.getAttribute('data-house'));
+        }
+      });
+    }
+    if (equipBtn) {
+      equipBtn.addEventListener('click', function () {
+        if (!state.selectedHouse) {
+          toast('Select a badge card first.', 'error');
+          return;
+        }
+        if (Number(state.selectedHouse) === 4) {
+          toast('Legacy is grandfathered and cannot be equipped directly.', 'info');
+          return;
+        }
+        setBusy(equipBtn, true);
+        apiCall('POST', '/hypesquad/online', { house_id: Number(state.selectedHouse) })
+          .then(function (res) {
+            resultToast(res, 'HypeSquad badge equipped.');
+          })
+          .catch(function () {
+            toast('Cannot reach Discord API.', 'error');
+          })
+          .finally(function () {
+            setBusy(equipBtn, false);
+          });
+      });
+    }
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        setBusy(removeBtn, true);
+        apiCall('DELETE', '/hypesquad/online')
+          .then(function (res) {
+            resultToast(res, 'HypeSquad badge removed.');
+          })
+          .catch(function () {
+            toast('Cannot reach Discord API.', 'error');
+          })
+          .finally(function () {
+            setBusy(removeBtn, false);
+          });
+      });
+    }
+    if (hideBtn) {
+      hideBtn.addEventListener('click', function () {
+        setBusy(hideBtn, true);
+        apiCall('PATCH', '/users/@me/settings', { profile_effective_badges: 0 })
+          .then(function (res) {
+            resultToast(res, 'Badges hidden.');
+          })
+          .catch(function () {
+            toast('Cannot reach Discord API.', 'error');
+          })
+          .finally(function () {
+            setBusy(hideBtn, false);
+          });
+      });
+    }
+  }
+
+  function initSubviews() {
+    const detailsBack = byId('accountDetailsBackBtn');
+    if (detailsBack) {
+      detailsBack.addEventListener('click', function () {
+        showView('dashboard');
+      });
+    }
+    const evoBack = byId('evolutionBackBtn');
+    if (evoBack) {
+      evoBack.addEventListener('click', function () {
+        showView('dashboard');
+      });
+    }
+    const copyId = byId('copyIdBtn');
+    if (copyId) {
+      copyId.addEventListener('click', function () {
+        if (!state.user || !state.user.id) {
+          toast('No account loaded.', 'error');
+          return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(state.user.id)
+            .then(function () {
+              toast('Account ID copied.', 'success');
+            })
+            .catch(function () {
+              toast('Clipboard blocked.', 'error');
+            });
+        } else {
+          toast('Clipboard not supported.', 'error');
+        }
+      });
+    }
+  }
+
+  function initTerminal() {
+    const backBtn = byId('backToMenuBtn');
+    const stopBtn = byId('stopOperationBtn');
+    if (backBtn) {
+      backBtn.addEventListener('click', function () {
+        stopRunning();
+        showView('dashboard');
+      });
+    }
+    if (stopBtn) {
+      stopBtn.addEventListener('click', function () {
+        if (state.running) {
+          stopRunning();
+          if (opPill) {
+            opPill.textContent = 'stopping';
+          }
+        } else {
+          toast('No operation is running.', 'info');
+        }
+      });
+    }
+    const historyClose = byId('historyModalClose');
+    if (historyClose) {
+      historyClose.addEventListener('click', closeModal);
+    }
+    const historyModal = byId('historyModal');
+    if (historyModal) {
+      historyModal.addEventListener('click', function (e) {
+        if (e.target === historyModal) {
+          closeModal();
+        }
+      });
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && historyModal && historyModal.classList.contains('active')) {
+        closeModal();
+      }
+    });
+  }
+
+  function initSettings() {
+    const autoStart = byId('setAutoStart');
+    const minTray = byId('setMinTray');
+    const speedSel = byId('setSpeed');
+    const accentBox = byId('accentPickers');
+    const wlSave = byId('wlSaveBtn');
+    const deactivate = byId('deactivateLicenseBtn');
+    const clearAll = byId('clearAllDataBtn');
+
+    function saveElectron() {
+      const pref = {
+        autoStart: !!(autoStart && autoStart.checked),
+        minTray: !!(minTray && minTray.checked)
+      };
+      jsonSet(localStorage, CONFIG.dsc.electron, pref);
+    }
+
+    if (autoStart) {
+      autoStart.addEventListener('change', function () {
+        saveElectron();
+        toast('Auto-start ' + (autoStart.checked ? 'enabled' : 'disabled') + '.', 'info');
+      });
+    }
+    if (minTray) {
+      minTray.addEventListener('change', function () {
+        saveElectron();
+        toast('Tray minimize ' + (minTray.checked ? 'enabled' : 'disabled') + '.', 'info');
+      });
+    }
+    if (speedSel) {
+      speedSel.addEventListener('change', function () {
+        storageSet(localStorage, CONFIG.dsc.speed, speedSel.value);
+        toast('Request speed: ' + speedSel.options[speedSel.selectedIndex].text + '.', 'info');
+      });
+    }
+    if (accentBox) {
+      accentBox.addEventListener('click', function (e) {
+        if (!(e.target && e.target.classList && e.target.classList.contains('accent-dot'))) {
+          return;
+        }
+        const name = e.target.getAttribute('data-accent');
+        applyAccent(name);
+        storageSet(localStorage, CONFIG.dsc.accent, name);
+        toast('Accent updated.', 'success');
+      });
+    }
+    if (wlSave) {
+      wlSave.addEventListener('click', function () {
+        const parse = function (el) {
+          return String(el ? el.value : '')
+            .split(/[,\n]/)
+            .map(function (s) {
+              return s.trim();
+            })
+            .filter(Boolean);
+        };
+        const wl = {
+          servers: parse(byId('wlServers')),
+          friends: parse(byId('wlFriends')),
+          dms: parse(byId('wlDms'))
+        };
+        jsonSet(localStorage, CONFIG.dsc.whitelists, wl);
+        toast('Whitelist saved.', 'success');
+      });
+    }
+    if (deactivate) {
+      deactivate.addEventListener('click', function () {
+        if (!window.confirm('Deactivate the current session and keep saved accounts?')) {
+          return;
+        }
+        stopRunning();
+        clearActiveAccount();
+        renderSavedAccounts();
+        showView('login');
+        toast('Session deactivated.', 'info');
+      });
+    }
+    if (clearAll) {
+      clearAll.addEventListener('click', function () {
+        if (!window.confirm('Wipe ALL local tokens, saved accounts, whitelists and storage? This cannot be undone.')) {
           return;
         }
         try {
@@ -635,76 +1437,36 @@ window.manager = {
     }
   }
 
-  /* ---------- Quick actions ---------- */
-
-  function bindQuickActions() {
-    const refreshStatsBtn = byId('quickRefresh');
-    const newSessionBtn = byId('quickNewSession');
-    const purgeBtn = byId('quickPurge');
-    const toManagerBtn = byId('quickToManager');
-
-    if (refreshStatsBtn) {
-      refreshStatsBtn.addEventListener('click', function () {
-        renderDashboardStats();
-        renderActivityLog('Dashboard stats refreshed.', 'info');
-      });
+  function setBusy(btn, busy) {
+    if (!btn) {
+      return;
     }
-    if (newSessionBtn) {
-      newSessionBtn.addEventListener('click', function () {
-        sim.sessions = clamp(sim.sessions + 1, 4, 48);
-        renderDashboardStats();
-        renderActivityLog('New session requested.', 'ok');
-        toast('New session queued.', 'success');
-      });
-    }
-    if (purgeBtn) {
-      purgeBtn.addEventListener('click', function () {
-        try {
-          localStorage.removeItem(CONFIG.storage.license);
-          localStorage.removeItem(CONFIG.storage.trialStarted);
-          localStorage.removeItem(CONFIG.storage.trialUsed);
-        } catch (e) {}
-        renderActivityLog('Local cache purged.', 'warn');
-        toast('Cache purged.', 'info');
-      });
-    }
-    if (toManagerBtn) {
-      toManagerBtn.addEventListener('click', function () {
-        if (window.appNav) {
-          window.appNav.setActiveTab('manager');
-        }
-      });
-    }
+    btn.classList.toggle('loading', busy);
+    btn.disabled = busy;
   }
 
   /* ---------- Boot ---------- */
 
-  const HEARTBEAT_POOL = [
-    'Gateway heartbeat OK.',
-    'Webhook relay synced.',
-    '1 session reconnected.',
-    'Stats snapshot complete.',
-    'Presence cache refreshed.',
-    'Audit batch flushed.'
-  ];
-  let heartbeatTick = 0;
-
   function boot() {
-    renderDashboardStats();
-    renderActivityLog('Dashboard initialised.', 'info');
-    renderActivityLog('Gateway connected.', 'ok');
-    renderActivityLog('4 services reporting healthy.', 'ok');
-    initManagerWorkspace();
-    applyPrefs();
-    bindSettings();
-    bindQuickActions();
+    applySettings();
+    applyWhitelists();
+    renderSavedAccounts();
+    initAuth();
+    initDashboard();
+    initOps();
+    initBadges();
+    initSubviews();
+    initTerminal();
+    initSettings();
 
-    setInterval(renderDashboardStats, 3000);
-    setInterval(function () {
-      const msg = HEARTBEAT_POOL[heartbeatTick % HEARTBEAT_POOL.length];
-      heartbeatTick += 1;
-      renderActivityLog(msg, 'info');
-    }, 20000);
+    if (hasAccount()) {
+      applyAccountState();
+      showView('dashboard', { persist: false });
+    } else {
+      showView('login', { persist: false });
+    }
+
+    setTimeout(applyBadge, 0);
   }
 
   boot();

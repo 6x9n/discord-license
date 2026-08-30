@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Discord Manager</title>
+  <title>Discord Account Manager</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -17,7 +17,7 @@
       <aside id="appSidebar" class="app-sidebar" aria-label="Primary">
         <div class="sidebar-brand">
           <span class="brand-dot small"></span>
-          <span class="app-brand-name">Discord Manager</span>
+          <span class="app-brand-name">Discord Account Manager</span>
         </div>
         <nav class="sidebar-nav">
           <a href="#dashboard" class="nav-link active" data-tab="dashboard" aria-current="page">
@@ -25,8 +25,8 @@
             <span class="nav-label">Dashboard</span>
           </a>
           <a href="#manager" class="nav-link" data-tab="manager">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
-            <span class="nav-label">Manager</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+            <span class="nav-label">Operations</span>
           </a>
           <a href="#settings" class="nav-link" data-tab="settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -45,7 +45,7 @@
         <div class="breadcrumb">
           <span class="breadcrumb-root">Discord Manager</span>
           <span class="breadcrumb-sep">/</span>
-          <span id="pageTitle" class="breadcrumb-current">Dashboard</span>
+          <span id="pageTitle" class="breadcrumb-current">Login</span>
         </div>
         <span class="spacer"></span>
         <span id="sessionPlan" class="badge">Open Access</span>
@@ -57,199 +57,406 @@
 
       <main id="mainCanvas" class="main-canvas">
 
-        <section id="viewDashboard" class="view-panel active" data-panel="dashboard">
-          <div class="view-inner">
+        <!-- View 1 — Login / Token -->
+        <section id="loginSection" class="view-panel active" data-panel="login">
+          <div class="view-inner view-inner-narrow">
+            <div class="auth-card">
+              <div class="auth-brand">
+                <span class="brand-dot"></span>
+                <div>
+                  <h1>Discord Account Manager</h1>
+                  <p class="subtitle">Easily manage your Discord account.</p>
+                </div>
+              </div>
 
-            <div id="statGrid" class="stat-grid">
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 6v6l4 2"/></svg>
-                </div>
-                <div>
-                  <div class="stat-label">Active Sessions</div>
-                  <div id="statSessions" class="stat-value">--</div>
-                  <div class="stat-sub">live connections</div>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17V9M10 17V3M16 17v-6M22 17v-3"/><path d="M2 17h20"/></svg>
-                </div>
-                <div>
-                  <div class="stat-label">System Load</div>
-                  <div id="statLoad" class="stat-value">--</div>
-                  <div class="stat-sub">across 4 vCPU</div>
+              <button id="electronLoginBtn" class="btn btn-primary btn-block" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                <span>Login with Discord</span>
+              </button>
+
+              <div class="divider"><span>or use a token</span></div>
+
+              <div class="field">
+                <label for="tokenInput" class="field-label">Account Token</label>
+                <div class="field-control">
+                  <input id="tokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="paste your user token">
+                  <button id="toggleToken" class="field-btn" type="button" title="Show / hide token" aria-label="Toggle token visibility">
+                    <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg class="icon-eye-off" display="none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
+                  </button>
                 </div>
               </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+
+              <a class="token-help" href="https://www.youtube.com/results?search_query=discord+how+to+get+user+token" target="_blank" rel="noopener">How to get your token?</a>
+
+              <button id="authenticateBtn" class="btn btn-primary btn-block" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="16" r="4"/><path d="M11 13L21 3M16 8l3 3M19 5l1 1"/></svg>
+                <span>Login Account</span>
+              </button>
+              <button id="clearSavedBtn" class="btn btn-ghost btn-block" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                <span>Clear Saved Accounts</span>
+              </button>
+
+              <div class="saved-box">
+                <div class="panel-head">
+                  <h2 class="panel-title">Saved Accounts</h2>
+                  <span id="savedCount" class="panel-hint">0 accounts</span>
                 </div>
-                <div>
-                  <div class="stat-label">Gateway Latency</div>
-                  <div id="statLatency" class="stat-value">--</div>
-                  <div class="stat-sub">ms average</div>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-                </div>
-                <div>
-                  <div class="stat-label">Uptime</div>
-                  <div id="statUptime" class="stat-value">--</div>
-                  <div class="stat-sub">since last restart</div>
-                </div>
+                <ul id="savedAccountsList" class="saved-list">
+                  <li class="log-empty">No saved accounts yet.</li>
+                </ul>
               </div>
             </div>
+          </div>
+        </section>
 
-            <div class="quick-actions">
-              <button id="quickRefresh" class="btn btn-secondary btn-small" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
-                <span>Refresh Stats</span>
-              </button>
-              <button id="quickNewSession" class="btn btn-secondary btn-small" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                <span>New Session</span>
-              </button>
-              <button id="quickPurge" class="btn btn-secondary btn-small" type="button">
+        <!-- View 2 — Dashboard / Main -->
+        <section id="dashboardView" class="view-panel" data-panel="dashboard">
+          <div class="view-inner">
+
+            <div class="panel profile-card">
+              <div id="profileAvatar" class="profile-avatar"></div>
+              <div class="profile-info">
+                <div class="profile-handle">
+                  <span id="profileUsername">&mdash;</span>
+                  <span id="profileDiscrim" class="profile-discrim"></span>
+                </div>
+                <div id="profileTag" class="profile-sub">Not signed in.</div>
+              </div>
+              <span class="spacer"></span>
+              <button id="confirmIconBtn" class="icon-btn" type="button" title="Confirm session" aria-label="Confirm session">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5.25-3.375 8.625-8 10-4.625-1.375-8-4.75-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
-                <span>Purge Cache</span>
               </button>
-              <button id="quickToManager" class="btn btn-primary btn-small" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-                <span>Open Manager</span>
+              <button id="logoutBtn" class="btn btn-ghost btn-small" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+                <span>Logout</span>
               </button>
             </div>
 
-            <div class="panel activity-panel">
-              <div class="panel-head">
-                <h2 class="panel-title">Activity Log</h2>
-                <span id="logCount" class="panel-hint">0 events</span>
-              </div>
-              <ul id="dashboardActivityLog" class="activity-log">
-                <li class="log-empty">No events yet.</li>
-              </ul>
-            </div>
-
-          </div>
-        </section>
-
-        <section id="viewManager" class="view-panel" data-panel="manager">
-          <div class="view-inner">
-
-            <div class="panel">
-              <div class="panel-head">
-                <h2 class="panel-title">Manager Workspace</h2>
-                <span class="panel-hint">search &middot; filter &middot; manage</span>
-              </div>
-              <div class="toolbar">
-                <div class="search-box">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-                  <input id="managerSearch" type="search" placeholder="Search name or type&hellip;" aria-label="Search records">
+            <div id="summaryGrid" class="stat-grid">
+              <div class="stat-card">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>
                 </div>
-                <select id="managerStatusFilter" class="select" aria-label="Filter by status">
-                  <option value="all">All statuses</option>
-                  <option value="active">Active</option>
-                  <option value="standby">Standby</option>
-                  <option value="error">Error</option>
-                  <option value="offline">Offline</option>
-                </select>
-                <button id="managerRefreshBtn" class="btn btn-secondary btn-small" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
-                  <span>Refresh</span>
-                </button>
-                <button id="managerClearBtn" class="btn btn-ghost btn-small" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                  <span>Clear</span>
-                </button>
+                <div>
+                  <div class="stat-label">Owned Servers</div>
+                  <div id="metricOwned" class="stat-value">&mdash;</div>
+                  <div class="stat-sub">you own these</div>
+                </div>
               </div>
-              <div id="managerTableWrap" class="table-wrap">
-                <table id="managerTable">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Type</th>
-                      <th>Status</th>
-                      <th>Region</th>
-                      <th>Updated</th>
-                      <th class="th-actions">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="managerTableBody"></tbody>
-                </table>
-                <div id="managerEmpty" class="empty-state">No records match your filters.</div>
+              <div class="stat-card">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                  <div class="stat-label">Joined Servers</div>
+                  <div id="metricJoined" class="stat-value">&mdash;</div>
+                  <div class="stat-sub">community member</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                </div>
+                <div>
+                  <div class="stat-label">Friends</div>
+                  <div id="metricFriends" class="stat-value">&mdash;</div>
+                  <div class="stat-sub">mutual buddies</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div>
+                  <div class="stat-label">Private DMs</div>
+                  <div id="metricDMs" class="stat-value">&mdash;</div>
+                  <div class="stat-sub">direct channels</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel ops-panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Operations</h2>
+                <span class="panel-hint">destructive &amp; management actions</span>
+              </div>
+              <div class="ops-grid">
+                <button id="leaveServersBtn" class="btn btn-ops" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+                  <span>Leave Servers</span>
+                </button>
+                <button id="removeFriendsBtn" class="btn btn-ops" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M18 8l3 3M21 8l-3 3"/></svg>
+                  <span>Remove Friends</span>
+                </button>
+                <button id="badgeActionBtn" class="btn btn-ops" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5.25-3.375 8.625-8 10-4.625-1.375-8-4.75-8-10V6z"/><path d="M12 6l1.4 2.84L16.5 9.5l-2.1 2.05.5 2.95L12 13.2l-2.9 1.3.5-2.95L7.5 9.5l3.1-.66L12 6z"/></svg>
+                  <span>Manage Badges</span>
+                </button>
+                <button id="closeDMsBtn" class="btn btn-ops" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+                  <span>Close DMs</span>
+                </button>
+                <button id="deleteUserDMsBtn" class="btn btn-ops" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
+                  <span>Delete DM Messages</span>
+                </button>
+                <button id="operationHistoryBtn" class="btn btn-ops" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  <span>Operation History</span>
+                </button>
+                <button id="accountDetailsBtn" class="btn btn-ops" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span>Account Details</span>
+                </button>
+                <button id="badgeEvolutionBtn" class="btn btn-ops" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+                  <span>Badge Evolution</span>
+                </button>
+                <button id="allInOneBtn" class="btn btn-ops danger" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                  <span>All-in-One Cleanup</span>
+                </button>
               </div>
             </div>
 
           </div>
         </section>
 
-        <section id="viewSettings" class="view-panel" data-panel="settings">
+        <!-- View 3 — Manage Badges -->
+        <section id="badgeSelectionView" class="view-panel" data-panel="badges">
+          <div class="view-inner">
+            <div class="view-toolbar">
+              <button id="badgeSelectionBackBtn" class="btn btn-ghost btn-small" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                <span>Back</span>
+              </button>
+            </div>
+
+            <div id="badgeGrid" class="badge-grid">
+              <button class="badge-card" type="button" data-house="1">
+                <div class="badge-emblem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l1.6 3.2 3.5.5-2.55 2.5.6 3.5L12 9.8l-3.15 1.9.6-3.5L6.9 5.7l3.5-.5L12 2z"/><path d="M5 21l1.5-6h11L19 21"/></svg>
+                </div>
+                <div class="badge-name">Bravery</div>
+                <div class="badge-desc">HypeSquad house of courage</div>
+              </button>
+              <button class="badge-card" type="button" data-house="2">
+                <div class="badge-emblem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg>
+                </div>
+                <div class="badge-name">Brilliance</div>
+                <div class="badge-desc">HypeSquad house of intellect</div>
+              </button>
+              <button class="badge-card" type="button" data-house="3">
+                <div class="badge-emblem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-3 8-12V5l-8-3-8 3v5c0 9 8 12 8 12z"/><path d="M9 12l2 2 4-4"/></svg>
+                </div>
+                <div class="badge-name">Balance</div>
+                <div class="badge-desc">HypeSquad house of harmony</div>
+              </button>
+              <button class="badge-card" type="button" data-house="4">
+                <div class="badge-emblem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20"/><path d="M4 18l-2-9 5 4 5-7 5 7 5-4-2 9H4z"/></svg>
+                </div>
+                <div class="badge-name">Legacy</div>
+                <div class="badge-desc">Grandfathered HypeSquad badge</div>
+              </button>
+            </div>
+
+            <div class="actions-row">
+              <button id="equipBadgeBtn" class="btn btn-primary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                <span>Equip Selected Badge</span>
+              </button>
+              <button id="removeBadgeBtn" class="btn btn-secondary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                <span>Remove HypeSquad Badge</span>
+              </button>
+              <button id="hideAllBadgesBtn" class="btn btn-secondary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
+                <span>Hide All Badges</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- View 4 — Account Details -->
+        <section id="accountDetailsView" class="view-panel" data-panel="details">
+          <div class="view-inner">
+            <div class="view-toolbar">
+              <button id="accountDetailsBackBtn" class="btn btn-ghost btn-small" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                <span>Back</span>
+              </button>
+              <span class="spacer"></span>
+              <button id="copyIdBtn" class="btn btn-secondary btn-small" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy Account ID</span>
+              </button>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Account Details</h2>
+                <span class="panel-hint">retrieved from your profile</span>
+              </div>
+              <div id="detailsGrid" class="details-grid"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- View 5 — Badge Evolution Tracker -->
+        <section id="badgeEvolutionView" class="view-panel" data-panel="evolution">
+          <div class="view-inner">
+            <div class="view-toolbar">
+              <button id="evolutionBackBtn" class="btn btn-ghost btn-small" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                <span>Back</span>
+              </button>
+            </div>
+
+            <div id="evolutionCards" class="evolution-grid"></div>
+          </div>
+        </section>
+
+        <!-- View 6 — Active Operation Terminal -->
+        <section id="operationView" class="view-panel" data-panel="operation">
+          <div class="view-inner">
+            <div class="panel terminal-panel">
+              <div class="panel-head terminal-head">
+                <h2 id="operationTitle" class="panel-title">Operation</h2>
+                <div class="terminal-actions">
+                  <span id="opStatPill" class="op-pill">idle</span>
+                  <button id="backToMenuBtn" class="btn btn-ghost btn-small" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                    <span>Menu</span>
+                  </button>
+                  <button id="stopOperationBtn" class="btn btn-ghost btn-small" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                    <span>Stop</span>
+                  </button>
+                </div>
+              </div>
+              <ul id="terminalLog" class="terminal-log"></ul>
+              <div class="progress-wrap">
+                <div class="progress-track">
+                  <div id="progressBarFill" class="progress-bar-fill"></div>
+                </div>
+                <div id="opProgressText" class="progress-text">0 / 0</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- View 7 — Settings & Whitelists -->
+        <section id="settingsView" class="view-panel" data-panel="settings">
           <div class="view-inner">
 
             <div class="panel">
               <div class="panel-head">
-                <h2 class="panel-title">Preferences</h2>
-                <span class="panel-hint">stored locally on this device</span>
+                <h2 class="panel-title">Desktop Controls</h2>
+                <span class="panel-hint">requires the desktop client</span>
               </div>
               <div class="settings-group">
-
                 <div class="settings-row">
                   <div>
-                    <div class="settings-label">UI Density</div>
-                    <div class="settings-desc">Control spacing between interface elements.</div>
-                  </div>
-                  <div class="density-options">
-                    <label class="density-option">
-                      <input type="radio" name="density" value="comfortable">
-                      <span>Comfortable</span>
-                    </label>
-                    <label class="density-option">
-                      <input type="radio" name="density" value="compact">
-                      <span>Compact</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="settings-row">
-                  <div>
-                    <div class="settings-label">Dashboard Notifications</div>
-                    <div class="settings-desc">Show state-change toasts for manager events.</div>
+                    <div class="settings-label">Launch with Windows</div>
+                    <div class="settings-desc">Start the manager on system startup.</div>
                   </div>
                   <label class="switch">
-                    <input type="checkbox" id="notifDashboard">
+                    <input type="checkbox" id="setAutoStart">
                     <span class="track"></span>
                   </label>
                 </div>
-
                 <div class="settings-row">
                   <div>
-                    <div class="settings-label">Sound Alerts</div>
-                    <div class="settings-desc">Play a short chime on critical events.</div>
+                    <div class="settings-label">Minimize to Tray</div>
+                    <div class="settings-desc">Keep running in the system tray on close.</div>
                   </div>
                   <label class="switch">
-                    <input type="checkbox" id="notifSound">
+                    <input type="checkbox" id="setMinTray">
                     <span class="track"></span>
                   </label>
                 </div>
-
-                <div class="settings-row">
-                  <div>
-                    <div class="settings-label">Email Digests</div>
-                    <div class="settings-desc">Receive a daily summary of activity.</div>
-                  </div>
-                  <label class="switch">
-                    <input type="checkbox" id="notifEmail">
-                    <span class="track"></span>
-                  </label>
-                </div>
-
               </div>
-              <div class="settings-footer">
-                <button id="settingsResetBtn" class="btn btn-danger" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
-                  <span>Clear Local Storage &amp; Cache</span>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Appearance &amp; Speed</h2>
+                <span class="panel-hint">theme accent and request pacing</span>
+              </div>
+              <div class="settings-group">
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-label">Theme Accent</div>
+                    <div class="settings-desc">Pick the accent color used across the UI.</div>
+                  </div>
+                  <div id="accentPickers" class="accent-dots">
+                    <button class="accent-dot selected" type="button" data-accent="violet" style="background:#5865f2" aria-label="Violet"></button>
+                    <button class="accent-dot" type="button" data-accent="teal" style="background:#2dd4bf" aria-label="Teal"></button>
+                    <button class="accent-dot" type="button" data-accent="rose" style="background:#f471b5" aria-label="Rose"></button>
+                    <button class="accent-dot" type="button" data-accent="amber" style="background:#f5b83d" aria-label="Amber"></button>
+                  </div>
+                </div>
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-label">Request Speed</div>
+                    <div class="settings-desc">Delay between destructive API calls.</div>
+                  </div>
+                  <select id="setSpeed" class="select" aria-label="Request speed">
+                    <option value="fast">Fast</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="safe">Safe</option>
+                    <option value="ultra">Ultra-Safe</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Whitelists</h2>
+                <span class="panel-hint">protected targets &mdash; never touched by operations</span>
+              </div>
+              <div class="whitelist-grid">
+                <div class="wl-block">
+                  <label for="wlServers" class="field-label">Whitelist Servers (IDs)</label>
+                  <textarea id="wlServers" class="whitelist-textarea" spellcheck="false" placeholder="one server ID per line"></textarea>
+                </div>
+                <div class="wl-block">
+                  <label for="wlFriends" class="field-label">Whitelist Friends (IDs or names)</label>
+                  <textarea id="wlFriends" class="whitelist-textarea" spellcheck="false" placeholder="one friend per line"></textarea>
+                </div>
+                <div class="wl-block">
+                  <label for="wlDms" class="field-label">Whitelist DMs (IDs or names)</label>
+                  <textarea id="wlDms" class="whitelist-textarea" spellcheck="false" placeholder="one user per line"></textarea>
+                </div>
+                <div class="wl-save-row">
+                  <button id="wlSaveBtn" class="btn btn-primary" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+                    <span>Save Whitelist</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Danger Zone</h2>
+                <span class="panel-hint">wipe local credentials and data</span>
+              </div>
+              <div class="settings-footer danger-footer">
+                <button id="deactivateLicenseBtn" class="btn btn-ghost" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span>Deactivate Session</span>
+                </button>
+                <button id="clearAllDataBtn" class="btn btn-danger" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                  <span>Clear All Data</span>
                 </button>
               </div>
             </div>
@@ -265,7 +472,7 @@
     <aside id="mobileDrawer" class="mobile-drawer" aria-label="Mobile navigation">
       <div class="sidebar-brand">
         <span class="brand-dot small"></span>
-        <span class="app-brand-name">Discord Manager</span>
+        <span class="app-brand-name">Discord Account Manager</span>
       </div>
       <nav class="sidebar-nav">
         <a href="#dashboard" class="nav-link active" data-tab="dashboard" aria-current="page">
@@ -273,8 +480,8 @@
           <span class="nav-label">Dashboard</span>
         </a>
         <a href="#manager" class="nav-link" data-tab="manager">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
-          <span class="nav-label">Manager</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+          <span class="nav-label">Operations</span>
         </a>
         <a href="#settings" class="nav-link" data-tab="settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -282,6 +489,19 @@
         </a>
       </nav>
     </aside>
+
+    <div id="historyModal" class="modal">
+      <div class="modal-card">
+        <div class="modal-body">
+          <div class="modal-title-row">
+            <h2 class="modal-title">Operation History</h2>
+            <span id="historyCount" class="panel-hint">0 records</span>
+          </div>
+          <ul id="historyList" class="modal-list"></ul>
+        </div>
+        <button id="historyModalClose" class="btn btn-secondary btn-block" type="button">Close</button>
+      </div>
+    </div>
 
   </div>
 
