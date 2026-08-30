@@ -134,12 +134,16 @@
     return Date.parse(value);
   }
 
+  function normalizeKey(key) {
+    return String(key || '').replace(/[\s\u200B-\u200D\uFEFF]/g, '').trim().toUpperCase();
+  }
+
   async function validateKey(key) {
     const base = (CONFIG.apiBase || '').replace(/\/$/, '');
     const res = await fetch(base + '/api/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key })
+      body: JSON.stringify({ key: normalizeKey(key) })
     });
     if (!res.ok) {
       throw new Error('Server error ' + res.status);
@@ -230,12 +234,13 @@
 
   function onActivate() {
     ripple(el.licenseActivateBtn);
-    const key = el.licenseKeyInput.value.trim();
+    const key = normalizeKey(el.licenseKeyInput.value);
     if (!key) {
       setMsg('Enter your license key first.', 'error');
       toast('Enter your license key first.', 'error');
       return;
     }
+    el.licenseKeyInput.value = key;
     setMsg('Validating license...');
     setBusy(el.licenseActivateBtn, true);
     validateKey(key)

@@ -1,5 +1,5 @@
 window.CONFIG = {
-  apiBase: '',
+  apiBase: 'https://discord-license-server.vercel.app',
   trialDuration: 10 * 60 * 1000,
   offlineGraceMs: 24 * 60 * 60 * 1000,
   storage: {
