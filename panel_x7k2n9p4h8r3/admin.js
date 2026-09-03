@@ -78,15 +78,20 @@
   let pending = null;
 
   // Static fallback presets used only if the plans endpoint is unavailable.
+  const SAFETY_NOTE =
+    "## Privacy & safety\n- This tool is safe to use on your own account\n- Your token stays on your device - it is never sent to or seen by the owner\n- Only an account ID is counted for usage limits; nothing sensitive is collected";
+
   const FALLBACK_PLANS = [
-    { name: 'Trial', max_accounts: 1, max_devices: 1, duration_days: 7,
-      notes: "## Welcome to Trial\nThanks for trying our Discord Manager. Get a feel for the workspace before you upgrade.\n\n## What's included\n- 1 connected account on this key\n- Core dashboard and onboarding tools\n- 7-day access window\n\n## Getting started\n- Activate the key, then connect a Discord account\n- Explore your server metrics and account overview\n\nNeed more power? Upgrade to Standard, Pro or Vip anytime by contacting Mythic." },
-    { name: 'Standard', max_accounts: 1, max_devices: 1, duration_days: 30,
-      notes: "## Welcome to Standard\nYou're all set. This plan keeps things focused around a single account.\n\n## What's included\n- 1 connected account on this key\n- Full dashboard metrics and saved accounts\n- Standard priority support\n\n## Getting started\n- Connect your Discord account to load a live overview\n- Use saved accounts for quick switching\n- Reach out to Mythic on Telegram whenever you need help\n\nQuestions? Message us on Telegram - we reply fast." },
-    { name: 'Pro', max_accounts: 3, max_devices: 1, duration_days: 30,
-      notes: "## Welcome to Pro\nA step up. Manage up to three accounts with priority support.\n\n## What's included\n- Up to 3 accounts on this key\n- All dashboard tools and automations\n- Priority support\n\n## Getting started\n- Connect each account from the login screen\n- Manage all of them from one clean view\n\nNeed more room? Vip gives you up to 10 accounts." },
+    { name: 'Trial', max_accounts: 1, max_devices: 1, duration_days: 3,
+      notes: "## Welcome to Trial\nThanks for trying our Discord Manager. Get a feel for the workspace before you upgrade.\n\n## What's included\n- 1 connected account on this key\n- Core dashboard and onboarding tools\n- 3-day access window\n\n## Getting started\n- Activate the key, then connect a Discord account\n- Explore your server metrics and account overview\n\nNeed more power? Upgrade to Standard, Pro, Master or Vip anytime by contacting Mythic.\n\n" + SAFETY_NOTE },
+    { name: 'Standard', max_accounts: 3, max_devices: 1, duration_days: 7,
+      notes: "## Welcome to Standard\nYou're all set. This plan keeps things focused and simple.\n\n## What's included\n- Up to 3 connected accounts on this key\n- Full dashboard metrics and saved accounts\n- Standard priority support\n\n## Getting started\n- Connect your Discord account to load a live overview\n- Use saved accounts for quick switching\n- Reach out to Mythic on Telegram whenever you need help\n\nQuestions? Message us on Telegram - we reply fast.\n\n" + SAFETY_NOTE },
+    { name: 'Pro', max_accounts: 5, max_devices: 1, duration_days: 14,
+      notes: "## Welcome to Pro\nA real step up. Manage more accounts with priority support.\n\n## What's included\n- Up to 5 accounts on this key\n- All dashboard tools and automations\n- Priority support\n\n## Getting started\n- Connect each account from the login screen\n- Manage all of them from one clean view\n\nNeed more room? Master or Vip gives you even more.\n\n" + SAFETY_NOTE },
+    { name: 'Master', max_accounts: 7, max_devices: 1, duration_days: 30,
+      notes: "## Welcome to Master\nAdvanced access for serious use. More accounts, more room.\n\n## What's included\n- Up to 7 accounts on this key\n- All dashboard tools and automations\n- Priority support\n\n## Getting started\n- Connect and switch between accounts freely\n- Everything is ready out of the box\n\nWant the top tier? Vip unlocks up to 10 accounts.\n\n" + SAFETY_NOTE },
     { name: 'Vip', max_accounts: 10, max_devices: 1, duration_days: 90,
-      notes: "## Welcome to Vip\nYou're on our highest tier. Enjoy the full experience.\n\n## What's included\n- Up to 10 accounts on this key\n- Every feature, fully unlocked\n- Direct support from the owner\n\n## Getting started\n- Add and switch between accounts freely\n- Everything works right out of the box\n\nEnjoy the premium access - and thanks for being a Vip!" }
+      notes: "## Welcome to Vip\nYou're on our highest tier. Enjoy the full experience.\n\n## What's included\n- Up to 10 accounts on this key\n- Every feature, fully unlocked\n- Direct support from the owner\n- 90-day access\n\n## Getting started\n- Add and switch between accounts freely\n- Everything works right out of the box\n\nEnjoy the premium access - and thanks for being a Vip!\n\n" + SAFETY_NOTE }
   ];
 
   function getSecret() {
