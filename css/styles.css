@@ -5074,6 +5074,7 @@ html[data-theme="light"] .btn-ops:hover {
   justify-content: center;
   gap: 8px;
   margin-top: 2px;
+  padding-top: 10px;
   width: 100%;
   text-decoration: none;
   box-sizing: border-box;
