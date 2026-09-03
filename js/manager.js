@@ -47,6 +47,40 @@ window.manager = {
     localStorage.removeItem(window.CONFIG.storage.license);
   },
 
+  reportAccountLogin(accountId) {
+    const cache = this.getLicenseCache();
+    const key = cache && cache.key ? String(cache.key) : '';
+    if (!key) {
+      return Promise.resolve(false);
+    }
+    const url = String(window.CONFIG.apiBase || '').replace(/\/+$/, '') + '/api/activate';
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key, accountId: String(accountId || '').trim() })
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return null; });
+      })
+      .then(function (body) {
+        if (!body || !body.success) {
+          return false;
+        }
+        const d = body.data || {};
+        if (d.maxActivations || d.activationsUsed !== undefined) {
+          cache.maxActivations = d.maxActivations;
+          cache.activationsUsed = d.activationsUsed;
+          try {
+            this.setLicenseCache(cache);
+          } catch (e) { }
+        }
+        return true;
+      }.bind(this))
+      .catch(function () {
+        return false;
+      });
+  },
+
   offlineGraceRemaining() {
     const cache = this.getLicenseCache();
     if (!cache || typeof cache.expiresAt !== 'number') {
@@ -1119,6 +1153,40 @@ window.manager = {
   function saveAccounts(list) {
     jsonSet(localStorage, CONFIG.dsc.accounts, list);
     renderSavedAccounts();
+  }
+
+  function pruneInvalidSavedAccounts() {
+    const accounts = loadAccounts();
+    if (!accounts.length) {
+      return Promise.resolve(0);
+    }
+    const checks = accounts.map(function (acc) {
+      return validateToken(acc.token)
+        .then(function () {
+          return { valid: true, account: acc };
+        })
+        .catch(function () {
+          return { valid: false, account: acc };
+        });
+    });
+    return Promise.all(checks).then(function (results) {
+      const kept = results.filter(function (r) {
+        return r.valid;
+      }).map(function (r) {
+        return r.account;
+      });
+      const removed = results.filter(function (r) {
+        return !r.valid;
+      }).length;
+      if (removed > 0) {
+        jsonSet(localStorage, CONFIG.dsc.accounts, kept);
+        renderSavedAccounts();
+        toast(removed + ' saved account' + (removed === 1 ? '' : 's') + ' removed (token no longer valid).', 'error');
+      }
+      return removed;
+    }).catch(function () {
+      return 0;
+    });
   }
 
   function renderSavedAccounts() {
@@ -3761,6 +3829,9 @@ window.manager = {
             setActiveAccount(token, res.data);
             upsertAccount(token, res.data);
             if (tokenInput) tokenInput.value = '';
+            if (window.manager && typeof window.manager.reportAccountLogin === 'function') {
+              window.manager.reportAccountLogin(res.data.id);
+            }
             showView('dashboard');
             applyAccountState();
             toast('Logged in as ' + (res.data.global_name || res.data.username) + '.', 'success');
@@ -3829,6 +3900,9 @@ window.manager = {
                   throw new Error('Saved account validation failed.');
                 }
                 setActiveAccount(acc.token, res.data);
+                if (window.manager && typeof window.manager.reportAccountLogin === 'function') {
+                  window.manager.reportAccountLogin(res.data.id);
+                }
                 showView('dashboard');
                 applyAccountState();
                 toast('Switched to ' + (res.data.global_name || res.data.username) + '.', 'success');
@@ -5684,6 +5758,7 @@ window.manager = {
     applySettings();
     applyWhitelists();
     renderSavedAccounts();
+    pruneInvalidSavedAccounts();
     initAuth();
     initDashboard();
     initOps();

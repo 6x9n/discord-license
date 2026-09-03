@@ -2,34 +2,38 @@
 
 const { hashKey, parseIso, rest, json, handleOptions, readBody } = require('./_lib/supabase.js');
 
-async function activationExists(licenseId, deviceId) {
-  const rows = await rest('license_activations?select=id&license_id=eq.' + encodeURIComponent(licenseId) + '&device_hash=eq.' + encodeURIComponent(deviceId) + '&limit=1', {});
+async function activationExists(licenseId, accountId) {
+  const rows = await rest('license_activations?select=id&license_id=eq.' + encodeURIComponent(licenseId) + '&discord_user_id=eq.' + encodeURIComponent(accountId) + '&limit=1', {});
   return !!(rows && rows.length);
 }
 
 async function currentActivationCount(licenseId) {
-  const rows = await rest('license_activations?select=id&license_id=eq.' + encodeURIComponent(licenseId), {});
+  const rows = await rest('license_activations?select=discord_user_id&license_id=eq.' + encodeURIComponent(licenseId) + '&not.is.null.discord_user_id', {});
   return (rows && rows.length) || 0;
 }
 
-async function recordActivation(licenseId, deviceId, maxActivations) {
-  const exists = await activationExists(licenseId, deviceId);
+async function recordActivation(licenseId, accountId, maxActivations) {
+  const account = String(accountId || '').trim();
+  if (!account) {
+    return { ok: true, count: await currentActivationCount(licenseId) };
+  }
+  const exists = await activationExists(licenseId, account);
   if (exists) {
-    return { ok: true };
+    return { ok: true, count: await currentActivationCount(licenseId) };
   }
   const count = await currentActivationCount(licenseId);
   if (count >= (maxActivations || 1)) {
-    return { ok: false, full: true };
+    return { ok: false, full: true, count: count };
   }
   try {
     await rest('license_activations', {
       method: 'POST',
-      body: { license_id: licenseId, device_hash: deviceId }
+      body: { license_id: licenseId, device_hash: account, discord_user_id: account }
     });
-    return { ok: true };
+    return { ok: true, count: await currentActivationCount(licenseId) };
   } catch (e) {
-    const recheck = await activationExists(licenseId, deviceId);
-    return { ok: recheck };
+    const recheck = await activationExists(licenseId, account);
+    return { ok: recheck, count: await currentActivationCount(licenseId) };
   }
 }
 
@@ -43,13 +47,10 @@ module.exports = async function handler(req, res) {
 
   const body = await readBody(req);
   const key = String(body.key || '').trim();
-  const deviceId = String(body.deviceId || '').trim();
+  const accountId = String(body.accountId || body.deviceId || '').trim();
 
   if (!key) {
     return json(res, 400, { success: false, error: 'License key is required.' });
-  }
-  if (!deviceId) {
-    return json(res, 400, { success: false, error: 'Device identifier is required.' });
   }
 
   const keyHash = hashKey(key);
@@ -76,16 +77,16 @@ module.exports = async function handler(req, res) {
 
   let activation;
   try {
-    activation = await recordActivation(row.id, deviceId, row.max_activations || 1);
+    activation = await recordActivation(row.id, accountId, row.max_activations || 1);
   } catch (err) {
     return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Activation check failed.' });
   }
 
   if (!activation.ok && activation.full) {
-    return json(res, 403, { success: false, error: 'This license is already in use.' });
+    return json(res, 403, { success: false, error: 'This license has reached its account limit.' });
   }
   if (!activation.ok) {
-    return json(res, 403, { success: false, error: 'Unable to activate on this device.' });
+    return json(res, 403, { success: false, error: 'Unable to activate.' });
   }
 
   try {
@@ -101,7 +102,7 @@ module.exports = async function handler(req, res) {
   try {
     used = await currentActivationCount(row.id);
   } catch (e) {
-    used = 0;
+    used = activation.count || 0;
   }
 
   return json(res, 200, {

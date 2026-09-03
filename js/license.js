@@ -69,7 +69,7 @@
     }
     setMsg('Validating key...', 'info');
 
-    const payload = { key: String(key || '').trim(), deviceId: deviceId() };
+    const payload = { key: String(key || '').trim() };
 
     return fetch(String(CONFIG.apiBase).replace(/\/+$/, '') + '/api/activate', {
       method: 'POST',
