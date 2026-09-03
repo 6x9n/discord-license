@@ -1,35 +1,23 @@
 ﻿'use strict';
 
-const { rest, json, handleOptions, isAuthorized } = require('../../_lib/supabase.js');
+const { rest, json, handleOptions, readBody, isAuthorized } = require('../../_lib/supabase.js');
 
-async function readBody(request) {
-  const text = await request.text();
-  if (!text) {
-    return {};
+module.exports = async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    return handleOptions(res);
   }
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    return {};
+  const auth = isAuthorized(req);
+  if (!auth.ok) {
+    return json(res, auth.error === 'Unauthorized' ? 401 : 503, { success: false, error: auth.error });
   }
-}
 
-module.exports = async function handler(request, ctx) {
-  if (request.method === 'OPTIONS') {
-    return handleOptions(request);
-  }
-  const { ok: authOk, error: authErr } = isAuthorized(request);
-      if (!authOk) {
-        return json(request, authErr === 'Unauthorized' ? 401 : 503, { success: false, error: authErr });
-      }
-
-  const id = decodeURIComponent((ctx.params && ctx.params.id) || '');
+  const id = decodeURIComponent((req.params && req.params.id) || '');
   if (!id) {
-    return json(request, 400, { success: false, error: 'Missing key id.' });
+    return json(res, 400, { success: false, error: 'Missing key id.' });
   }
 
-  if (request.method === 'PATCH') {
-    const body = await readBody(request);
+  if (req.method === 'PATCH') {
+    const body = await readBody(req);
     const patch = {};
     if (body.label !== undefined) patch.label = String(body.label);
     if (body.expires_at !== undefined) patch.expires_at = body.expires_at ? String(body.expires_at) : null;
@@ -41,21 +29,21 @@ module.exports = async function handler(request, ctx) {
     try {
       const updated = await rest('license_keys?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: patch, headers: { 'Prefer': 'return=representation' } });
       const row = updated && updated[0] ? updated[0] : null;
-      return json(request, 200, { success: true, data: row });
+      return json(res, 200, { success: true, data: row });
     } catch (err) {
-      return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to update key.' });
+      return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to update key.' });
     }
   }
 
-  if (request.method === 'DELETE') {
+  if (req.method === 'DELETE') {
     try {
       await rest('license_activations?license_id=eq.' + encodeURIComponent(id), { method: 'DELETE' });
       await rest('license_keys?id=eq.' + encodeURIComponent(id), { method: 'DELETE' });
-      return json(request, 200, { success: true });
+      return json(res, 200, { success: true });
     } catch (err) {
-      return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to delete key.' });
+      return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to delete key.' });
     }
   }
 
-  return json(request, 405, { success: false, error: 'Method not allowed' });
+  return json(res, 405, { success: false, error: 'Method not allowed' });
 }

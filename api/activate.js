@@ -1,18 +1,6 @@
 'use strict';
 
-const { hashKey, parseIso, rest, json, handleOptions } = require('./_lib/supabase.js');
-
-async function readBody(request) {
-  const text = await request.text();
-  if (!text) {
-    return {};
-  }
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    return {};
-  }
-}
+const { hashKey, parseIso, rest, json, handleOptions, readBody } = require('./_lib/supabase.js');
 
 async function activationExists(licenseId, deviceId) {
   const rows = await rest('license_activations?select=id&license_id=eq.' + encodeURIComponent(licenseId) + '&device_hash=eq.' + encodeURIComponent(deviceId) + '&limit=1', {});
@@ -45,23 +33,23 @@ async function recordActivation(licenseId, deviceId, maxActivations) {
   }
 }
 
-module.exports = async function handler(request) {
-  if (request.method === 'OPTIONS') {
-    return handleOptions(request);
+module.exports = async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    return handleOptions(res);
   }
-  if (request.method !== 'POST') {
-    return json(request, 405, { success: false, error: 'Method not allowed' });
+  if (req.method !== 'POST') {
+    return json(res, 405, { success: false, error: 'Method not allowed' });
   }
 
-  const body = await readBody(request);
+  const body = await readBody(req);
   const key = String(body.key || '').trim();
   const deviceId = String(body.deviceId || '').trim();
 
   if (!key) {
-    return json(request, 400, { success: false, error: 'License key is required.' });
+    return json(res, 400, { success: false, error: 'License key is required.' });
   }
   if (!deviceId) {
-    return json(request, 400, { success: false, error: 'Device identifier is required.' });
+    return json(res, 400, { success: false, error: 'Device identifier is required.' });
   }
 
   const keyHash = hashKey(key);
@@ -70,34 +58,34 @@ module.exports = async function handler(request) {
   try {
     rows = await rest('license_keys?select=*&key_hash=eq.' + encodeURIComponent(keyHash) + '&limit=1', {});
   } catch (err) {
-    return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'License lookup failed.' });
+    return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'License lookup failed.' });
   }
 
   const row = (rows && rows[0]) || null;
   if (!row) {
-    return json(request, 404, { success: false, error: 'Invalid license key.' });
+    return json(res, 404, { success: false, error: 'Invalid license key.' });
   }
   if (row.revoked) {
-    return json(request, 403, { success: false, error: 'This license has been revoked.' });
+    return json(res, 403, { success: false, error: 'This license has been revoked.' });
   }
 
   const expiresAt = parseIso(row.expires_at);
   if (expiresAt && expiresAt <= Date.now()) {
-    return json(request, 403, { success: false, error: 'This license has expired.' });
+    return json(res, 403, { success: false, error: 'This license has expired.' });
   }
 
   let activation;
   try {
-    activation = await recordActivation(row.id, deviceId, maxActivations);
+    activation = await recordActivation(row.id, deviceId, row.max_activations || 1);
   } catch (err) {
-    return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Activation check failed.' });
+    return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Activation check failed.' });
   }
 
   if (!activation.ok && activation.full) {
-    return json(request, 403, { success: false, error: 'This license is already in use.' });
+    return json(res, 403, { success: false, error: 'This license is already in use.' });
   }
   if (!activation.ok) {
-    return json(request, 403, { success: false, error: 'Unable to activate on this device.' });
+    return json(res, 403, { success: false, error: 'Unable to activate on this device.' });
   }
 
   try {
@@ -109,7 +97,7 @@ module.exports = async function handler(request) {
     // non-fatal; continue
   }
 
-  return json(request, 200, {
+  return json(res, 200, {
     success: true,
     data: {
       expiresAt: expiresAt ? new Date(expiresAt).getTime() : null,

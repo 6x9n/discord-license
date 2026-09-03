@@ -1,19 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { hashKey, rest, json, handleOptions, isAuthorized } = require('../_lib/supabase.js');
-
-async function readBody(request) {
-  const text = await request.text();
-  if (!text) {
-    return {};
-  }
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    return {};
-  }
-}
+const { hashKey, rest, json, handleOptions, readBody, isAuthorized } = require('../_lib/supabase.js');
 
 function randSegment(n) {
   let out = '';
@@ -29,21 +17,22 @@ function generateKey() {
   return ['DMT', seg(6), seg(6), seg(6), seg(6)].join('-');
 }
 
-module.exports = async function handler(request) {
-  if (request.method === 'OPTIONS') {
-    return handleOptions(request);
-  }
-  const auth = isAuthorized(request);
-  if (!auth.ok) {
-    return json(request, auth.error === 'Unauthorized' ? 401 : 503, { success: false, error: auth.error });
+module.exports = async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    return handleOptions(res);
   }
 
-  if (request.method === 'GET') {
+  const auth = isAuthorized(req);
+  if (!auth.ok) {
+    return json(res, auth.error === 'Unauthorized' ? 401 : 503, { success: false, error: auth.error });
+  }
+
+  if (req.method === 'GET') {
     let rows;
     try {
       rows = await rest('license_keys?order=created_at.desc', {});
     } catch (err) {
-      return json(request, (err && (err.status || err.configError)) ? (err.status || 503) : 500, { success: false, error: (err && err.message) || 'Failed to list keys.' });
+      return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to list keys.' });
     }
 
     let acts = [];
@@ -65,11 +54,11 @@ module.exports = async function handler(request) {
       return copy;
     });
 
-    return json(request, 200, { success: true, data: rowsOut });
+    return json(res, 200, { success: true, data: rowsOut });
   }
 
-  if (request.method === 'POST') {
-    const body = await readBody(request);
+  if (req.method === 'POST') {
+    const body = await readBody(req);
     const label = String(body.label || '').trim() || 'Standard';
     const expiresIso = body.expires_at ? String(body.expires_at) : null;
     const maxActivations = parseInt(body.max_activations, 10);
@@ -87,7 +76,7 @@ module.exports = async function handler(request) {
     try {
       const inserted = await rest('license_keys', { method: 'POST', body: payload });
       const row = inserted && inserted[0] ? inserted[0] : payload;
-      return json(request, 200, {
+      return json(res, 200, {
         success: true,
         data: {
           id: row.id,
@@ -101,9 +90,9 @@ module.exports = async function handler(request) {
         }
       });
     } catch (err) {
-      return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to create key.' });
+      return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to create key.' });
     }
   }
 
-  return json(request, 405, { success: false, error: 'Method not allowed' });
+  return json(res, 405, { success: false, error: 'Method not allowed' });
 }

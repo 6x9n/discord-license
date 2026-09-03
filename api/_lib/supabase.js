@@ -31,23 +31,83 @@ function configState() {
   };
 }
 
-function notConfiguredMessage() {
-  const st = configState();
-  const missing = [];
-  if (!st.serviceKeySet) missing.push('SUPABASE_SERVICE_ROLE_KEY');
-  if (!st.adminSecretSet) missing.push('LICENSE_ADMIN_SECRET');
-  return 'Server not configured. Missing environment variable' + (missing.length > 1 ? 's: ' : ': ') + missing.join(', ') + '. Set these in the Vercel project settings and redeploy.';
+function getBearer(req) {
+  const h = (req && req.headers && req.headers.authorization) || '';
+  return h.replace(/^Bearer\s+/i, '');
 }
+
+function isAuthorized(req) {
+  if (!adminSecret) {
+    return { ok: false, error: 'Server not configured. Missing LICENSE_ADMIN_SECRET environment variable.' };
+  }
+  if (getBearer(req) !== adminSecret) {
+    return { ok: false, error: 'Unauthorized' };
+  }
+  return { ok: true };
+}
+
+// Read the request body as a parsed JSON object (Node http.IncomingMessage style).
+function readBody(req) {
+  return new Promise(function (resolve) {
+    let data = '';
+    req.on('data', function (chunk) {
+      data += chunk;
+    });
+    req.on('end', function () {
+      if (!data) {
+        return resolve({});
+      }
+      try {
+        resolve(JSON.parse(data));
+      } catch (e) {
+        resolve({});
+      }
+    });
+    req.on('error', function () {
+      resolve({});
+    });
+  });
+}
+
+// Write a JSON response using the Node http.ServerResponse.
+function json(res, status, body) {
+  const payload = JSON.stringify(body);
+  const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, GET, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  };
+  res.writeHead(status, headers);
+  res.end(payload);
+}
+
+function handleOptions(res) {
+  res.writeHead(204, {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, GET, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  });
+  res.end();
+}
+
+const NOT_CONFIGURED_MESSAGE = (function () {
+  const missing = [];
+  if (!SERVICE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+  if (!adminSecret) missing.push('LICENSE_ADMIN_SECRET');
+  if (!missing.length) return null;
+  return 'Server not configured. Missing environment variable' + (missing.length > 1 ? 's: ' : ': ') + missing.join(', ') + '. Set these in the Vercel project settings and redeploy.';
+})();
 
 async function rest(path, options) {
   if (!SERVICE_KEY) {
-    const err = new Error(notConfiguredMessage());
+    const err = new Error(NOT_CONFIGURED_MESSAGE || 'Service key not configured.');
     err.status = 503;
     err.configError = true;
     throw err;
   }
   const opts = options || {};
-  const req = {
+  const reqOpts = {
     method: opts.method || 'GET',
     headers: Object.assign({
       apikey: SERVICE_KEY,
@@ -56,25 +116,30 @@ async function rest(path, options) {
     }, opts.headers || {})
   };
   if (opts.body !== undefined) {
-    req.body = JSON.stringify(opts.body);
+    reqOpts.body = JSON.stringify(opts.body);
   }
 
   let res;
+  let bodyText;
   try {
-    res = await fetch(restBase + path, req);
+    if (typeof fetch !== 'function') {
+      throw new Error('Fetch API not available in this runtime.');
+    }
+    res = await fetch(restBase + path, reqOpts);
+    bodyText = await res.text();
   } catch (e) {
-    const err = new Error('Unable to reach Supabase. Check SUPABASE_URL.');
+    const err = new Error((e && e.message === 'Fetch API not available in this runtime.') ? e.message : 'Unable to reach Supabase. Check SUPABASE_URL.');
     err.status = 502;
     err.detail = e && e.message;
     throw err;
   }
-  const text = await res.text();
+
   let data = null;
-  if (text) {
+  if (bodyText) {
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(bodyText);
     } catch (e) {
-      data = text;
+      data = bodyText;
     }
   }
 
@@ -87,44 +152,14 @@ async function rest(path, options) {
   return data;
 }
 
-function isAuthorized(req) {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace(/^Bearer\s+/i, '');
-  if (!adminSecret) {
-    return { ok: false, error: 'Server not configured. Missing LICENSE_ADMIN_SECRET environment variable.' };
-  }
-  if (token !== adminSecret) {
-    return { ok: false, error: 'Unauthorized' };
-  }
-  return { ok: true };
-}
-
-function corsHeaders(req, extra) {
-  const origin = req.headers.get('origin') || '*';
-  return Object.assign({
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'POST, GET, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Vary': 'Origin'
-  }, extra || {});
-}
-
-function json(req, status, body) {
-  return new Response(JSON.stringify(body), { status: status, headers: corsHeaders(req) });
-}
-
-function handleOptions(req) {
-  return new Response(null, { status: 204, headers: corsHeaders(req) });
-}
-
 module.exports = {
   normalizeKey: normalizeKey,
   hashKey: hashKey,
   parseIso: parseIso,
-  rest: rest,
+  configState: configState,
   isAuthorized: isAuthorized,
-  corsHeaders: corsHeaders,
+  readBody: readBody,
   json: json,
-  handleOptions: handleOptions
+  handleOptions: handleOptions,
+  rest: rest
 };
