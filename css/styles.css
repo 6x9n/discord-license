@@ -5463,6 +5463,68 @@ html[data-theme="light"] .btn-ops:hover {
 .welcome-notes {
   margin-bottom: 12px;
 }
+.welcome-notes-body {
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid var(--border-glass);
+  border-radius: 14px;
+  padding: 6px 16px 14px;
+}
+.welcome-notes-body .note-head {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 14px 0 6px;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.welcome-notes-body .note-head::before {
+  content: "";
+  width: 5px;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), var(--success));
+  flex-shrink: 0;
+}
+.welcome-notes-body .note-list {
+  margin: 6px 0 10px;
+  padding-left: 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.welcome-notes-body .note-li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.5;
+  text-align: left;
+}
+.welcome-notes-body .note-li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: rgba(88, 101, 242, 0.85);
+  box-shadow: 0 0 6px rgba(88, 101, 242, 0.5);
+}
+.welcome-notes-body .note-li strong {
+  color: var(--text);
+  font-weight: 700;
+}
+.welcome-notes-body .note-line {
+  margin: 8px 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+  text-align: left;
+}
 #welcomeOk {
   margin-top: 4px;
 }

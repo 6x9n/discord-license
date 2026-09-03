@@ -138,6 +138,67 @@
       });
   }
 
+  function renderNotes(host, notesText) {
+    if (!host) {
+      return;
+    }
+    host.innerHTML = '';
+    const label = document.createElement('div');
+    label.className = 'welcome-block-label';
+    label.textContent = 'Your plan instructions';
+    host.appendChild(label);
+
+    const body = document.createElement('div');
+    body.className = 'welcome-notes-body';
+    host.appendChild(body);
+
+    const lines = String(notesText || '').split(/\r?\n/);
+    let list = null;
+    lines.forEach(function (raw) {
+      const line = String(raw).trimEnd();
+      if (line.trim() === '') {
+        if (list) {
+          list = null;
+        }
+        return;
+      }
+      if (/^##\s+/.test(line)) {
+        list = null;
+        const head = document.createElement('div');
+        head.className = 'note-head';
+        head.textContent = line.replace(/^##\s+/, '').trim();
+        body.appendChild(head);
+        return;
+      }
+      if (/^-\s+/.test(line)) {
+        if (!list) {
+          list = document.createElement('ul');
+          list.className = 'note-list';
+          body.appendChild(list);
+        }
+        const item = document.createElement('li');
+        item.className = 'note-li';
+        const text = line.replace(/^-\s+/, '').trim();
+        const boldMatch = text.match(/^(.+?):\s+(.+)$/);
+        if (boldMatch) {
+          const strong = document.createElement('strong');
+          strong.textContent = boldMatch[1] + ':';
+          item.appendChild(strong);
+          item.appendChild(document.createTextNode(' ' + boldMatch[2]));
+        } else {
+          item.textContent = text;
+        }
+        list.appendChild(item);
+        return;
+      }
+      list = null;
+      const para = document.createElement('p');
+      para.className = 'note-line';
+      para.textContent = line.trim();
+      body.appendChild(para);
+    });
+  }
+
   function showWelcome(info) {
     const modal = document.getElementById('welcomeModal');
     if (!modal) {
@@ -177,11 +238,7 @@
     if (notes) {
       if (info.notes) {
         notes.hidden = false;
-        notes.innerHTML = '<div class="welcome-block-label">Your plan instructions</div>';
-        const p = document.createElement('p');
-        p.className = 'welcome-block-sub';
-        p.textContent = info.notes;
-        notes.appendChild(p);
+        renderNotes(notes, info.notes);
       } else {
         notes.hidden = true;
         notes.innerHTML = '';

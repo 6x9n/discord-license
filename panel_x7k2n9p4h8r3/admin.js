@@ -79,10 +79,14 @@
 
   // Static fallback presets used only if the plans endpoint is unavailable.
   const FALLBACK_PLANS = [
-    { name: 'Trial', max_accounts: 1, max_devices: 1, duration_days: 7 },
-    { name: 'Standard', max_accounts: 1, max_devices: 1, duration_days: 30 },
-    { name: 'Pro', max_accounts: 3, max_devices: 1, duration_days: 30 },
-    { name: 'Vip', max_accounts: 10, max_devices: 1, duration_days: 90 }
+    { name: 'Trial', max_accounts: 1, max_devices: 1, duration_days: 7,
+      notes: "## Welcome to Trial\nThanks for trying our Discord Manager. Get a feel for the workspace before you upgrade.\n\n## What's included\n- 1 connected account on this key\n- Core dashboard and onboarding tools\n- 7-day access window\n\n## Getting started\n- Activate the key, then connect a Discord account\n- Explore your server metrics and account overview\n\nNeed more power? Upgrade to Standard, Pro or Vip anytime by contacting Mythic." },
+    { name: 'Standard', max_accounts: 1, max_devices: 1, duration_days: 30,
+      notes: "## Welcome to Standard\nYou're all set. This plan keeps things focused around a single account.\n\n## What's included\n- 1 connected account on this key\n- Full dashboard metrics and saved accounts\n- Standard priority support\n\n## Getting started\n- Connect your Discord account to load a live overview\n- Use saved accounts for quick switching\n- Reach out to Mythic on Telegram whenever you need help\n\nQuestions? Message us on Telegram - we reply fast." },
+    { name: 'Pro', max_accounts: 3, max_devices: 1, duration_days: 30,
+      notes: "## Welcome to Pro\nA step up. Manage up to three accounts with priority support.\n\n## What's included\n- Up to 3 accounts on this key\n- All dashboard tools and automations\n- Priority support\n\n## Getting started\n- Connect each account from the login screen\n- Manage all of them from one clean view\n\nNeed more room? Vip gives you up to 10 accounts." },
+    { name: 'Vip', max_accounts: 10, max_devices: 1, duration_days: 90,
+      notes: "## Welcome to Vip\nYou're on our highest tier. Enjoy the full experience.\n\n## What's included\n- Up to 10 accounts on this key\n- Every feature, fully unlocked\n- Direct support from the owner\n\n## Getting started\n- Add and switch between accounts freely\n- Everything works right out of the box\n\nEnjoy the premium access - and thanks for being a Vip!" }
   ];
 
   function getSecret() {
