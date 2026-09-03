@@ -48,8 +48,8 @@
     if (!visible) {
       return;
     }
-    ringX += (x - ringX) * 0.45;
-    ringY += (y - ringY) * 0.45;
+    ringX += (x - ringX) * 0.5;
+    ringY += (y - ringY) * 0.5;
 
     const dX = x - ringX;
     const dY = y - ringY;
@@ -61,7 +61,7 @@
     const scale = Math.min(1.2, 1 + dist * 0.003);
     ring.style.transform = 'translate(0,0) scale(' + scale.toFixed(3) + ')';
 
-    if (Math.abs(dist) > 1) {
+    if (Math.abs(dist) > 0.5) {
       rafId = requestAnimationFrame(frame);
     }
   }
@@ -70,12 +70,31 @@
     setVisible(false);
   }
 
+  function snapToPointer() {
+    ringX = x;
+    ringY = y;
+    if (!visible) {
+      return;
+    }
+    ring.style.left = (ringX - 12) + 'px';
+    ring.style.top = (ringY - 12) + 'px';
+    ring.style.transform = 'translate(0,0) scale(1)';
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  }
+
   function onMouseDown() {
+    snapToPointer();
     cursorEl.classList.add('active');
   }
 
   function onMouseUp() {
     cursorEl.classList.remove('active');
+    if (!rafId && visible) {
+      rafId = requestAnimationFrame(frame);
+    }
   }
 
   function onOver(e) {
