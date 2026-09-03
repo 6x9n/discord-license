@@ -223,6 +223,10 @@
     });
   }
 
+  function escNotes(s) {
+    return esc(s).replace(/\r?\n/g, '<br>');
+  }
+
   function renderTable() {
     const q = (el.searchInput.value || '').trim().toLowerCase();
     const filtered = keys.filter(function (k) {
@@ -518,7 +522,7 @@
         '<td>' + esc(String(p.max_accounts != null ? p.max_accounts : 1)) + '</td>' +
         '<td>' + esc(String(p.max_devices != null ? p.max_devices : 1)) + '</td>' +
         '<td>' + ((p.duration_days > 0) ? esc(String(p.duration_days)) : '<span class="badge badge-lifetime">Lifetime</span>') + '</td>' +
-        '<td class="note-cell">' + esc(p.notes || '—') + '</td>' +
+        '<td class="note-cell">' + escNotes(p.notes || '—') + '</td>' +
         '<td>' + esc(p.created_at ? fmtDate(p.created_at) : '—') + '</td>' +
         '<td><div class="row-actions">' +
         '<button class="btn btn-ghost mini-btn" data-plan="edit" data-id="' + esc(p.id) + '">Edit</button>' +

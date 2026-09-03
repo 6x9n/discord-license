@@ -91,6 +91,52 @@ window.manager = {
       });
   },
 
+  // Release this device/account on the license server so the key becomes
+  // activatable again (e.g. on another device) after the user logs out.
+  releaseDevice(accountId) {
+    const cache = this.getLicenseCache();
+    const key = cache && cache.key ? String(cache.key) : '';
+    if (!key) {
+      return Promise.resolve(false);
+    }
+    const url = String(window.CONFIG.apiBase || '').replace(/\/+$/, '') + '/api/deactivate';
+    let deviceId = '';
+    try {
+      deviceId = localStorage.getItem('dmt.device.id') || '';
+    } catch (e) { }
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: key,
+        deviceId: String(deviceId).trim(),
+        accountId: String(accountId || '').trim()
+      })
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return null; });
+      })
+      .then(function (body) {
+        if (!body || !body.success) {
+          return false;
+        }
+        const cache2 = this.getLicenseCache();
+        if (cache2) {
+          cache2.devicesUsed = Math.max(0, (Number(cache2.devicesUsed) || 0) - 1);
+          if (accountId) {
+            cache2.activationsUsed = Math.max(0, (Number(cache2.activationsUsed) || 0) - 1);
+          }
+          try {
+            this.setLicenseCache(cache2);
+          } catch (e) { }
+        }
+        return true;
+      }.bind(this))
+      .catch(function () {
+        return false;
+      });
+  },
+
   offlineGraceRemaining() {
     const cache = this.getLicenseCache();
     if (!cache || typeof cache.expiresAt !== 'number') {
@@ -4009,6 +4055,7 @@ window.manager = {
 
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function () {
+        releaseActiveKey();
         cancelOperationForExit();
         clearActiveAccount();
         renderSavedAccounts();
@@ -4020,12 +4067,20 @@ window.manager = {
     const topLogoutBtn = byId('topLogoutBtn');
     if (topLogoutBtn) {
       topLogoutBtn.addEventListener('click', function () {
+        releaseActiveKey();
         cancelOperationForExit();
         clearActiveAccount();
         renderSavedAccounts();
         showView('login');
         toast('Logged out.', 'info');
       });
+    }
+  }
+
+  function releaseActiveKey() {
+    if (window.manager && typeof window.manager.releaseDevice === 'function') {
+      const accountId = state.user && state.user.id ? String(state.user.id) : '';
+      window.manager.releaseDevice(accountId);
     }
   }
 
