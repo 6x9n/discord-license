@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const { rest, json, handleOptions, isAuthorized } = require('../../_lib/supabase.js');
 
@@ -18,9 +18,10 @@ module.exports = async function handler(request, ctx) {
   if (request.method === 'OPTIONS') {
     return handleOptions(request);
   }
-  if (!isAuthorized(request)) {
-    return json(request, 401, { success: false, error: 'Unauthorized' });
-  }
+  const { ok: authOk, error: authErr } = isAuthorized(request);
+      if (!authOk) {
+        return json(request, authErr === 'Unauthorized' ? 401 : 503, { success: false, error: authErr });
+      }
 
   const id = decodeURIComponent((ctx.params && ctx.params.id) || '');
   if (!id) {
@@ -42,7 +43,7 @@ module.exports = async function handler(request, ctx) {
       const row = updated && updated[0] ? updated[0] : null;
       return json(request, 200, { success: true, data: row });
     } catch (err) {
-      return json(request, 500, { success: false, error: 'Failed to update key.' });
+      return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to update key.' });
     }
   }
 
@@ -52,7 +53,7 @@ module.exports = async function handler(request, ctx) {
       await rest('license_keys?id=eq.' + encodeURIComponent(id), { method: 'DELETE' });
       return json(request, 200, { success: true });
     } catch (err) {
-      return json(request, 500, { success: false, error: 'Failed to delete key.' });
+      return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to delete key.' });
     }
   }
 

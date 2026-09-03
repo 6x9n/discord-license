@@ -26,7 +26,10 @@ module.exports = async function handler(request) {
   const secret = String(body.secret || '').trim();
   const adminSecret = process.env.LICENSE_ADMIN_SECRET || '';
 
-  if (!adminSecret || secret !== adminSecret) {
+  if (!adminSecret) {
+    return json(request, 503, { success: false, error: 'Server not configured. Missing LICENSE_ADMIN_SECRET environment variable.' });
+  }
+  if (secret !== adminSecret) {
     return json(request, 401, { success: false, error: 'Access denied.' });
   }
 

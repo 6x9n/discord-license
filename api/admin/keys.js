@@ -33,8 +33,9 @@ module.exports = async function handler(request) {
   if (request.method === 'OPTIONS') {
     return handleOptions(request);
   }
-  if (!isAuthorized(request)) {
-    return json(request, 401, { success: false, error: 'Unauthorized' });
+  const auth = isAuthorized(request);
+  if (!auth.ok) {
+    return json(request, auth.error === 'Unauthorized' ? 401 : 503, { success: false, error: auth.error });
   }
 
   if (request.method === 'GET') {
@@ -42,7 +43,7 @@ module.exports = async function handler(request) {
     try {
       rows = await rest('license_keys?order=created_at.desc', {});
     } catch (err) {
-      return json(request, 500, { success: false, error: 'Failed to list keys.' });
+      return json(request, (err && (err.status || err.configError)) ? (err.status || 503) : 500, { success: false, error: (err && err.message) || 'Failed to list keys.' });
     }
 
     let acts = [];
@@ -100,7 +101,7 @@ module.exports = async function handler(request) {
         }
       });
     } catch (err) {
-      return json(request, 500, { success: false, error: 'Failed to create key.' });
+      return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to create key.' });
     }
   }
 

@@ -6,8 +6,9 @@ module.exports = async function handler(request, ctx) {
   if (request.method === 'OPTIONS') {
     return handleOptions(request);
   }
-  if (!isAuthorized(request)) {
-    return json(request, 401, { success: false, error: 'Unauthorized' });
+  const auth = isAuthorized(request);
+  if (!auth.ok) {
+    return json(request, auth.error === 'Unauthorized' ? 401 : 503, { success: false, error: auth.error });
   }
 
   const id = decodeURIComponent((ctx.params && ctx.params.id) || '');
@@ -20,7 +21,7 @@ module.exports = async function handler(request, ctx) {
       await rest('license_activations?license_id=eq.' + encodeURIComponent(id), { method: 'DELETE' });
       return json(request, 200, { success: true });
     } catch (err) {
-      return json(request, 500, { success: false, error: 'Failed to clear activations.' });
+      return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to clear activations.' });
     }
   }
 

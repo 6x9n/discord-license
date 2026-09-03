@@ -24,7 +24,28 @@ function parseIso(iso) {
   return isNaN(ms) ? null : ms;
 }
 
+function configState() {
+  return {
+    serviceKeySet: !!SERVICE_KEY,
+    adminSecretSet: !!adminSecret
+  };
+}
+
+function notConfiguredMessage() {
+  const st = configState();
+  const missing = [];
+  if (!st.serviceKeySet) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+  if (!st.adminSecretSet) missing.push('LICENSE_ADMIN_SECRET');
+  return 'Server not configured. Missing environment variable' + (missing.length > 1 ? 's: ' : ': ') + missing.join(', ') + '. Set these in the Vercel project settings and redeploy.';
+}
+
 async function rest(path, options) {
+  if (!SERVICE_KEY) {
+    const err = new Error(notConfiguredMessage());
+    err.status = 503;
+    err.configError = true;
+    throw err;
+  }
   const opts = options || {};
   const req = {
     method: opts.method || 'GET',
@@ -38,7 +59,15 @@ async function rest(path, options) {
     req.body = JSON.stringify(opts.body);
   }
 
-  const res = await fetch(restBase + path, req);
+  let res;
+  try {
+    res = await fetch(restBase + path, req);
+  } catch (e) {
+    const err = new Error('Unable to reach Supabase. Check SUPABASE_URL.');
+    err.status = 502;
+    err.detail = e && e.message;
+    throw err;
+  }
   const text = await res.text();
   let data = null;
   if (text) {
@@ -61,7 +90,13 @@ async function rest(path, options) {
 function isAuthorized(req) {
   const auth = req.headers.get('authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '');
-  return !!adminSecret && token === adminSecret;
+  if (!adminSecret) {
+    return { ok: false, error: 'Server not configured. Missing LICENSE_ADMIN_SECRET environment variable.' };
+  }
+  if (token !== adminSecret) {
+    return { ok: false, error: 'Unauthorized' };
+  }
+  return { ok: true };
 }
 
 function corsHeaders(req, extra) {

@@ -70,7 +70,7 @@ module.exports = async function handler(request) {
   try {
     rows = await rest('license_keys?select=*&key_hash=eq.' + encodeURIComponent(keyHash) + '&limit=1', {});
   } catch (err) {
-    return json(request, 500, { success: false, error: 'License lookup failed.' });
+    return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'License lookup failed.' });
   }
 
   const row = (rows && rows[0]) || null;
@@ -90,7 +90,7 @@ module.exports = async function handler(request) {
   try {
     activation = await recordActivation(row.id, deviceId, maxActivations);
   } catch (err) {
-    return json(request, 500, { success: false, error: 'Activation check failed.' });
+    return json(request, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Activation check failed.' });
   }
 
   if (!activation.ok && activation.full) {
