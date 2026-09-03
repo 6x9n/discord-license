@@ -157,6 +157,12 @@ async function rest(path, options) {
     err.status = res.status;
     err.detail = data;
     err.code = (data && data.code) ? data.code : null;
+    err.diag = {
+      url: restBase + path,
+      keyHead: SERVICE_KEY ? SERVICE_KEY.slice(0, 24) + '...' : '(empty)',
+      supabaseUrl: SUPABASE_URL,
+      keySet: !!SERVICE_KEY
+    };
     throw err;
   }
   return data;
