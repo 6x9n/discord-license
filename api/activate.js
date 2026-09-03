@@ -58,7 +58,7 @@ module.exports = async function handler(req, res) {
   try {
     rows = await rest('license_keys?select=*&key_hash=eq.' + encodeURIComponent(keyHash) + '&limit=1', {});
   } catch (err) {
-    return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'License lookup failed.', diag: (err && err.diag) || undefined });
+    return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'License lookup failed.' });
   }
 
   const row = (rows && rows[0]) || null;

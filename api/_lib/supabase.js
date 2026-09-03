@@ -125,7 +125,8 @@ async function rest(path, options) {
     if (typeof fetch !== 'function') {
       throw new Error('Fetch API not available in this runtime.');
     }
-    res = await fetch(restBase + path, reqOpts);
+    const joinPath = (String(path).charAt(0) === '/') ? String(path) : '/' + path;
+    res = await fetch(restBase + joinPath, reqOpts);
     bodyText = await res.text();
   } catch (e) {
     const err = new Error((e && e.message === 'Fetch API not available in this runtime.') ? e.message : 'Unable to reach Supabase. Check SUPABASE_URL.');
@@ -145,24 +146,11 @@ async function rest(path, options) {
 
   if (!res.ok) {
     const pgrstMessage = (bodyText && typeof bodyText === 'string' && bodyText.trim()) ? bodyText.trim() : null;
-    let message;
-    if (pgrstMessage && pgrstMessage.length < 300) {
-      message = pgrstMessage;
-    } else if (pgrstMessage) {
-      message = 'Supabase error ' + res.status + ' [det1]';
-    } else {
-      message = 'Supabase error ' + res.status + ' [det0]';
-    }
+    const message = (pgrstMessage && pgrstMessage.length < 300) ? pgrstMessage : ('Supabase error ' + res.status);
     const err = new Error(message);
     err.status = res.status;
     err.detail = data;
     err.code = (data && data.code) ? data.code : null;
-    err.diag = {
-      url: restBase + path,
-      keyHead: SERVICE_KEY ? SERVICE_KEY.slice(0, 24) + '...' : '(empty)',
-      supabaseUrl: SUPABASE_URL,
-      keySet: !!SERVICE_KEY
-    };
     throw err;
   }
   return data;
