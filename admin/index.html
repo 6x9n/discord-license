@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>License Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <div id="loginView" class="view">
+    <div class="login-card">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-name">License Admin</span>
+      </div>
+      <h1 class="login-title">Sign in</h1>
+      <form id="loginForm" autocomplete="off">
+        <label class="field-label" for="secret">Admin Secret</label>
+        <input id="secret" class="input" type="password" autocomplete="off" placeholder="Enter admin secret">
+        <div id="loginMsg" class="msg" role="status"></div>
+        <button id="loginBtn" class="btn btn-primary" type="submit">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="appView" class="view" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-name">License Admin</span>
+      </div>
+      <div class="topbar-actions">
+        <a class="link-home" href="/">Back to App</a>
+        <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="stats">
+        <div class="stat"><div id="statTotal" class="stat-num">0</div><div class="stat-label">Total Keys</div></div>
+        <div class="stat"><div id="statActive" class="stat-num">0</div><div class="stat-label">Active</div></div>
+        <div class="stat"><div id="statRevoked" class="stat-num">0</div><div class="stat-label">Revoked</div></div>
+        <div class="stat"><div id="statTable" class="stat-num">0</div><div class="stat-label">Activations</div></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">License Keys</h2>
+          <button id="openCreateBtn" class="btn btn-primary" type="button">New Key</button>
+        </div>
+        <div class="toolbar">
+          <input id="searchInput" class="input search" type="text" placeholder="Search by key or label...">
+        </div>
+        <div class="table-wrap">
+          <table class="keys-table">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Label</th>
+                <th>Expires</th>
+                <th>Max Dev</th>
+                <th>Status</th>
+                <th>Activations</th>
+                <th>Last Validated</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="keysBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyMsg" class="empty" hidden>No keys found.</div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Create / Edit modal -->
+  <div id="keyModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 id="modalTitle" class="modal-title">New License Key</h3>
+      <div id="newKeyBox" class="new-key-box" hidden>
+        <label class="field-label">Generated Key</label>
+        <div class="key-copy-row">
+          <code id="generatedKey" class="gen-key"></code>
+          <button id="copyKeyBtn" class="btn btn-ghost" type="button">Copy</button>
+        </div>
+      </div>
+      <form id="keyForm">
+        <input id="editId" type="hidden">
+        <label class="field-label" for="fLabel">Label / Plan</label>
+        <input id="fLabel" class="input" type="text" placeholder="Standard">
+        <label class="field-label" for="fExpires">Expires (ISO or empty for lifetime)</label>
+        <input id="fExpires" class="input" type="text" placeholder="2027-01-01T00:00:00Z">
+        <label class="field-label" for="fMax">Max Devices</label>
+        <input id="fMax" class="input" type="number" min="1" value="1">
+        <div class="field-row">
+          <label class="check">
+            <input id="fRevoked" type="checkbox">
+            <span>Revoked</span>
+          </label>
+        </div>
+        <div id="keyFormMsg" class="msg" role="status"></div>
+        <div class="modal-actions">
+          <button id="cancelModalBtn" class="btn btn-ghost" type="button">Cancel</button>
+          <button id="submitKeyBtn" class="btn btn-primary" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">Confirm</h3>
+      <p id="confirmText" class="confirm-text"></p>
+      <div id="confirmMsg" class="msg" role="status"></div>
+      <div class="modal-actions">
+        <button id="confirmCancel" class="btn btn-ghost" type="button">Cancel</button>
+        <button id="confirmOk" class="btn btn-danger" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="/admin/admin.js?v=1"></script>
+</body>
+</html>

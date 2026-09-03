@@ -1,85 +1,182 @@
 (function () {
   const CONFIG = window.CONFIG;
+  const manager = window.manager;
 
-  const el = {
-    appScreen: document.getElementById('appScreen'),
-    glassPanel: document.querySelector('#appScreen .glass-panel'),
-    sessionPlan: document.getElementById('sessionPlan'),
-    toastContainer: document.getElementById('toastContainer')
-  };
+  const gate = document.getElementById('licenseGate');
+  const form = document.getElementById('licForm');
+  const keyInput = document.getElementById('licKey');
+  const msg = document.getElementById('licMsg');
+  const submitBtn = document.getElementById('licSubmit');
 
-  const TOAST_ICONS = {
-    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
-    error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5h.01"/></svg>',
-    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg>'
-  };
-
-  function animateEntrance(node) {
-    if (!node) {
+  function setMsg(text, kind) {
+    if (!msg) {
       return;
     }
-    node.classList.remove('animate-entrance');
-    void node.offsetWidth;
-    node.classList.add('animate-entrance');
+    msg.textContent = text || '';
+    msg.className = 'lic-msg' + (kind ? ' lic-msg-' + kind : '');
   }
 
-  function toast(message, kind) {
-    if (!el.toastContainer) {
+  function showGate() {
+    if (!gate) {
       return;
     }
-    const node = document.createElement('div');
-    node.className = 'toast ' + kind;
-    node.innerHTML =
-      '<div class="toast-icon">' + TOAST_ICONS[kind] + '</div>' +
-      '<div class="toast-text"></div>' +
-      '<div class="toast-bar"></div>';
-    node.querySelector('.toast-text').textContent = message;
-    el.toastContainer.appendChild(node);
-    requestAnimationFrame(function () {
-      node.classList.add('showing');
-    });
-    setTimeout(function () {
-      node.classList.add('out');
-    }, 3950);
-    setTimeout(function () {
-      if (node.parentNode) {
-        node.parentNode.removeChild(node);
-      }
-    }, 4350);
+    gate.hidden = false;
+    gate.classList.add('active');
   }
 
-  function clearLegacyKeys() {
+  function hideGate() {
+    if (!gate) {
+      return;
+    }
+    gate.classList.remove('active');
+    setTimeout(function () {
+      gate.hidden = true;
+    }, 180);
+  }
+
+  function hasValidLicense() {
     try {
-      const keys = [CONFIG.storage.license, CONFIG.storage.trialStarted, CONFIG.storage.trialUsed];
-      keys.forEach(function (k) {
-        if (k) {
-          localStorage.removeItem(k);
+      if (manager && typeof manager.getLicenseCache === 'function') {
+        const cache = manager.getLicenseCache();
+        if (cache && typeof cache.expiresAt === 'number' && cache.expiresAt > Date.now()) {
+          return true;
         }
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  }
+
+  function deviceId() {
+    const storageKey = 'dmt.device.id';
+    try {
+      let id = localStorage.getItem(storageKey);
+      if (!id) {
+        id = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(storageKey, id);
+      }
+      return id;
+    } catch (e) {
+      return 'dev-unknown';
+    }
+  }
+
+  function activate(key) {
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.classList.add('loading');
+    }
+    setMsg('Validating key...', 'info');
+
+    const payload = { key: String(key || '').trim(), deviceId: deviceId() };
+
+    return fetch(String(CONFIG.apiBase).replace(/\/+$/, '') + '/api/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        return res.json().catch(function () {
+          return null;
+        }).then(function (body) {
+          return { status: res.status, body: body };
+        });
+      })
+      .then(function (result) {
+        const body = result.body || {};
+        if (result.status >= 200 && result.status < 300 && body && body.success) {
+          const data = body.data || {};
+          const expiresAt = Number(data.expiresAt);
+          if (expiresAt && expiresAt <= Date.now()) {
+            throw new Error('License is not valid for this session.');
+          }
+          const cacheExpires = expiresAt || (Date.now() + 31536000000);
+          if (manager && typeof manager.setLicenseCache === 'function') {
+            manager.setLicenseCache({
+              expiresAt: cacheExpires,
+              activatedAt: Date.now(),
+              plan: data.plan || data.label || 'Unknown',
+              owner: data.owner || null,
+              key: String(key || '').trim()
+            });
+          }
+          setMsg('License activated. Welcome back.', 'success');
+          return true;
+        }
+        const err = (body && (body.error || body.message)) || 'Invalid license key.';
+        throw new Error(err);
+      })
+      .catch(function (err) {
+        const message = (err && err.message) ? err.message : 'Unable to validate key. Check your connection.';
+        setMsg(message, 'error');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.classList.remove('loading');
+        }
+        return false;
       });
-    } catch (e) {}
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    const key = keyInput ? keyInput.value.trim() : '';
+    if (!key) {
+      setMsg('Please enter a license key.', 'error');
+      return;
+    }
+    activate(key).then(function (ok) {
+      if (ok) {
+        hideGate();
+      }
+    });
   }
 
   function boot() {
-    clearLegacyKeys();
-    if (el.sessionPlan) {
-      el.sessionPlan.textContent = 'Open Access';
-    }
-    if (el.appScreen) {
-      el.appScreen.classList.add('active');
-    }
-    if (el.glassPanel) {
-      animateEntrance(el.glassPanel);
+    if (hasValidLicense()) {
+      hideGate();
+    } else {
+      showGate();
+      if (keyInput) {
+        keyInput.focus();
+      }
     }
   }
 
-  window.appToast = toast;
-  window.appSetBusy = function (node, busy) {
-    if (!node) {
-      return;
+  if (form) {
+    form.addEventListener('submit', handleSubmit);
+  }
+  if (keyInput) {
+    keyInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (form) {
+          form.dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+      }
+    });
+  }
+
+  if (gate && manager && CONFIG && CONFIG.storage && CONFIG.storage.license) {
+    window.addEventListener('storage', function (e) {
+      if (e.key === CONFIG.storage.license || e.key === null) {
+        if (!hasValidLicense() && gate.hidden) {
+          showGate();
+        }
+      }
+    });
+  }
+
+  window.licenseGate = {
+    lock: showGate,
+    unlock: hideGate,
+    isLocked: function () {
+      return gate ? !gate.hidden : false;
     }
-    node.classList.toggle('loading', busy);
-    node.disabled = busy;
   };
 
-  boot();
+  document.addEventListener('DOMContentLoaded', boot);
+  if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    boot();
+  }
 })();

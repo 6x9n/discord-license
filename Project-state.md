@@ -1,221 +1,117 @@
-# Project State — Discord Manager Tool
+## Operation Confirmation Popup Style
 
-## Phase 1: Web License Activation & Trial System
+Use this pattern for Friends, Leave Servers, Close DMs, and future destructive operations:
 
-Status: **Phase 1 complete — UI + client logic shipped. Phase 2 backend + admin shipped, then Phase 3 extracted the admin into a standalone `admin-app/` server (env config required).**
+- Use the existing `.modal` and `.modal-card.leave-confirm-card` structure.
+- Keep the modal dark glass with a centered title, short plain-language description, and two equal-width actions.
+- Render counts and estimated time as plain centered text, not pills or boxed containers.
+- Use green for ready/success counts, amber for skipped/protected/whitelisted counts, and muted gray for estimated time.
+- Show whitelist counts in the confirmation summary before the user confirms.
+- Calculate ETA from the number of actionable items and `currentDelay()`; do not include skipped whitelist items.
+- Keep confirmation, cancellation, Escape, and backdrop-close behavior consistent.
+- Store whitelist values through `CONFIG.dsc.whitelists` and `loadWhitelists()`/`setWhitelist()`; never introduce a second storage format.
+- For Private DMs, allow whitelist matching by channel ID and recipient name, and skip protected rows in single, batch, and all-item operations.
 
-### UI-UX PRO MAX Design System — ADOPTED (css/styles.css + index.html)
-- **Palette**: `#0e1015` bg, `#181b22` surface, `#222733` card overlays, `#5865F2` Discord accent, `#23a55a` success, `#f23f43` error. All tokens centralized in `:root` CSS variables.
-- **Design language**: Premium glassmorphism — `backdrop-filter: blur(16px)` on cards, header, modal, and toasts; layered `1px solid rgba(255,255,255,0.08)` borders; inset top-highlights; multi-layer drop shadows; fixed radial-gradient + noise background aura.
-- **Typography**: Inter (`gg sans` fallback) via Google Fonts; fluid scale via `clamp()`; `letter-spacing: -0.02em` on headers.
-- **License screen refinements**: glowing purple top border (`.license-card .card-glow`), focus ring `0 0 0 3px rgba(88, 101, 242, 0.4)` on input, labeled key field, SVG icons on all buttons.
-- **Buttons**: gradient primary fill, hover elevation (`translateY(-2px)`), glowing borders, ambient `pulse-glow` aura on active actions, `loading` shimmer overlay state.
-- **Toasts**: floating glass stack top-right (`#toastContainer`), slide-in/slide-out, auto-dismiss with animated progress bar. Kinds: `success` / `error` / `info`.
+## Project Overview
 
-#### Animation integration (js/license.js wires; css/styles.css defines)
-| Keyframe | Purpose | Wired at |
-|----------|---------|----------|
-| `pulse-glow` | Ambient aura on active buttons, header `sessionPlan` badge, panel icon | CSS auto + JS `renderSession` |
-| `card-entrance` | Spring-bounce (`cubic-bezier(0.16, 1, 0.3, 1)`) on card/glass-panel render | `showScreen()` |
-| `shake-error` | Horizontal shake on key/activation failure | `setMsg(..., 'error')` |
-| `ripple-click` | Press feedback (`scale(0.97)`) on buttons | `ripple()` on click handlers |
-| `shimmer-loading` | Metallic sweep on busy buttons/wait states | `setBusy()` |
+- Vanilla browser dashboard for managing one Discord account.
+- No bundler or framework; the app runs from static HTML, CSS, and JavaScript.
+- Main files: `index.html`, `css/styles.css`, and `js/manager.js`.
+- Account, UI, operation history, and whitelist state are stored in `localStorage`/`sessionStorage`.
+- The app uses Discord API v9 requests through the shared `apiCall()`/`makeRequest()` path.
 
-Extra keyframes added to support the toast system: `screen-in`, `toast-in`, `toast-out`, `toast-progress`, `aura-drift`. `prefers-reduced-motion` fully honored.
+## Request And Operation Flow
 
-**Compatibility guarantees**: all Phase 1 element IDs preserved (`licenseScreen`, `appScreen`, `licenseActivateBtn`, `licenseTrialBtn`, `licenseBuyBtn`, `licenseKeyInput`, `licenseMsg`, `sessionPlan`, `trialCountdown`, `lockBtn`, `renewalModal`, `renewalMsg`, `renewalGrace`, `renewalCheckBtn`, `toastContainer`). No JS bindings changed, only visuals + additive UI helpers.
+- `makeRequest()` handles JSON responses, `Retry-After`, bounded retries, and rate-limit warnings.
+- Rate-limit retries are capped at `MAX_RATE_RETRIES` and use a bounded fallback delay when Discord does not send a retry value.
+- Operation stop aborts the active controller and cancels retry waits and nested deletion delays.
+- `prepareOperation()` loads current account data before building operation items.
+- `runOperation()` is the canonical sequential operation runner for generic destructive actions.
+- Operation buttons are locked while work is running and restored after completion or cancellation.
+- Concurrent `loadAccountData()` calls share one in-flight promise to avoid duplicate dashboard refresh bursts.
+- Non-success API responses are surfaced as operation failures instead of being treated as successful resolved promises.
 
-**Responsiveness**: fluid `clamp()` type/spacing, media queries at 320px, 600px, 2000px (4K) breakpoints; toast stack reflows to full-width on mobile.
+## Dashboard And Profile State
 
-### licenseScreen PRO MAX pass — ADOPTED (css/styles.css, index.html, js/license.js)
-All `licenseScreen` element IDs unchanged; existing JS bindings untouched (paste control is additive).
+- Dashboard startup refreshes the active account and account metrics.
+- Profile badge rendering uses `getUserBadges()` and the current profile response.
+- Dashboard profile badges filter Legacy Username when it is explicitly hidden, preventing stale profile history from appearing as an active badge.
+- Account refreshes update the badge-selection view through `window.refreshBadgeView()` when available.
 
-- **Container**: `.license-card` now `width: min(90%, 420px)`, centered via flexbox on `#licenseScreen { min-height: 100vh }`, fluid padding `clamp(1.25rem, 5vw, 2.25rem)`.
-- **Glass card**: `background: rgba(22, 24, 29, 0.85); backdrop-filter: blur(20px) saturate(180%)`.
-- **Top glow**: animated sweeping accent highlight `.card-glow` (linear-gradient transparent→rgba(88,101,242,.6)→transparent, `@keyframes top-glow-sweep`).
-- **Status dot**: `.brand-dot` now breathes via `@keyframes neon-pulse` (2s infinite ease-in-out).
-- **Key input**: `rgba(0,0,0,0.3)` bg, monospace stack (JetBrains Mono/Cascadia/Consolas), circular paste button (`#licensePasteBtn` — new ID, wired additively in license.js via `navigator.clipboard.readText()` with manual-paste fallback toast), blue focus ring `0 0 0 2px #5865F2, 0 0 15px rgba(88,101,242,0.35)`.
-- **Buttons**: primary holds `transform: scale(0.97)` on active press + new `@keyframes spin` spincircle loading state (`.btn.loading::before`); secondary/outline hovers gain contrast + subtle accent glow.
-- **Touch targets**: `@media (max-width: 768px)` forces 100% width, `min-height: 48px` on all license-screen buttons and the key input.
-- Keyframes added: `neon-pulse`, `card-reveal` (spring entry — now drives license card entrance), `top-glow-sweep`, `spin`. `shake-error` retained for validation failures.
+## Badge Management
 
-### Architecture
-- Pure web app, no build step: `index.html` + `js/manager.js` (manager layer) + `js/license.js` (UI/boot wiring) + `css/styles.css`.
-- License state persisted in `window.localStorage`. Remote validation via the Vercel server.
-- Runs in any modern browser. Designed to be embedded in an Electron/webview wrapper later.
+- Manage Badges supports HypeSquad Bravery, Brilliance, Balance, and Legacy Username.
+- `getEquippedBadgeInfo()` detects Legacy Username from protobuf visibility settings, normalized profile badges, and direct profile fields.
+- `legacyUsernameOverride` gives immediate UI feedback after successful equip/remove actions and resets when accounts are changed or cleared.
+- Removing Legacy Username clears stale local profile badge data before the refresh completes.
+- Equipping/removing badges updates card selection, Equipped labels, action buttons, and profile/dashboard rendering.
+- The live flow was tested: Legacy Username correctly changed between Equipped, Remove, and Equip states across navigation.
 
-### File map
-| File | Purpose |
-|------|---------|
-| `index.html` | App shell: `licenseScreen`, `appScreen`, renewal modal, all target elements |
-| `js/manager.js` | `window.manager` API + `window.CONFIG` constants |
-| `js/license.js` | Screen/button wiring, trial countdown, renewal watchdog |
-| `css/styles.css` | Responsive dark UI, modal overlay |
-| `Project-state.md` | This document |
+## Close DMs
 
----
+- The Dashboard Close DMs action closes/hides active DM channels through `DELETE /channels/{channelId}`.
+- It no longer toggles account-wide DM privacy settings.
+- Both 1:1 DMs (`type === 1`) and group DMs (`type === 3`) are supported.
+- Channels are processed sequentially through the guarded operation lifecycle.
+- Successful channel closes are removed from `state.channels` and update the Dashboard DM metric.
+- The confirmation popup reports actionable DMs, skipped whitelist entries, direct/group counts, and ETA.
+- ETA uses the current configured operation delay and excludes skipped items.
 
-### `window.manager` methods — COMPLETE (js/manager.js)
-| Method | Status | Description |
-|--------|--------|-------------|
-| `ensureLicenseActive()` | Done | Returns `true` if cached license `expiresAt` is still in the future, or a trial is currently within its 10-min window. |
-| `getLicenseCache()` | Done | Reads `dmt.license.cache` from localStorage, returns parsed object or `null`. |
-| `setLicenseCache(data)` | Done | Persists {key, plan, activatedAt, lastVerified, expiresAt} to `dmt.license.cache`. |
-| `clearLicenseCache()` | Done | Removes `dmt.license.cache` from localStorage. |
-| `offlineGraceRemaining()` | Done | Returns ms remaining of 24h offline grace window after `expiresAt` (0 if no cache). |
+## Whitelist System
 
-Supporting helpers (not in the target list, used by the UI layer): `trialStarted()`, `trialRemaining()`, `trialUsed()`.
+- Whitelists are stored per account under `CONFIG.dsc.whitelistsByAccount`, keyed by validated Discord account ID, with each value shaped as `{ servers: [], friends: [], dms: [] }`.
+- Settings saves and reloads the active account's whitelist through `loadWhitelists()` and `setWhitelist()`.
+- The former global `CONFIG.dsc.whitelists` record is migrated once to the active account and then removed.
+- Private DM inspector rows now include `Whitelist`/`Un whitelist` actions.
+- DM whitelist matching supports channel IDs and recipient names.
+- Single Close DM and Ignore actions refuse whitelisted DMs.
+- Batch Close and Ignore actions filter whitelisted IDs and show a skipped-items warning.
+- Main Close DMs skips whitelisted channels.
+- Friends and Leave Servers confirmation windows show their whitelist/protected counts.
+- Server and friend whitelist behavior remains compatible with the existing settings UI.
 
-### Config (js/manager.js)
-- `apiBase`: `''` → same-origin `/api/validate`. For a cross-origin setup, set `CONFIG.apiBase` to the standalone server origin (e.g. `'https://your-discord-license-server.vercel.app'`); the standalone server answers with CORS `Access-Control-Allow-Origin: *`.
-- `trialDuration`: 10 minutes (600000 ms)
-- `offlineGraceMs`: 24 hours (86400000 ms)
+## Confirmation Popup UI
 
----
+- Friends, Leave Servers, and Close DMs use the shared `.modal-card.leave-confirm-card` visual style.
+- Dialogs use a centered title, concise description, plain centered count text, plain ETA text, and two equal-width actions.
+- Count pills and boxed ETA containers were removed from these confirmation dialogs.
+- Ready counts use green, protected/whitelisted counts use amber, actionable categories use distinct accent colors, and ETA uses muted gray.
+- Confirmation, Cancel, Escape, and backdrop-close behavior are supported.
+- Leave Servers calculates its ETA from the selected actionable server count.
+- Remove Friends calculates its ETA from the current removable relationship count.
 
-### Web views — COMPLETE
-| Element ID | Status | Description |
-|------------|--------|-------------|
-| `licenseScreen` | Done | Responsive centered card: key input + Activate + Start 10-Minute Trial + Buy a Code (Telegram) + status message. |
-| `licenseActivateBtn` | Done | POSTs key to `/api/validate`; on `valid` sets license cache and unlocks app. |
-| `licenseTrialBtn` | Done | Starts trial: stamps `dmt.trial.started` (epoch ms), marks trial consumed, clears license cache, unlocks 10-min session. Disabled once used. |
-| `licenseBuyBtn` | Done | Anchor styled as button → `https://t.me/` (placeholder — replace with real Telegram handle). |
-| `renewalModal` / `renewalCheckBtn` | Done | Mid-session renewal modal. Re-POSTs cached key to `/api/validate`; valid → resume, invalid → cache cleared + lock to `licenseScreen`. |
+## Verification Completed
 
-### Trial system — COMPLETE (js/license.js)
-- Start timestamp: `dmt.trial.started` (epoch ms). Countdown rendered live (`mm:ss`), refreshed at 500 ms.
-- On expiry: app locks to `licenseScreen`, `clearLicenseCache()` is called, and trial is permanently disabled via `dmt.trial.used = "1"`.
-- Design note: `dmt.trial.used` is written at trial **start** as well as expiry, so refresh/restart cannot re-roll a second trial on the same browser. Documented here as an intentional strengthening of the "disable at expiry" requirement.
-- Reload during an active trial resumes the remaining countdown from storage.
-- Trial storage keys: `dmt.trial.started`, `dmt.trial.used` (guard), plus `dmt.license.cache` shared with licensed sessions.
+- Live browser checks confirmed the Close DMs popup opens with counts and ETA.
+- Live whitelist toggle test saved a DM ID, changed the label to `Un whitelist`, then restored it to `Whitelist`.
+- Live badge tests confirmed Legacy Username removal and re-equip update the card and action controls immediately.
+- `node --check js/manager.js` passes after the implementation changes.
+- Editor diagnostics report no errors in `index.html`, `css/styles.css`, `js/manager.js`, or this document.
 
-### Vercel backend — IMPLEMENTED IN-REPO (api/ directory)
-Previously the client pointed at an external pre-hosted URL. The license server is now built from scratch in this repository and the frontend calls the relative endpoint directly (no hardcoded external domain for APIs).
+## Future Implementation Rules
 
-| File | Endpoint | Purpose |
-|------|----------|---------|
-| `api/validate.js` | `POST /api/validate` | Verifies `{ key }` against storage; checks revoked status + expiration; returns `{ valid, plan, expiresAt, role, isOwner }` or `{ valid:false, message }`. |
-| `api/admin/login.js` | `POST /api/admin/login` | Validates `{ password }` against `process.env.ADMIN_SECRET`; returns stateless HMAC session token (12h). |
-| `api/admin/keys.js` | `GET/POST/DELETE/PATCH /api/admin/keys` | Auth-gated (Bearer token). GET lists all keys, POST generates (duration select, `role: user|owner`), DELETE removes, PATCH revoke/extend(+30d). |
-| `api/lib/store.js` | shared | Reads/writes keys. Uses Upstash Redis REST (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) when configured, otherwise local JSON file `data/keys.json`. |
-| `api/lib/utils.js` | shared | HMAC token sign/verify, CORS, key generator (`XXXX-XXXX-XXXX-XXXX`, unambiguous alphabet), plan mapping, expiration math. |
+- Read this file before adding another destructive operation.
+- Reuse existing IDs, whitelist storage, modal classes, and operation lifecycle helpers.
+- Do not create a second whitelist format or a second request/retry system.
+- Add actionable counts, skipped protected counts, and ETA to new confirmation dialogs.
+- Keep UI state updates immediate after successful mutations, then reconcile with a server refresh.
 
-Request/response contract (kept as designed in Phase 1):
-```json
-POST /api/validate
-{ "key": "XXXX-XXXX-XXXX-XXXX" }
-→ 200 { "valid": true, "plan": "Monthly", "expiresAt": 1760000000000, "role": "user", "isOwner": false }
-→ 200 { "valid": false, "message": "..." }
-```
-Plan mapping: 1d→`Trial`, 30d→`Monthly`, 90d→`Quarterly`, 365d→`Yearly`, 0/lifetime→`Lifetime` (`expiresAt` `4102444800000`). Owner keys: `role: "owner"` / `isOwner: true`. Admin sessions: 12h stateless HMAC token.
+## Saved Account Cache
 
-Deployment: `vercel.json` rewrites `/admin`, `/admin/`, `/admin/:path*` → `index.html`. Required env: `ADMIN_SECRET`; add `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` for persisted key storage on serverless (local `vercel dev` uses `data/keys.json`).
+- `CONFIG.dsc.accounts` stores `{ username, token, user }` for each saved account, including the cached Discord profile and avatar hash.
+- `loadAccounts()` migrates older records and keeps valid nested `user` profile data so saved-account avatars render before validation.
+- Empty records without a token are discarded during migration.
+- Saved account rows use array indexes for Use/Delete actions; switching validates the token and rebuilds the full active user state in memory.
+- The active session state remains in memory for app features; saved accounts persist the validated profile cache for display.
 
-## Phase 2: Vercel Backend + Admin Dashboard
+## Active Operation Dashboard Template
 
-Status: **Implemented (deployment env config required)**
-
-### `/admin` dashboard — js/admin.js + `adminView` + css/styles.css
-- **Routing**: hash handler binds `#admin` (and secret alias `#owner-login`) to `adminView`; `vercel.json` makes `/admin` and subpaths serve `index.html`. Hash `#admin`/`#owner-login`/`#license` handled dynamically via `hashchange`.
-- **Auth screen**: password modal (`#adminLoginModal` + `adminLoginBtn`) shown before panels. Session in `sessionStorage['dmt.admin.token']` (12h HMAC token, cleared on tab exit). 401 → auto-logout to the login modal.
-- **Key generation**: duration dropdown `#adminDuration` (1d Trial / 30 / 90 / 365 / Lifetime), label field `#adminNoteInput`, Owner/Admin checkbox `#adminOwnerCheck`, `adminGenBtn` → POST `/api/admin/keys` (`role: owner|user`); generated key appears in `#adminCopyBox` (1-click copy: `navigator.clipboard.writeText` with execCommand fallback).
-- **Keys table** (`#adminKeysTable`): columns Key / Plan / Created / Expiration / Status / Actions; rows rendered client-side with row action buttons `.adminRevokeBtn`, `.adminExtendBtn` (+30d), `.adminDeleteBtn` (event delegation). Status badges pulse (`Active`/`Revoked`), owner keys get an `owner-tag`, search bar `#adminSearchInput` filters instantly by key or note label.
-- **Responsive**: toolbar collapses to 1 column ≤768px; table scrolls horizontally (`overflow-x`) on mobile; PRO MAX glass cards, glowing accent indicators.
-
-### Admin access control (hidden entry points) — Phase 2.1, EXTRACTED to `/admin-app` in Phase 3
-The original in-client admin UI (embedded `adminView` + `js/admin.js` + root `api/admin/*`) implemented role-based keys and hidden shortcuts. **As of Phase 3 all of this is removed from the client and re-homed in the standalone `admin-app/` project.** Historical notes below.
-- **Public UI removed**: the `#adminLink` footer on `licenseScreen` is gone, and no visible Admin link appears in the app header for regular users (verified: no `href="#admin"` in static HTML).
-- **Method A — role-based key activation**: `/api/validate.js` now returns `{ role: 'user'|'owner', isOwner: bool }` from the key record (`api/admin/keys.js` stores `role`, default `user`; owner checkbox sets `owner`). On activation the role is cached; an active owner-role session renders an **Admin Control Panel** nav button in the app header (`#adminNavSlot` → `#admin`).
-- **Method B — hidden shortcuts**:
-  - Secret hash: `#admin` **or** `#owner-login` routes to the admin view.
-  - Keyboard: `Ctrl + Shift + A` on any screen opens the admin password modal.
-- **Gating enforcement**: every entry path (`#admin`, `#owner-login`, `/admin`, nav button, shortcut) lands on the locked admin view; the `adminLoginBtn` password modal still requires `ADMIN_SECRET` verification before `adminView` panels render. URL guessing alone cannot bypass auth.
-
-### Frontend/backend wiring
-- `js/license.js` now POSTs to relative `/api/validate` (external URL removed). `js/manager.js` `CONFIG.apiBase` removed. Shared UI helpers exposed as `window.appToast` / `window.appSetBusy` for reuse by admin.js.
-
-### File map (new — Phase 2 intake; admin rows relocated to `admin-app` in Phase 3)
-| File | Purpose |
-|------|---------|
-| `api/validate.js` | License validation function (consumer surface) |
-| `api/lib/store.js` | Upstash Redis + local JSON storage |
-| `api/lib/utils.js` | CORS + constants (trimmed; token/keygen moved to `admin-app/api/lib/utils.js`) |
-| `api/admin/login.js` | Admin auth function — **moved to `admin-app/api/admin/login.js`** |
-| `api/admin/keys.js` | Key CRUD function — **replaced by `admin-app/api/admin/{generate,revoke,extend,delete,keys}.js`** |
-| `js/admin.js` | Admin dashboard logic + routing — **moved to `admin-app/js/admin-portal.js`** |
-| `vercel.json` | `/admin` rewrites — **removed in Phase 3 (client is pure consumer)** |
-| `data/keys.json` | Local key persistence (dev) |
-
-### Pending / blockers
-- Set `ADMIN_SECRET` (required) and, for production persistence, `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` on the **standalone server** (`admin-app`) so the client and server share the same key store.
-- Replace `licenseBuyBtn` Telegram placeholder with the real purchase link.
-- Phase 4 candidates: periodic online re-validation of active licenses (true mid-session revocation without waiting for expiry), client key-free activation flow, Electron wrapper.
-
----
-
-## Phase 3: Standalone Admin Server (`/admin-app`, mirroring `discord-license-server`)
-
-Status: **Implemented. The admin dashboard and every administrative endpoint are extracted from the client into a fully self-contained, independently deployable project under `/admin-app`. The client is now a pure license consumer.**
-
-### Layout
-| Path | Purpose |
-|------|---------|
-| `admin-app/index.html` | Standalone Admin Portal entry — login gate, metrics dashboard, key generation, searchable key table. No client-user app code, no license-gateway logic. |
-| `admin-app/css/admin-theme.css` | Standalone UI-UX PRO MAX dark glass theme: metrics cards (Total/Active/Expired/Revoked), responsive data table, status pills, toasts. |
-| `admin-app/js/admin-portal.js` | Self-contained module: master-password login (12h HMAC token), key generation, custom-days extend, revoke, delete, instant search, metrics refresh. |
-| `admin-app/api/**` | Serverless routes (contract below). |
-| `admin-app/vercel.json` | CORS `Access-Control-Allow-Origin: *` on `/api/*` + security headers. |
-| `admin-app/data/keys.json` | Local key persistence fallback (gitignored). |
-
-### API contract (standalone server)
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/admin/login` | POST | `{ password }` vs `process.env.ADMIN_SECRET` → `{ ok, token, expiresIn }` (12h HMAC, `dls-admin` namespace). |
-| `/api/admin/keys` | GET | Bearer-auth → `{ ok, keys }` listing all keys (active/expired/revoked), newest first. |
-| `/api/admin/generate` | POST | `{ durationDays, tag? }` creates a key (Trial/30/90/365/Lifetime or any custom days) with optional client tag; optional custom `key` value. |
-| `/api/admin/revoke` | POST | `{ key }` → status `revoked`, instantly invalid. |
-| `/api/admin/extend` | POST | `{ key, days }` → adds exact days from `max(expiry, now)`. |
-| `/api/admin/delete` | DELETE | `{ key }` (body or query) → permanently removes the record. |
-| `/api/validate` | POST | Public. `{ key }` → `{ valid, plan, expiresAt, tag }` or `{ valid:false, message }`. No auth. |
-
-Contract example:
-```json
-POST /api/validate
-{ "key": "XXXX-XXXX-XXXX-XXXX" }
-→ 200 { "valid": true, "plan": "Monthly", "expiresAt": 1760000000000, "tag": "alice#0001" }
-→ 200 { "valid": false, "message": "This license key has been revoked." }
-```
-
-- Every `/api/admin/*` route requires `Authorization: Bearer <token>` from `/api/admin/login`; otherwise 401.
-- No `role` concept — plan mapping only: 1d→`Trial`, 30d→`Monthly`, 90d→`Quarterly`, 365d→`Yearly`, 0/lifetime→`Lifetime` (`expiresAt` `4102444800000`); non-standard `durationDays` are honored exactly.
-- Storage (`admin-app/api/lib/store.js`): Upstash Redis REST (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`, key `dls:keys:v1`) with local `admin-app/data/keys.json` fallback. Required env: `ADMIN_SECRET`.
-
-### Client cleanup (pure license consumer)
-- Removed: `js/admin.js`, `#adminView` + `#adminNavSlot` markup, `Ctrl+Shift+A` shortcut, `#admin` / `#owner-login` routes, owner-role nav, root `api/admin/*`, root `vercel.json` `/admin` rewrites, `role`/`isOwner` in `/api/validate` and the license cache, and the admin CSS block in `css/styles.css`.
-- Kept (consumer surface only): `js/license.js` activation/trial/renewal + `api/validate.js` (same-origin). Target URL is `(CONFIG.apiBase || '') + '/api/validate'` — default same-origin, override to the standalone server for cross-origin.
-- Public client contract now matches the server: `POST /api/validate` `{ key }` → `{ valid, plan, expiresAt, tag }`.
-
-### Verification (Phase 3)
-- `node --check` passes for every client + server JS file; ID cross-checks pass for both `index.html`/`license.js` and `admin-app/index.html`/`admin-portal.js`.
-- Endpoint smoke suite against the standalone server (file store): wrong-password 401 → login token → keys 401/200 → generate 30d + lifetime → validate good/bogus → extend +15d → revoke → validate-revoked → delete → listing check — **all passed**.
-- Client grep confirms zero admin references (`admin`, `owner-tag`, `#admin`, shortcut handler) remain in `index.html`, `css/*`, `js/*`, `api/validate.js`, `api/lib/*`.
-
-### Running / deploying
-- Standalone server: `cd admin-app && vercel dev` (needs `ADMIN_SECRET`; add `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` for shared persistence). Deploy `admin-app` as its own Vercel project — the mirror of `6x9n/discord-license-server`.
-- Client: serve the repo root; when hosted cross-origin, set `CONFIG.apiBase` to the standalone server origin.
-
----
-
-## Git / Remote — SHIPPED (two repos)
-
-### Client app (repo root) — `discord-license`
-- **Remote**: `origin → https://github.com/6x9n/discord-license.git`, branch `main` tracks `origin/main`.
-- **History**: `e04c15d` (initial) → `e3f8b95` (docs) → **`1d964d0`** `refactor: separate admin panel into server repo and strip client to pure license consumer`.
-- **Push status**: `SUCCESS` — `git ls-remote origin main` → `1d964d0f1ee26401e4cfc7c00953287326aadb2d refs/heads/main`; local `main` == remote (`## main...origin/main`, working tree clean).
-- **`.gitignore`**: `node_modules/`, `.vercel/`, `.env`, `data/keys.json`, `**/data/keys.json`, `admin-app/` (nested standalone repo excluded — no submodule tracking).
-
-### Standalone Admin Server (`admin-app/`) — `discord-license-server`
-- **Remote**: `origin → https://github.com/6x9n/discord-license-server.git`, branch `main` tracks `origin/main` (initialized in `admin-app`, force-pushed over the prior scaffold `ad8cb4c`).
-- **Head commit**: **`2af6d3b`** `feat: complete standalone admin server and license management backend` (15 files: portal, theme, portal JS, 7 API routes, libs, `vercel.json`, `package.json`, `.gitignore`).
-- **Push status**: `SUCCESS` — `git ls-remote origin main` → `2af6d3bb2ad5a84098a61fbc95a1158be975be54 refs/heads/main`; local `main` == remote, working tree clean.
-- **`.gitignore`** (admin-app): `node_modules/`, `.vercel/`, `.env`, `**/data/keys.json` — `admin-app/data/keys.json` confirmed ignored, not tracked.
+- Every destructive operation uses the Operation terminal as its live log surface.
+- Confirming an operation opens the terminal immediately with a `preparing` state when data still needs to load.
+- Back to Menu returns to Dashboard without cancelling the operation.
+- While running, all destructive operation buttons remain disabled; the active operation retains its loading state.
+- `currentOperationBar` appears in the Dashboard Operations panel with the operation name and `current / total • percentage` progress summary.
+- `View Log` reopens the current operation terminal while work is running.
+- The status bar clears on completion, stop, preparation failure, or when there is no actionable work.
+- Use the shared `setCurrentOperation()` and `updateProgress()` hooks for new operations instead of creating separate progress UI.
+- Close DMs additionally keeps its per-DM result modal, showing each conversation name, channel ID, and closed/failed status.

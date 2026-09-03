@@ -1,0 +1,13 @@
+{
+  "name": "discord-license",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static Discord Account Manager + license server and admin dashboard",
+  "scripts": {
+    "check": "node --check js/manager.js && node --check js/license.js && node --check js/cursor.js && node --check admin/admin.js && node --check api/_lib/supabase.js && node --check api/activate.js && node --check api/admin/keys.js && node --check \"api/admin/keys/[id].js\" && node --check \"api/admin/keys/[id]/activations.js\" && node --check api/admin/validate.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}

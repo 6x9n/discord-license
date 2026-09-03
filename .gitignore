@@ -1,0 +1,10 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+.vercel/
+
+# OS / editor
+Thumbs.db
+.DS_Store
+*.log
