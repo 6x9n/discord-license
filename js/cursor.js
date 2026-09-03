@@ -48,8 +48,8 @@
     if (!visible) {
       return;
     }
-    ringX += (x - ringX) * 0.16;
-    ringY += (y - ringY) * 0.16;
+    ringX += (x - ringX) * 0.45;
+    ringY += (y - ringY) * 0.45;
 
     const dX = x - ringX;
     const dY = y - ringY;
@@ -58,10 +58,10 @@
     ring.style.left = (ringX - 12) + 'px';
     ring.style.top = (ringY - 12) + 'px';
 
-    const scale = Math.min(1.5, 1 + dist * 0.008);
+    const scale = Math.min(1.2, 1 + dist * 0.003);
     ring.style.transform = 'translate(0,0) scale(' + scale.toFixed(3) + ')';
 
-    if (Math.abs(dist) > 2) {
+    if (Math.abs(dist) > 1) {
       rafId = requestAnimationFrame(frame);
     }
   }
