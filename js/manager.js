@@ -247,6 +247,11 @@ window.manager = {
       e.preventDefault();
       const name = viewBtn.getAttribute('data-view');
       if (name) {
+        if (!hasAccount()) {
+          showView('login', { persist: false });
+          toast('Login a Discord account first.', 'error');
+          return;
+        }
         const target = VIEWS[name] ? name : (name === 'manager' ? 'operation' : name);
         showView(target, { persist: true });
       }
@@ -259,6 +264,11 @@ window.manager = {
     const tabLink = e.target.closest('.nav-link[data-tab]');
     if (tabLink) {
       e.preventDefault();
+      if (!hasAccount()) {
+        showView('login', { persist: false });
+        toast('Login a Discord account first.', 'error');
+        return;
+      }
       window.appNav.setActiveTab(tabLink.getAttribute('data-tab'));
       document.body.classList.remove('drawer-open');
     }
@@ -466,6 +476,68 @@ window.manager = {
     return !!state.token && !!state.user && !isSyntheticUser(state.user);
   }
 
+  function applyAccountLock() {
+    const locked = !hasAccount();
+    document.body.classList.toggle('account-locked', locked);
+    const node = document.getElementById('appScreen');
+    if (node) {
+      node.classList.toggle('account-locked', locked);
+    }
+    document.querySelectorAll('#appSidebar .nav-link').forEach(function (link) {
+      link.classList.toggle('locked', locked);
+      link.setAttribute('aria-disabled', locked ? 'true' : 'false');
+      link.setAttribute('tabindex', locked ? '-1' : '0');
+    });
+    renderTopbar();
+  }
+
+  function renderTopbar() {
+    const planEl = document.getElementById('sessionPlan');
+    const keyEl = document.getElementById('sessionKey');
+    if (!planEl) {
+      return;
+    }
+    const li = managerLicenseInfo();
+    const owner = (li && li.owner) || (state.user && (state.user.global_name || state.user.username)) || '';
+    if (owner) {
+      planEl.textContent = (li && li.plan && li.plan !== 'Standard') ? li.plan : 'Licensed';
+      planEl.title = owner;
+    } else {
+      planEl.textContent = 'Open Access';
+      planEl.title = '';
+    }
+    if (keyEl) {
+      const mask = (li && li.key) ? maskKey(li.key) : '';
+      keyEl.textContent = mask;
+      keyEl.title = (li && li.key) || '';
+      keyEl.hidden = !mask;
+    }
+  }
+
+  function maskKey(key) {
+    const k = String(key || '').trim();
+    if (!k) {
+      return '';
+    }
+    const parts = k.split('-');
+    if (parts.length < 2) {
+      return k;
+    }
+    const head = parts[0];
+    const tail = parts[parts.length - 1];
+    return head + '-••••-••••-' + tail;
+  }
+
+  function managerLicenseInfo() {
+    try {
+      const raw = localStorage.getItem('dmt.license.cache') || localStorage.getItem('dmt.welcome.pending');
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch (e) { }
+    return null;
+  }
+
   function setActiveAccount(token, user) {
     state.token = normalizeToken(token);
     state.user = user;
@@ -487,6 +559,7 @@ window.manager = {
     });
     applyWhitelists();
     applyBadge();
+    applyAccountLock();
   }
 
   function clearActiveAccount() {
@@ -503,6 +576,7 @@ window.manager = {
     state.accountDetailsLoading = false;
     localStorage.removeItem(CONFIG.dsc.user);
     applyBadge();
+    applyAccountLock();
   }
 
   function applyBadge() {
@@ -5630,6 +5704,7 @@ window.manager = {
       } else {
         showView('login', { persist: false });
       }
+      applyAccountLock();
       setTimeout(applyBadge, 0);
     });
   }

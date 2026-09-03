@@ -1369,6 +1369,38 @@ body::after {
   box-shadow: inset 0 0 0 1px rgba(88, 101, 242, 0.35);
 }
 
+/* Locked (no account logged in) state */
+#appScreen.account-locked .nav-link {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: transparent;
+  box-shadow: none;
+}
+#appScreen.account-locked .nav-link svg {
+  opacity: 0.5;
+}
+#appScreen.account-locked .nav-link.active {
+  color: var(--muted);
+  box-shadow: none;
+}
+#appScreen.account-locked .main-canvas > .view-panel:not(#loginSection) {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.session-key-badge {
+  background: rgba(139, 147, 167, 0.16);
+  color: var(--text-2);
+  border-color: rgba(139, 147, 167, 0.35);
+  font-family: Consolas, monospace;
+  font-size: 0.74em;
+  letter-spacing: 0.03em;
+}
+.session-key-badge::before {
+  display: none;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
