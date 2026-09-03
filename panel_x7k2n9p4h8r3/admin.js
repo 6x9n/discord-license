@@ -64,25 +64,25 @@
       name: 'Trial',
       maxAccounts: 1,
       durationHint: 7,
-      notes: 'Welcome to the Trial plan!\n\nWhat you get:\n\u2022 Test the Discord tool with limited access.\n\u2022 1 account allowed on this key.\n\u2022 Full feature review before upgrading.\n\nHow to start:\n\u2022 Open the tool and paste your license key to activate.\n\u2022 Load the account and try the dashboard.\n\nNeed more? Contact the seller on Telegram to upgrade to Standard, Pro or Vip.'
+      notes: 'Welcome to the Trial plan!\n\nWhat you get:\n\u2022 Test the Discord tool with limited access.\n\u2022 1 account allowed on this key.\n\u2022 Full feature review before upgrading.\n\nHow to start:\n\u2022 Open the tool and paste your license key to activate.\n\u2022 Load the account and try the dashboard.\n\nNeed more? Contact the owner on Telegram to upgrade to Standard, Pro or Vip.'
     },
     standard: {
       name: 'Standard',
       maxAccounts: 1,
       durationHint: 30,
-      notes: 'Welcome to the Standard plan!\n\nWhat you get:\n\u2022 1 account allowed on this key.\n\u2022 Core dashboard features and saved accounts.\n\u2022 Standard support.\n\nHow to start:\n\u2022 Open the tool and paste your license key to activate.\n\u2022 Your account usage shows in the activation screen.\n\nNeed help? Contact the seller on Telegram: https://t.me/mythicxd'
+      notes: 'Welcome to the Standard plan!\n\nWhat you get:\n\u2022 1 account allowed on this key.\n\u2022 Core dashboard features and saved accounts.\n\u2022 Standard support.\n\nHow to start:\n\u2022 Open the tool and paste your license key to activate.\n\u2022 Your account usage shows in the activation screen.\n\nNeed help? Contact the owner on Telegram: https://t.me/mythicxd'
     },
     pro: {
       name: 'Pro',
       maxAccounts: 3,
       durationHint: 30,
-      notes: 'Welcome to the Pro plan!\n\nWhat you get:\n\u2022 Up to 3 accounts on this key.\n\u2022 All dashboard features and automations.\n\u2022 Priority support.\n\nHow to start:\n\u2022 Activate with your key, then switch between up to 3 accounts.\n\u2022 Watch your usage in the activation confirmation.\n\nLimit reached? Use a higher plan (Vip) or contact the seller.'
+      notes: 'Welcome to the Pro plan!\n\nWhat you get:\n\u2022 Up to 3 accounts on this key.\n\u2022 All dashboard features and automations.\n\u2022 Priority support.\n\nHow to start:\n\u2022 Activate with your key, then switch between up to 3 accounts.\n\u2022 Watch your usage in the activation confirmation.\n\nLimit reached? Use a higher plan (Vip) or contact the owner.'
     },
     vip: {
       name: 'Vip',
       maxAccounts: 10,
       durationHint: 90,
-      notes: 'Welcome to the Vip plan!\n\nWhat you get:\n\u2022 Up to 10 accounts on this key.\n\u2022 Everything in Pro plus fully unlocked limits.\n\u2022 Direct support from the seller.\n\nHow to start:\n\u2022 Activate with your key and manage up to 10 accounts.\n\u2022 Your activation screen shows live usage.\n\nQuestions? Contact the seller on Telegram: https://t.me/mythicxd'
+      notes: 'Welcome to the Vip plan!\n\nWhat you get:\n\u2022 Up to 10 accounts on this key.\n\u2022 Everything in Pro plus fully unlocked limits.\n\u2022 Direct support from the owner.\n\nHow to start:\n\u2022 Activate with your key and manage up to 10 accounts.\n\u2022 Your activation screen shows live usage.\n\nQuestions? Contact the owner on Telegram: https://t.me/mythicxd'
     },
     custom: {
       name: '',
