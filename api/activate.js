@@ -97,13 +97,24 @@ module.exports = async function handler(req, res) {
     // non-fatal; continue
   }
 
+  let used = 0;
+  try {
+    used = await currentActivationCount(row.id);
+  } catch (e) {
+    used = 0;
+  }
+
   return json(res, 200, {
     success: true,
     data: {
       expiresAt: expiresAt ? new Date(expiresAt).getTime() : null,
+      endsAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       label: row.label || 'Standard',
       plan: row.label || 'Standard',
-      maxActivations: row.max_activations || 1
+      owner: row.owner || null,
+      notes: row.notes || '',
+      maxActivations: row.max_activations || 1,
+      activationsUsed: used
     }
   });
 }

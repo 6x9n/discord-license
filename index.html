@@ -24,7 +24,27 @@
         <div id="licMsg" class="lic-msg" role="status"></div>
         <button id="licSubmit" class="btn btn-primary btn-block" type="submit">Activate</button>
       </form>
-      <p class="lic-foot">No key? <a id="licInfoLink" href="#" >Contact the seller.</a></p>
+      <p class="lic-foot">No key? <a id="licInfoLink" href="https://t.me/mythicxd" target="_blank" rel="noopener">Contact the seller on Telegram.</a></p>
+    </div>
+  </div>
+  <div id="welcomeModal" class="lic-gate welcome-gate" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" hidden>
+    <div class="welcome-card">
+      <div class="welcome-emblem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <h2 id="welcomeTitle" class="welcome-title">Welcome<span id="welcomeOwner" class="welcome-owner"></span></h2>
+      <div class="welcome-plan">
+        <span class="pill pill-plan" id="welcomePlan"></span>
+        <span class="pill pill-expires" id="welcomeExpires"></span>
+      </div>
+      <p class="welcome-keyline">Key: <code id="welcomeKey"></code></p>
+      <div class="welcome-block">
+        <div class="welcome-block-label">Accounts in use</div>
+        <div class="welcome-accbar"><div id="welcomeAccFill" class="welcome-accfill"></div></div>
+        <div id="welcomeAccText" class="welcome-block-sub"></div>
+      </div>
+      <div id="welcomeNotes" class="welcome-notes" hidden></div>
+      <button id="welcomeOk" class="btn btn-primary btn-block" type="button">Let's go</button>
     </div>
   </div>
   <div id="app">

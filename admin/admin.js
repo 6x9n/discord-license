@@ -3,43 +3,54 @@
 
   const SES_KEY = 'dmt.admin.secret';
 
-  const el = {
-    loginView: document.getElementById('loginView'),
-    appView: document.getElementById('appView'),
-    loginForm: document.getElementById('loginForm'),
-    secret: document.getElementById('secret'),
-    loginMsg: document.getElementById('loginMsg'),
-    loginBtn: document.getElementById('loginBtn'),
-    logoutBtn: document.getElementById('logoutBtn'),
-    keysBody: document.getElementById('keysBody'),
-    searchInput: document.getElementById('searchInput'),
-    emptyMsg: document.getElementById('emptyMsg'),
-    openCreateBtn: document.getElementById('openCreateBtn'),
-    statTotal: document.getElementById('statTotal'),
-    statActive: document.getElementById('statActive'),
-    statRevoked: document.getElementById('statRevoked'),
-    statTable: document.getElementById('statTable'),
-    keyModal: document.getElementById('keyModal'),
-    modalTitle: document.getElementById('modalTitle'),
-    newKeyBox: document.getElementById('newKeyBox'),
-    generatedKey: document.getElementById('generatedKey'),
-    copyKeyBtn: document.getElementById('copyKeyBtn'),
-    keyForm: document.getElementById('keyForm'),
-    editId: document.getElementById('editId'),
-    fLabel: document.getElementById('fLabel'),
-    fExpires: document.getElementById('fExpires'),
-    fMax: document.getElementById('fMax'),
-    fRevoked: document.getElementById('fRevoked'),
-    keyFormMsg: document.getElementById('keyFormMsg'),
-    cancelModalBtn: document.getElementById('cancelModalBtn'),
-    submitKeyBtn: document.getElementById('submitKeyBtn'),
-    confirmModal: document.getElementById('confirmModal'),
-    confirmText: document.getElementById('confirmText'),
-    confirmMsg: document.getElementById('confirmMsg'),
-    confirmCancel: document.getElementById('confirmCancel'),
-    confirmOk: document.getElementById('confirmOk'),
-    toastContainer: document.getElementById('toastContainer')
-  };
+  const el = (function () {
+    function g(id) {
+      return document.getElementById(id);
+    }
+    return {
+      loginView: g('loginView'),
+      appView: g('appView'),
+      loginForm: g('loginForm'),
+      secret: g('secret'),
+      loginMsg: g('loginMsg'),
+      loginBtn: g('loginBtn'),
+      logoutBtn: g('logoutBtn'),
+      overviewView: g('overviewView'),
+      keysView: g('keysView'),
+      overviewClock: g('overviewClock'),
+      keysBody: g('keysBody'),
+      searchInput: g('searchInput'),
+      resultCount: g('resultCount'),
+      emptyMsg: g('emptyMsg'),
+      openCreateBtn: g('openCreateBtn'),
+      statTotal: g('statTotal'),
+      statActive: g('statActive'),
+      statRevoked: g('statRevoked'),
+      statTable: g('statTable'),
+      keyModal: g('keyModal'),
+      modalTitle: g('modalTitle'),
+      newKeyBox: g('newKeyBox'),
+      generatedKey: g('generatedKey'),
+      copyKeyBtn: g('copyKeyBtn'),
+      keyForm: g('keyForm'),
+      editId: g('editId'),
+      fOwner: g('fOwner'),
+      fLabel: g('fLabel'),
+      fDays: g('fDays'),
+      fMax: g('fMax'),
+      fNotes: g('fNotes'),
+      fRevoked: g('fRevoked'),
+      keyFormMsg: g('keyFormMsg'),
+      cancelModalBtn: g('cancelModalBtn'),
+      submitKeyBtn: g('submitKeyBtn'),
+      confirmModal: g('confirmModal'),
+      confirmText: g('confirmText'),
+      confirmMsg: g('confirmMsg'),
+      confirmCancel: g('confirmCancel'),
+      confirmOk: g('confirmOk'),
+      toastContainer: g('toastContainer')
+    };
+  })();
 
   let keys = [];
   let pending = null;
@@ -48,17 +59,17 @@
     return sessionStorage.getItem(SES_KEY) || '';
   }
 
-  function toast(text) {
+  function toast(text, kind) {
     if (!el.toastContainer) {
       return;
     }
     const node = document.createElement('div');
-    node.className = 'toast';
+    node.className = 'toast' + (kind ? ' toast-' + kind : '');
     node.textContent = text;
     el.toastContainer.appendChild(node);
     setTimeout(function () {
       node.remove();
-    }, 3000);
+    }, 3200);
   }
 
   function setLoginMsg(text, kind) {
@@ -96,23 +107,42 @@
 
   function fmtDate(iso) {
     if (!iso) {
-      return 'â€”';
+      return '—';
     }
     const d = new Date(iso);
-    return isNaN(d.getTime()) ? 'â€”' : d.toLocaleString();
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
-  function statusBadge(row) {
-    if (row.revoked) {
+  function daysLeft(iso) {
+    if (!iso) {
+      return null;
+    }
+    const ms = Date.parse(iso);
+    if (isNaN(ms)) {
+      return null;
+    }
+    if (ms <= Date.now()) {
+      return 0;
+    }
+    return Math.max(0, Math.ceil((ms - Date.now()) / 86400000));
+  }
+
+  function statusBadge(k) {
+    if (k.revoked) {
       return '<span class="badge badge-revoked">Revoked</span>';
     }
-    if (!row.expires_at) {
+    if (!k.expires_at) {
       return '<span class="badge badge-lifetime">Lifetime</span>';
     }
-    const exp = new Date(row.expires_at).getTime();
-    return exp > Date.now()
-      ? '<span class="badge badge-ok">Active</span>'
-      : '<span class="badge badge-revoked">Expired</span>';
+    const exp = new Date(k.expires_at).getTime();
+    const dl = daysLeft(k.expires_at);
+    if (exp <= Date.now()) {
+      return '<span class="badge badge-revoked">Expired</span>';
+    }
+    if (dl <= 3) {
+      return '<span class="badge badge-warn">' + dl + 'd left</span>';
+    }
+    return '<span class="badge badge-ok">Active</span>';
   }
 
   function esc(s) {
@@ -129,6 +159,7 @@
       }
       return (String(k.plain_key || '').toLowerCase().indexOf(q) !== -1) ||
         (String(k.key_hash || '').toLowerCase().indexOf(q) !== -1) ||
+        (String(k.owner || '').toLowerCase().indexOf(q) !== -1) ||
         (String(k.label || '').toLowerCase().indexOf(q) !== -1);
     });
 
@@ -136,18 +167,24 @@
     filtered.forEach(function (k) {
       const tr = document.createElement('tr');
       const activations = (k.activationCount || 0);
+      const maxAccounts = (k.max_activations || 1);
+      const duration = k.expires_at ? (daysLeft(k.expires_at) === null ? '—' : ((k.revoked ? '<span class="muted-text">' : '') + daysLeft(k.expires_at) + 'd' + (k.revoked ? '</span>' : ''))) : '<span class="badge badge-lifetime">Lifetime</span>';
+      const usedWidth = Math.min(100, Math.round((activations / maxAccounts) * 100));
       tr.innerHTML =
         '<td class="key-cell">' + esc(k.plain_key || k.key_hash) + '</td>' +
-        '<td>' + esc(k.label || 'â€”') + '</td>' +
-        '<td>' + esc(k.expires_at ? fmtDate(k.expires_at) : 'Lifetime') + '</td>' +
-        '<td>' + esc(k.max_activations) + '</td>' +
+        '<td>' + (esc(k.owner || '—')) + '</td>' +
+        '<td>' + esc(k.label || '—') + '</td>' +
+        '<td>' + duration + '</td>' +
+        '<td>' +
+          '<div class="acc-bar"><div class="acc-fill" style="width:' + usedWidth + '%"></div></div>' +
+          '<span class="acc-count">' + esc(activations) + ' / ' + esc(maxAccounts) + '</span>' +
+        '</td>' +
         '<td>' + statusBadge(k) + '</td>' +
-        '<td>' + esc(activations) + '</td>' +
-        '<td>' + esc(k.last_validated_at ? fmtDate(k.last_validated_at) : 'â€”') + '</td>' +
-        '<td>' + esc(k.created_at ? fmtDate(k.created_at) : 'â€”') + '</td>' +
+        '<td>' + esc(k.last_validated_at ? fmtDate(k.last_validated_at) : '—') + '</td>' +
+        '<td>' + esc(k.created_at ? fmtDate(k.created_at) : '—') + '</td>' +
         '<td><div class="row-actions">' +
         '<button class="btn btn-ghost mini-btn" data-act="edit" data-id="' + esc(k.id) + '">Edit</button>' +
-        '<button class="btn btn-ghost mini-btn" data-act="clear" data-id="' + esc(k.id) + '">Clear Devs</button>' +
+        '<button class="btn btn-ghost mini-btn" data-act="clear" data-id="' + esc(k.id) + '">Reset</button>' +
         '<button class="btn btn-danger mini-btn" data-act="delete" data-id="' + esc(k.id) + '">Delete</button>' +
         '</div></td>';
       tr.querySelector('[data-act="edit"]').addEventListener('click', function () { openEdit(k); });
@@ -157,11 +194,12 @@
     });
 
     el.emptyMsg.hidden = filtered.length !== 0;
+    el.resultCount.textContent = filtered.length + ' of ' + keys.length;
     renderStats();
   }
 
   function renderStats() {
-    const total = keys.length;
+    let total = keys.length;
     let active = 0;
     let revoked = 0;
     let acts = 0;
@@ -170,6 +208,8 @@
         revoked++;
       } else if (!k.expires_at || new Date(k.expires_at).getTime() > Date.now()) {
         active++;
+      } else {
+        revoked++;
       }
       acts += (k.activationCount || 0);
     });
@@ -187,6 +227,7 @@
     } catch (err) {
       keys = [];
       renderTable();
+      toast(err.message, 'error');
     }
   }
 
@@ -200,6 +241,15 @@
     el.loginView.hidden = true;
     el.appView.hidden = false;
     loadKeys();
+    setNav('overview');
+  }
+
+  function setNav(name) {
+    el.overviewView.hidden = name !== 'overview';
+    el.keysView.hidden = name !== 'keys';
+    document.querySelectorAll('.sidebar-link[data-nav]').forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('data-nav') === name);
+    });
   }
 
   function openCreate() {
@@ -209,7 +259,7 @@
     el.newKeyBox.hidden = true;
     el.generatedKey.textContent = '';
     el.keyModal.hidden = false;
-    el.fLabel.focus();
+    el.fOwner.focus();
   }
 
   function openEdit(k) {
@@ -217,17 +267,22 @@
     el.modalTitle.textContent = 'Edit License Key';
     el.editId.value = k.id;
     el.newKeyBox.hidden = true;
+    el.fOwner.value = k.owner || '';
     el.fLabel.value = k.label || '';
-    el.fExpires.value = k.expires_at || '';
+    const dl = daysLeft(k.expires_at);
+    el.fDays.value = dl === null ? '' : String(dl);
     el.fMax.value = k.max_activations || 1;
+    el.fNotes.value = k.notes || '';
     el.fRevoked.checked = !!k.revoked;
     el.keyModal.hidden = false;
   }
 
   function resetForm() {
+    el.fOwner.value = '';
     el.fLabel.value = '';
-    el.fExpires.value = '';
+    el.fDays.value = '';
     el.fMax.value = '1';
+    el.fNotes.value = '';
     el.fRevoked.checked = false;
     setFormMsg('');
   }
@@ -236,10 +291,11 @@
     el.keyModal.hidden = true;
   }
 
-  function showConfirm(text, onOk) {
+  function showConfirm(text, onOk, dangerLabel) {
     el.confirmText.textContent = text;
     el.confirmMsg.textContent = '';
     el.confirmMsg.className = 'msg';
+    el.confirmOk.textContent = dangerLabel || 'Confirm';
     pending = onOk;
     el.confirmModal.hidden = false;
   }
@@ -250,32 +306,46 @@
   }
 
   function confirmDelete(k) {
-    showConfirm('Delete license key ' + (k.plain_key || k.id) + '? This also clears its device activations.', async function () {
-      await api('/api/admin/keys/' + encodeURIComponent(k.id), { method: 'DELETE' });
-      toast('Key deleted.');
-      closeConfirm();
-      loadKeys();
-    });
+    showConfirm(
+      'Delete license ' + (k.plain_key || k.id) + '? This also clears its account activations. This cannot be undone.',
+      async function () {
+        await api('/api/admin/keys/' + encodeURIComponent(k.id), { method: 'DELETE' });
+        toast('Key deleted.');
+        closeConfirm();
+        loadKeys();
+      },
+      'Delete Key'
+    );
   }
 
   function confirmClear(k) {
-    showConfirm('Clear all device activations for this key?', async function () {
-      await api('/api/admin/keys/' + encodeURIComponent(k.id) + '/activations', { method: 'DELETE' });
-      toast('Activations cleared.');
-      closeConfirm();
-      loadKeys();
-    });
+    showConfirm(
+      'Reset all account activations for this key? Users will need to reactivate.',
+      async function () {
+        await api('/api/admin/keys/' + encodeURIComponent(k.id) + '/activations', { method: 'DELETE' });
+        toast('Activations cleared.');
+        closeConfirm();
+        loadKeys();
+      },
+      'Reset'
+    );
   }
 
   async function handleKeySubmit(e) {
     e.preventDefault();
     const id = el.editId.value;
+    const daysRaw = String(el.fDays.value || '').trim();
     const body = {
+      owner: el.fOwner.value.trim(),
       label: el.fLabel.value.trim() || 'Standard',
-      expires_at: el.fExpires.value.trim() || null,
+      days: daysRaw === '' ? 0 : parseInt(daysRaw, 10),
       max_activations: parseInt(el.fMax.value, 10) || 1,
+      notes: el.fNotes.value.trim(),
       revoked: el.fRevoked.checked
     };
+    if (id) {
+      body.expires_at = null; // reuse days path on the server
+    }
     el.submitKeyBtn.disabled = true;
     setFormMsg('Saving...', 'info');
     try {
@@ -299,6 +369,12 @@
     }
   }
 
+  function tickClock() {
+    if (el.overviewClock) {
+      el.overviewClock.textContent = new Date().toLocaleString();
+    }
+  }
+
   function init() {
     if (getSecret()) {
       showApp();
@@ -314,7 +390,7 @@
         return;
       }
       el.loginBtn.disabled = true;
-      setLoginMsg('Signing in...', 'info');
+      setLoginMsg('Verifying...', 'info');
       try {
         sessionStorage.setItem(SES_KEY, secret);
         await api('/api/admin/validate', {
@@ -336,6 +412,13 @@
       showLogin();
     });
 
+    document.querySelectorAll('.sidebar-link[data-nav]').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        setNav(a.getAttribute('data-nav'));
+      });
+    });
+
     el.openCreateBtn.addEventListener('click', openCreate);
     el.cancelModalBtn.addEventListener('click', closeModal);
     el.keyModal.addEventListener('click', function (e) {
@@ -346,12 +429,15 @@
     el.keyForm.addEventListener('submit', handleKeySubmit);
     el.confirmCancel.addEventListener('click', closeConfirm);
     el.confirmOk.addEventListener('click', function () {
-      if (pending) {
-        Promise.resolve(pending()).catch(function (err) {
-          el.confirmMsg.textContent = err.message || 'Action failed.';
-          el.confirmMsg.className = 'msg msg-error';
-        });
-      }
+      el.confirmOk.disabled = true;
+      Promise.resolve(pending()).catch(function (err) {
+        el.confirmMsg.textContent = err.message || 'Action failed.';
+        el.confirmMsg.className = 'msg msg-error';
+      }).finally(function () {
+        if (el.confirmModal.hidden) {
+          el.confirmOk.disabled = false;
+        }
+      });
     });
     el.copyKeyBtn.addEventListener('click', function () {
       const val = el.generatedKey.textContent;
@@ -362,6 +448,9 @@
       }
     });
     el.searchInput.addEventListener('input', renderTable);
+
+    tickClock();
+    setInterval(tickClock, 30000);
   }
 
   if (document.readyState === 'loading') {

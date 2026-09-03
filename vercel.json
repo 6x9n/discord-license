@@ -1,7 +1,11 @@
 {
   "rewrites": [
-    { "source": "/admin", "destination": "/admin/index.html" },
-    { "source": "/admin/", "destination": "/admin/index.html" }
+    { "source": "/mythicisadminofthisapp", "destination": "/admin/index.html" },
+    { "source": "/mythicisadminofthisapp/", "destination": "/admin/index.html" },
+    { "source": "/mythicisadminofthisapp/admin.css", "destination": "/admin/admin.css" },
+    { "source": "/mythicisadminofthisapp/admin.js", "destination": "/admin/admin.js" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/", "destination": "/index.html" }
   ],
   "headers": [
     {

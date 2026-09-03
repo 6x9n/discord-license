@@ -60,7 +60,15 @@ module.exports = async function handler(req, res) {
   if (req.method === 'POST') {
     const body = await readBody(req);
     const label = String(body.label || '').trim() || 'Standard';
-    const expiresIso = body.expires_at ? String(body.expires_at) : null;
+    const owner = String(body.owner || '').trim();
+    const notes = String(body.notes || '').trim();
+    const days = parseInt(body.days, 10);
+    let expiresIso = null;
+    if (!isNaN(days) && days > 0) {
+      expiresIso = new Date(Date.now() + days * 86400000).toISOString();
+    } else if (body.expires_at) {
+      expiresIso = String(body.expires_at);
+    }
     const maxActivations = parseInt(body.max_activations, 10);
     const activatedAt = new Date().toISOString();
     const plain = generateKey();
@@ -68,6 +76,8 @@ module.exports = async function handler(req, res) {
       key_hash: hashKey(plain),
       plain_key: plain,
       label: label,
+      owner: owner || null,
+      notes: notes || null,
       expires_at: expiresIso,
       max_activations: isNaN(maxActivations) || maxActivations < 1 ? 1 : maxActivations,
       revoked: false,
@@ -83,6 +93,8 @@ module.exports = async function handler(req, res) {
           key: plain,
           key_hash: row.key_hash,
           label: row.label,
+          owner: row.owner,
+          notes: row.notes,
           expires_at: row.expires_at,
           max_activations: row.max_activations,
           revoked: row.revoked,

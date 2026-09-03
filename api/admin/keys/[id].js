@@ -20,7 +20,18 @@ module.exports = async function handler(req, res) {
     const body = await readBody(req);
     const patch = {};
     if (body.label !== undefined) patch.label = String(body.label);
-    if (body.expires_at !== undefined) patch.expires_at = body.expires_at ? String(body.expires_at) : null;
+    if (body.owner !== undefined) patch.owner = String(body.owner) || null;
+    if (body.notes !== undefined) patch.notes = String(body.notes) || null;
+    if (body.days !== undefined && body.days !== '' && body.days !== null) {
+      const d = parseInt(body.days, 10);
+      if (!isNaN(d) && d > 0) {
+        patch.expires_at = new Date(Date.now() + d * 86400000).toISOString();
+      } else {
+        patch.expires_at = null;
+      }
+    } else if (body.expires_at !== undefined) {
+      patch.expires_at = body.expires_at ? String(body.expires_at) : null;
+    }
     if (body.max_activations !== undefined) {
       const m = parseInt(body.max_activations, 10);
       patch.max_activations = isNaN(m) || m < 1 ? 1 : m;

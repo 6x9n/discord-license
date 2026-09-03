@@ -92,15 +92,23 @@
             throw new Error('License is not valid for this session.');
           }
           const cacheExpires = expiresAt || (Date.now() + 31536000000);
+          const licenseInfo = {
+            expiresAt: cacheExpires,
+            endsAt: data.endsAt || null,
+            activatedAt: Date.now(),
+            plan: data.plan || data.label || 'Unknown',
+            owner: data.owner || null,
+            key: String(key || '').trim(),
+            notes: data.notes || '',
+            maxActivations: data.maxActivations || 1,
+            activationsUsed: data.activationsUsed || 0
+          };
           if (manager && typeof manager.setLicenseCache === 'function') {
-            manager.setLicenseCache({
-              expiresAt: cacheExpires,
-              activatedAt: Date.now(),
-              plan: data.plan || data.label || 'Unknown',
-              owner: data.owner || null,
-              key: String(key || '').trim()
-            });
+            manager.setLicenseCache(licenseInfo);
           }
+          try {
+            localStorage.setItem('dmt.welcome.pending', JSON.stringify(licenseInfo));
+          } catch (e) {}
           setMsg('License activated. Welcome back.', 'success');
           return true;
         }
@@ -118,6 +126,61 @@
       });
   }
 
+  function showWelcome(info) {
+    const modal = document.getElementById('welcomeModal');
+    if (!modal) {
+      return false;
+    }
+    const set = function (id, val) {
+      const n = document.getElementById(id);
+      if (n) {
+        n.textContent = val;
+      }
+    };
+    set('welcomeOwner', info.owner ? ' ' + info.owner : '');
+    set('welcomePlan', info.plan || 'Standard');
+    set('welcomeKey', info.key || '');
+
+    const exp = document.getElementById('welcomeExpires');
+    if (exp) {
+      if (info.endsAt || (info.expiresAt && info.expiresAt > Date.now() + 31536000000)) {
+        exp.textContent = info.endsAt ? 'Ends ' + new Date(info.endsAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Lifetime';
+      } else {
+        exp.textContent = info.endsAt ? 'Ends ' + new Date(info.endsAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Lifetime';
+      }
+    }
+
+    const used = info.activationsUsed || 0;
+    const max = info.maxActivations || 1;
+    const accText = document.getElementById('welcomeAccText');
+    if (accText) {
+      accText.textContent = used + ' of ' + max + ' account' + (max === 1 ? '' : 's') + ' using this key' + (used >= max ? ' — limit reached.' : '.');
+    }
+    const accFill = document.getElementById('welcomeAccFill');
+    if (accFill) {
+      accFill.style.width = Math.min(100, Math.round((used / max) * 100)) + '%';
+    }
+
+    const notes = document.getElementById('welcomeNotes');
+    if (notes) {
+      if (info.notes) {
+        notes.hidden = false;
+        notes.innerHTML = '<div class="welcome-block-label">Your plan instructions</div>';
+        const p = document.createElement('p');
+        p.className = 'welcome-block-sub';
+        p.textContent = info.notes;
+        notes.appendChild(p);
+      } else {
+        notes.hidden = true;
+        notes.innerHTML = '';
+      }
+    }
+
+    modal.hidden = false;
+    modal.classList.add('active');
+    return true;
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
     const key = keyInput ? keyInput.value.trim() : '';
@@ -127,6 +190,14 @@
     }
     activate(key).then(function (ok) {
       if (ok) {
+        try {
+          const pendingRaw = localStorage.getItem('dmt.welcome.pending');
+          if (pendingRaw) {
+            const info = JSON.parse(pendingRaw);
+            localStorage.removeItem('dmt.welcome.pending');
+            showWelcome(info);
+          }
+        } catch (e) {}
         hideGate();
       }
     });
@@ -174,6 +245,19 @@
       return gate ? !gate.hidden : false;
     }
   };
+
+  const welcomeOk = document.getElementById('welcomeOk');
+  if (welcomeOk) {
+    welcomeOk.addEventListener('click', function () {
+      const modal = document.getElementById('welcomeModal');
+      if (modal) {
+        modal.classList.remove('active');
+        setTimeout(function () {
+          modal.hidden = true;
+        }, 180);
+      }
+    });
+  }
 
   document.addEventListener('DOMContentLoaded', boot);
   if (document.readyState === 'interactive' || document.readyState === 'complete') {
