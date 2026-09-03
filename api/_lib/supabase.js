@@ -144,9 +144,12 @@ async function rest(path, options) {
   }
 
   if (!res.ok) {
-    const err = new Error('Supabase error ' + res.status);
+    const pgrstMessage = (bodyText && typeof bodyText === 'string') ? bodyText : null;
+    const message = pgrstMessage && pgrstMessage.length < 300 ? pgrstMessage : ('Supabase error ' + res.status);
+    const err = new Error(message);
     err.status = res.status;
     err.detail = data;
+    err.code = (data && data.code) ? data.code : null;
     throw err;
   }
   return data;
