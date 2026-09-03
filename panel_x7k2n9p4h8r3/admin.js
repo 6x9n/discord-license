@@ -64,6 +64,12 @@
       submitPlanBtn: g('submitPlanBtn'),
       plansBody: g('plansBody'),
       plansEmptyMsg: g('plansEmptyMsg'),
+      planPreviewModal: g('planPreviewModal'),
+      planPreviewName: g('planPreviewName'),
+      planPreviewTag: g('planPreviewTag'),
+      planPreviewStats: g('planPreviewStats'),
+      planPreviewNotes: g('planPreviewNotes'),
+      planPreviewClose: g('planPreviewClose'),
       confirmModal: g('confirmModal'),
       confirmText: g('confirmText'),
       confirmMsg: g('confirmMsg'),
@@ -514,15 +520,21 @@
     if (!el.plansBody) {
       return;
     }
+    const tierOrder = { 'Trial': 0, 'Standard': 1, 'Pro': 2, 'Master': 3, 'Vip': 4 };
+    const sorted = plans.slice().sort(function (a, b) {
+      const ta = tierOrder[a.name] != null ? tierOrder[a.name] : 10 + (Number(a.max_accounts) || 1);
+      const tb = tierOrder[b.name] != null ? tierOrder[b.name] : 10 + (Number(b.max_accounts) || 1);
+      return ta - tb || String(a.name || '').localeCompare(String(b.name || ''));
+    });
     el.plansBody.innerHTML = '';
-    plans.forEach(function (p) {
+    sorted.forEach(function (p) {
       const tr = document.createElement('tr');
       tr.innerHTML =
         '<td><strong>' + esc(p.name || '—') + '</strong></td>' +
         '<td>' + esc(String(p.max_accounts != null ? p.max_accounts : 1)) + '</td>' +
         '<td>' + esc(String(p.max_devices != null ? p.max_devices : 1)) + '</td>' +
         '<td>' + ((p.duration_days > 0) ? esc(String(p.duration_days)) : '<span class="badge badge-lifetime">Lifetime</span>') + '</td>' +
-        '<td class="note-cell">' + escNotes(p.notes || '—') + '</td>' +
+        '<td class="preview-cell">' + ((p.notes && p.notes.trim()) ? '<button class="btn btn-ghost mini-btn" data-plan="preview" data-name="' + esc(p.name || '') + '">Preview</button>' : '<span class="muted-text">—</span>') + '</td>' +
         '<td>' + esc(p.created_at ? fmtDate(p.created_at) : '—') + '</td>' +
         '<td><div class="row-actions">' +
         '<button class="btn btn-ghost mini-btn" data-plan="edit" data-id="' + esc(p.id) + '">Edit</button>' +
@@ -530,12 +542,37 @@
         '</div></td>';
       tr.querySelector('[data-plan="edit"]').addEventListener('click', function () { openPlanEdit(p); });
       tr.querySelector('[data-plan="delete"]').addEventListener('click', function () { confirmDeletePlan(p); });
+      const previewBtn = tr.querySelector('[data-plan="preview"]');
+      if (previewBtn) {
+        previewBtn.addEventListener('click', function () { openPlanPreview(p); });
+      }
       el.plansBody.appendChild(tr);
     });
     if (el.plansEmptyMsg) {
       el.plansEmptyMsg.hidden = plans.length !== 0;
     }
     renderStats();
+  }
+
+  function openPlanPreview(p) {
+    if (!el.planPreviewModal) {
+      return;
+    }
+    el.planPreviewName.textContent = p.name || 'Plan';
+    const duration = (p.duration_days > 0) ? (p.duration_days + ' days') : 'Lifetime';
+    el.planPreviewTag.textContent = (p.max_accounts != null ? p.max_accounts : 1) + ' accounts · ' + (p.max_devices != null ? p.max_devices : 1) + ' device' + ((p.max_devices != null ? p.max_devices : 1) === 1 ? '' : 's') + ' · ' + duration;
+    el.planPreviewStats.innerHTML = '' +
+      '<div class="pp-stat"><span class="pp-label">Accounts</span><span class="pp-value">' + esc(String(p.max_accounts != null ? p.max_accounts : 1)) + '</span></div>' +
+      '<div class="pp-stat"><span class="pp-label">Devices</span><span class="pp-value">' + esc(String(p.max_devices != null ? p.max_devices : 1)) + '</span></div>' +
+      '<div class="pp-stat"><span class="pp-label">Duration</span><span class="pp-value">' + esc(String(duration)) + '</span></div>';
+    el.planPreviewNotes.innerHTML = p.notes && p.notes.trim() ? esc(p.notes) : '<p class="muted-text">No instructions for this plan.</p>';
+    el.planPreviewModal.hidden = false;
+  }
+
+  function closePlanPreview() {
+    if (el.planPreviewModal) {
+      el.planPreviewModal.hidden = true;
+    }
   }
 
   function openPlanCreate() {
@@ -732,6 +769,13 @@
       }
     });
     el.planForm.addEventListener('submit', handlePlanSubmit);
+
+    el.planPreviewClose.addEventListener('click', closePlanPreview);
+    el.planPreviewModal.addEventListener('click', function (e) {
+      if (e.target === el.planPreviewModal) {
+        closePlanPreview();
+      }
+    });
 
     el.confirmCancel.addEventListener('click', closeConfirm);
     el.confirmOk.addEventListener('click', function () {

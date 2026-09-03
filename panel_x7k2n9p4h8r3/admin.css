@@ -148,10 +148,17 @@ button {
   background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b93a7' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 13px center;
-  background-color: var(--raised);
+  background-color: #101a26;
+  color: var(--text);
   padding-right: 36px;
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.select option,
+.select optgroup {
+  background-color: #0e151e;
+  color: var(--text);
 }
 
 .select:hover {
@@ -419,15 +426,14 @@ button {
   color: var(--muted);
 }
 
-.keys-table .note-cell {
+.keys-table .note-cell,
+.keys-table .preview-cell {
   max-width: 320px;
-  min-width: 0;
+  min-width: 120px;
   white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  color: var(--text-2);
-  vertical-align: top;
-  line-height: 1.5;
+}
+.preview-cell .muted-text {
+  font-size: 12px;
 }
 
 /* ---------- Stats ---------- */
@@ -770,6 +776,70 @@ button {
   color: var(--text-2);
   font-size: 14px;
   line-height: 1.55;
+}
+
+/* ---------- Plan preview ---------- */
+.plan-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.plan-preview-name {
+  margin-bottom: 4px;
+}
+.plan-preview-tag {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+.plan-preview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.pp-stat {
+  background: linear-gradient(180deg, var(--card-raised), var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+.pp-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.pp-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+.plan-preview-notes {
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 18px;
+  max-height: 40vh;
+  overflow-y: auto;
+  text-align: left;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.plan-preview-notes p {
+  margin: 0;
 }
 
 /* ---------- Toast ---------- */

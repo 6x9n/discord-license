@@ -275,12 +275,114 @@
   function boot() {
     if (hasValidLicense()) {
       hideGate();
+      startLicenseCheck();
     } else {
       showGate();
       if (keyInput) {
         keyInput.focus();
       }
     }
+  }
+
+  // ---- Periodic license health check (~every 10 minutes) ----
+  let licenseTimer = null;
+
+  function startLicenseCheck() {
+    if (licenseTimer) {
+      return;
+    }
+    // First check shortly after boot, then keep polling.
+    licenseTimer = setInterval(runLicenseCheck, 600000);
+    setTimeout(runLicenseCheck, 8000);
+  }
+
+  function forceLicenseLogout(message) {
+    if (licenseTimer) {
+      clearInterval(licenseTimer);
+      licenseTimer = null;
+    }
+    try {
+      if (manager && typeof manager.clearLicenseCache === 'function') {
+        manager.clearLicenseCache();
+      }
+    } catch (e) {}
+    if (manager && typeof manager.forceLicenseLogout === 'function') {
+      manager.forceLicenseLogout();
+    }
+    showGate();
+    setMsg(message, 'error');
+  }
+
+  function runLicenseCheck() {
+    if (!manager || typeof manager.getLicenseCache !== 'function') {
+      return;
+    }
+    let cache;
+    try {
+      cache = manager.getLicenseCache();
+    } catch (e) {
+      return;
+    }
+    if (!cache || !cache.key || !hasValidLicense()) {
+      return;
+    }
+    const url = String(CONFIG.apiBase || '').replace(/\/+$/, '') + '/api/validate';
+    let accountId = '';
+    if (manager && typeof manager.activeAccountId === 'function') {
+      accountId = manager.activeAccountId() || '';
+    }
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: String(cache.key || '').trim(),
+        deviceId: deviceId(),
+        accountId: String(accountId || '').trim()
+      })
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return null; }).then(function (body) {
+          return { status: res.status, body: body };
+        });
+      })
+      .then(function (result) {
+        const body = result.body || {};
+        if (!body.success) {
+          const code = body.code || '';
+          let message = (body.error || 'This license is no longer valid.').replace(/\.+$/, '') + '.';
+          if (code === 'EXPIRED') {
+            message = 'Your license has expired. Please renew it to continue.';
+          } else if (code === 'REVOKED') {
+            message = 'This license has been revoked. Contact Mythic for help.';
+          } else if (code === 'INVALID') {
+            message = 'This license key is no longer valid.';
+          }
+          forceLicenseLogout(message);
+          return;
+        }
+        const d = body.data || {};
+        if (d.devicesFull) {
+          forceLicenseLogout('This license is already active on another device. Logged out automatically.');
+          return;
+        }
+        if (d.accountsFull) {
+          forceLicenseLogout('This license has reached its account limit. Logged out automatically.');
+          return;
+        }
+        if (d && (d.activationsUsed !== undefined || d.activationsTotal !== undefined)) {
+          if (d.activationsUsed !== undefined) cache.activationsUsed = d.activationsUsed;
+          if (d.activationsTotal !== undefined) cache.maxActivations = d.activationsTotal;
+          if (d.devicesUsed !== undefined) cache.devicesUsed = d.devicesUsed;
+          if (d.devicesTotal !== undefined) cache.maxDevices = d.devicesTotal;
+          if (d.expiresAt) cache.expiresAt = d.expiresAt;
+          try {
+            manager.setLicenseCache(cache);
+          } catch (e) {}
+        }
+      })
+      .catch(function () {
+        // Transient network error - leave the user logged in.
+      });
   }
 
   if (form) {

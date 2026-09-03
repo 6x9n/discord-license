@@ -2,8 +2,9 @@
 
 const { hashKey, readBody, json, handleOptions, rest } = require('./_lib/supabase.js');
 
-// Release a device (and optionally its account) for a license key so the same
-// key can be activated again on another device. Called when a user logs out.
+// Release the device lock for a license key so the same key can be activated
+// again on another device. Account usage counts are intentionally preserved
+// (the saved data stays; only this device slot is freed). Called on logout.
 module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return handleOptions(res);
@@ -15,7 +16,6 @@ module.exports = async function handler(req, res) {
   const body = await readBody(req);
   const key = String(body.key || '').trim();
   const deviceId = String(body.deviceId || '').trim();
-  const accountId = String(body.accountId || '').trim();
 
   if (!key) {
     return json(res, 400, { success: false, error: 'License key is required.' });
@@ -38,25 +38,15 @@ module.exports = async function handler(req, res) {
   }
   const licenseId = row.id;
 
+  // Remove only the device lock row (device_hash set, discord_user_id null) so
+  // account usage counters and saved account data are left untouched.
   try {
-    await rest('license_activations?license_id=eq.' + encodeURIComponent(licenseId) + '&device_hash=eq.' + encodeURIComponent(deviceId), {
+    await rest('license_activations?license_id=eq.' + encodeURIComponent(licenseId) + '&device_hash=eq.' + encodeURIComponent(deviceId) + '&discord_user_id=is.null', {
       method: 'DELETE',
       headers: { Prefer: 'return=minimal' }
     });
   } catch (err) {
     return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Failed to release device.' });
-  }
-
-  // Also release the account slot so the same account can log in on the new device.
-  if (accountId) {
-    try {
-      await rest('license_activations?license_id=eq.' + encodeURIComponent(licenseId) + '&discord_user_id=eq.' + encodeURIComponent(accountId), {
-        method: 'DELETE',
-        headers: { Prefer: 'return=minimal' }
-      });
-    } catch (e) {
-      // non-fatal; account slot may not exist
-    }
   }
 
   return json(res, 200, { success: true, data: { released: true } });

@@ -123,9 +123,6 @@ window.manager = {
         const cache2 = this.getLicenseCache();
         if (cache2) {
           cache2.devicesUsed = Math.max(0, (Number(cache2.devicesUsed) || 0) - 1);
-          if (accountId) {
-            cache2.activationsUsed = Math.max(0, (Number(cache2.activationsUsed) || 0) - 1);
-          }
           try {
             this.setLicenseCache(cache2);
           } catch (e) { }
@@ -4083,6 +4080,20 @@ window.manager = {
       window.manager.releaseDevice(accountId);
     }
   }
+
+  // Force the whole session down because the license is no longer usable.
+  // Clears the active Discord account and returns to the login view. The
+  // license gate/message is handled by js/license.js.
+  window.manager.forceLicenseLogout = function () {
+    cancelOperationForExit();
+    clearActiveAccount();
+    renderSavedAccounts();
+    showView('login');
+  };
+
+  window.manager.activeAccountId = function () {
+    return state.user && state.user.id ? String(state.user.id) : '';
+  };
 
   function initOps() {
     const handlers = {
