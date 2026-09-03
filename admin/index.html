@@ -141,6 +141,21 @@
       </div>
       <form id="keyForm">
         <input id="editId" type="hidden">
+        <div class="form-field">
+          <label class="field-label" for="fPreset">Plan Preset</label>
+          <div class="preset-row">
+            <select id="fPreset" class="input select">
+              <option value="">Choose a plan...</option>
+              <option value="trial">Trial</option>
+              <option value="standard">Standard</option>
+              <option value="pro">Pro</option>
+              <option value="vip">Vip</option>
+              <option value="custom">Custom Plan</option>
+            </select>
+            <button id="applyPresetBtn" class="btn btn-ghost mini-btn" type="button">Apply</button>
+          </div>
+          <span class="field-hint">Pick a preset to auto-fill plan, accounts and instructions.</span>
+        </div>
         <div class="form-grid">
           <div class="form-field">
             <label class="field-label" for="fOwner">Account / Username</label>

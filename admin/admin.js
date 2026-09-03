@@ -34,6 +34,8 @@
       copyKeyBtn: g('copyKeyBtn'),
       keyForm: g('keyForm'),
       editId: g('editId'),
+      fPreset: g('fPreset'),
+      applyPresetBtn: g('applyPresetBtn'),
       fOwner: g('fOwner'),
       fLabel: g('fLabel'),
       fDays: g('fDays'),
@@ -54,6 +56,41 @@
 
   let keys = [];
   let pending = null;
+
+  // Predefined plan presets: name, default account limit, default instructions.
+  // 'custom' leaves plan/accounts/notes free for the admin to define.
+  const PLANS = {
+    trial: {
+      name: 'Trial',
+      maxAccounts: 1,
+      durationHint: 7,
+      notes: 'Welcome to the Trial plan!\n\nWhat you get:\n\u2022 Test the Discord tool with limited access.\n\u2022 1 account allowed on this key.\n\u2022 Full feature review before upgrading.\n\nHow to start:\n\u2022 Open the tool and paste your license key to activate.\n\u2022 Load the account and try the dashboard.\n\nNeed more? Contact the seller on Telegram to upgrade to Standard, Pro or Vip.'
+    },
+    standard: {
+      name: 'Standard',
+      maxAccounts: 1,
+      durationHint: 30,
+      notes: 'Welcome to the Standard plan!\n\nWhat you get:\n\u2022 1 account allowed on this key.\n\u2022 Core dashboard features and saved accounts.\n\u2022 Standard support.\n\nHow to start:\n\u2022 Open the tool and paste your license key to activate.\n\u2022 Your account usage shows in the activation screen.\n\nNeed help? Contact the seller on Telegram: https://t.me/mythicxd'
+    },
+    pro: {
+      name: 'Pro',
+      maxAccounts: 3,
+      durationHint: 30,
+      notes: 'Welcome to the Pro plan!\n\nWhat you get:\n\u2022 Up to 3 accounts on this key.\n\u2022 All dashboard features and automations.\n\u2022 Priority support.\n\nHow to start:\n\u2022 Activate with your key, then switch between up to 3 accounts.\n\u2022 Watch your usage in the activation confirmation.\n\nLimit reached? Use a higher plan (Vip) or contact the seller.'
+    },
+    vip: {
+      name: 'Vip',
+      maxAccounts: 10,
+      durationHint: 90,
+      notes: 'Welcome to the Vip plan!\n\nWhat you get:\n\u2022 Up to 10 accounts on this key.\n\u2022 Everything in Pro plus fully unlocked limits.\n\u2022 Direct support from the seller.\n\nHow to start:\n\u2022 Activate with your key and manage up to 10 accounts.\n\u2022 Your activation screen shows live usage.\n\nQuestions? Contact the seller on Telegram: https://t.me/mythicxd'
+    },
+    custom: {
+      name: '',
+      maxAccounts: null,
+      durationHint: null,
+      notes: ''
+    }
+  };
 
   function getSecret() {
     return sessionStorage.getItem(SES_KEY) || '';
@@ -262,6 +299,42 @@
     el.fOwner.focus();
   }
 
+  function applyPreset() {
+    const val = el.fPreset.value;
+    const plan = PLANS[val];
+    if (!plan) {
+      return;
+    }
+    if (val === 'custom') {
+      return;
+    }
+    el.fLabel.value = plan.name;
+    if (plan.maxAccounts !== null) {
+      el.fMax.value = String(plan.maxAccounts);
+    }
+    if (plan.durationHint !== null) {
+      el.fDays.value = String(plan.durationHint);
+    }
+    if (plan.notes) {
+      el.fNotes.value = plan.notes;
+    }
+  }
+
+  function matchPreset(k) {
+    const name = String(k.label || '').trim().toLowerCase();
+    let found = '';
+    Object.keys(PLANS).forEach(function (key) {
+      const val = PLANS[key];
+      if (!val.durationHint) {
+        return;
+      }
+      if (name === String(val.name).toLowerCase()) {
+        found = key;
+      }
+    });
+    return found;
+  }
+
   function openEdit(k) {
     resetForm();
     el.modalTitle.textContent = 'Edit License Key';
@@ -274,10 +347,13 @@
     el.fMax.value = k.max_activations || 1;
     el.fNotes.value = k.notes || '';
     el.fRevoked.checked = !!k.revoked;
+    const preset = matchPreset(k);
+    el.fPreset.value = preset || '';
     el.keyModal.hidden = false;
   }
 
   function resetForm() {
+    el.fPreset.value = '';
     el.fOwner.value = '';
     el.fLabel.value = '';
     el.fDays.value = '';
@@ -420,6 +496,18 @@
     });
 
     el.openCreateBtn.addEventListener('click', openCreate);
+    el.applyPresetBtn.addEventListener('click', function () {
+      applyPreset();
+      toast('Plan preset applied.');
+    });
+    el.fPreset.addEventListener('change', function () {
+      if (el.fPreset.value === 'custom') {
+        el.fNotes.focus();
+      } else if (el.fPreset.value) {
+        applyPreset();
+        toast('Plan "' + el.fLabel.value + '" applied.');
+      }
+    });
     el.cancelModalBtn.addEventListener('click', closeModal);
     el.keyModal.addEventListener('click', function (e) {
       if (e.target === el.keyModal) {
