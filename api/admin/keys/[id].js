@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
     return json(res, auth.error === 'Unauthorized' ? 401 : 503, { success: false, error: auth.error });
   }
 
-  const id = decodeURIComponent((req.params && req.params.id) || '');
+  const id = decodeURIComponent((req.params && (req.params.id || req.query.id)) || (req.query && req.query.id) || '');
   if (!id) {
     return json(res, 400, { success: false, error: 'Missing key id.' });
   }
