@@ -2764,33 +2764,89 @@ html[data-theme="light"] .density-option span {
 }
 
 .saved-box {
-  border-top: 1px solid var(--border-glass);
-  padding-top: 4px;
+  margin-top: 6px;
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012));
+  overflow: hidden;
+}
+
+.saved-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-glass);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.saved-title {
+  font-size: 0.92em;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.saved-count {
+  min-width: 24px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.saved-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(178, 220, 232, 0.22) transparent;
+}
+
+.saved-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.saved-scroll::-webkit-scrollbar-thumb {
+  background: rgba(178, 220, 232, 0.2);
+  border-radius: 999px;
+}
+
+.saved-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(178, 220, 232, 0.32);
 }
 
 .saved-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 4px 2px;
-  max-height: 210px;
-  overflow-y: auto;
+  gap: 8px;
+  padding: 12px;
+  margin: 0;
 }
 
 .saved-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--border-glass);
+  transition: background 0.15s, border-color 0.15s, transform 0.08s;
+}
+
+.saved-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(178, 220, 232, 0.22);
+}
+
+.saved-item:active {
+  transform: scale(0.995);
 }
 
 .saved-avatar {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border-radius: 50%;
   background-size: cover;
@@ -2801,15 +2857,89 @@ html[data-theme="light"] .density-option span {
   justify-content: center;
   font-weight: 800;
   color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.saved-item-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.saved-name-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.saved-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(35, 165, 90, 0.22), 0 0 8px rgba(35, 165, 90, 0.6);
 }
 
 .saved-name {
   font-weight: 700;
-  font-size: 0.86em;
+  font-size: 0.88em;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.saved-sub {
+  font-size: 0.74em;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 26px 18px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.saved-empty-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.saved-empty-icon svg {
+  width: 22px;
+  height: 22px;
+  opacity: 0.7;
+}
+
+.saved-empty-title {
+  font-size: 0.9em;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.saved-empty-sub {
+  font-size: 0.78em;
+  color: var(--muted);
+  max-width: 240px;
+  line-height: 1.4;
 }
 
 .saved-actions {
@@ -2820,7 +2950,8 @@ html[data-theme="light"] .density-option span {
 }
 
 .saved-actions .btn {
-  padding: 7px 12px;
+  padding: 6px 11px;
+  font-size: 0.8em;
 }
 
 /* ---------- Profile card ---------- */
@@ -4656,7 +4787,8 @@ html[data-theme="light"] #tokenInput {
 }
 
 html[data-theme="light"] .saved-item,
-html[data-theme="light"] .modal-item {
+html[data-theme="light"] .modal-item,
+html[data-theme="light"] .saved-box {
   background: rgba(255, 255, 255, 0.6);
 }
 

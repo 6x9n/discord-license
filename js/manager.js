@@ -533,6 +533,10 @@ window.manager = {
       link.setAttribute('tabindex', locked ? '-1' : '0');
     });
     renderTopbar();
+    const topLogoutBtn = document.getElementById('topLogoutBtn');
+    if (topLogoutBtn) {
+      topLogoutBtn.hidden = locked;
+    }
   }
 
   function renderTopbar() {
@@ -1204,7 +1208,7 @@ window.manager = {
     const count = byId('savedCount');
     const accounts = loadAccounts();
     if (count) {
-      count.textContent = accounts.length + (accounts.length === 1 ? ' account' : ' accounts');
+      count.textContent = String(accounts.length);
     }
     if (!list) {
       return;
@@ -1212,8 +1216,13 @@ window.manager = {
     list.innerHTML = '';
     if (!accounts.length) {
       const empty = document.createElement('li');
-      empty.className = 'log-empty';
-      empty.textContent = 'No saved accounts yet.';
+      empty.className = 'saved-empty';
+      empty.innerHTML =
+        '<span class="saved-empty-icon">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' +
+        '</span>' +
+        '<span class="saved-empty-title">No saved accounts yet</span>' +
+        '<span class="saved-empty-sub">Logged-in accounts appear here for quick switching.</span>';
       list.appendChild(empty);
       return;
     }
@@ -1230,9 +1239,32 @@ window.manager = {
         avatar.textContent = (acc.username || '?').slice(0, 1).toUpperCase();
       }
 
+      const main = document.createElement('span');
+      main.className = 'saved-item-main';
+
+      const nameRow = document.createElement('span');
+      nameRow.className = 'saved-name-row';
+
+      if (state && state.user && acc.user && acc.user.id && state.user.id === acc.user.id) {
+        const dot = document.createElement('span');
+        dot.className = 'saved-dot';
+        dot.setAttribute('title', 'Active account');
+        dot.setAttribute('aria-label', 'Active account');
+        nameRow.appendChild(dot);
+      }
+
       const name = document.createElement('span');
       name.className = 'saved-name';
       name.textContent = acc.username;
+      nameRow.appendChild(name);
+      main.appendChild(nameRow);
+
+      if (acc.user && acc.user.global_name && acc.user.global_name !== acc.username) {
+        const sub = document.createElement('span');
+        sub.className = 'saved-sub';
+        sub.textContent = '@' + acc.username + (acc.user.discriminator && acc.user.discriminator !== '0' ? '#' + acc.user.discriminator : '');
+        main.appendChild(sub);
+      }
 
       const actions = document.createElement('span');
       actions.className = 'saved-actions';
@@ -1253,7 +1285,7 @@ window.manager = {
       actions.appendChild(delBtn);
 
       li.appendChild(avatar);
-      li.appendChild(name);
+      li.appendChild(main);
       li.appendChild(actions);
       list.appendChild(li);
     });
@@ -3977,6 +4009,17 @@ window.manager = {
 
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function () {
+        cancelOperationForExit();
+        clearActiveAccount();
+        renderSavedAccounts();
+        showView('login');
+        toast('Logged out.', 'info');
+      });
+    }
+
+    const topLogoutBtn = byId('topLogoutBtn');
+    if (topLogoutBtn) {
+      topLogoutBtn.addEventListener('click', function () {
         cancelOperationForExit();
         clearActiveAccount();
         renderSavedAccounts();

@@ -110,6 +110,9 @@
         <span class="spacer"></span>
         <span id="sessionKey" class="badge session-key-badge" hidden></span>
         <span id="sessionPlan" class="badge">Open Access</span>
+        <button id="topLogoutBtn" class="icon-btn" type="button" aria-label="Log out" title="Log out" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+        </button>
         <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle theme" title="Toggle theme">
           <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.42 1.42"/></svg>
           <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -153,13 +156,21 @@
               </button>
 
               <div class="saved-box">
-                <div class="panel-head">
-                  <h2 class="panel-title">Saved Accounts</h2>
-                  <span id="savedCount" class="panel-hint">0 accounts</span>
+                <div class="saved-head">
+                  <h2 class="saved-title">Saved Accounts</h2>
+                  <span id="savedCount" class="badge saved-count">0</span>
                 </div>
-                <ul id="savedAccountsList" class="saved-list">
-                  <li class="log-empty">No saved accounts yet.</li>
-                </ul>
+                <div class="saved-scroll">
+                  <ul id="savedAccountsList" class="saved-list">
+                    <li class="saved-empty">
+                      <span class="saved-empty-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      </span>
+                      <span class="saved-empty-title">No saved accounts yet</span>
+                      <span class="saved-empty-sub">Logged-in accounts appear here for quick switching.</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
