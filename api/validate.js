@@ -3,12 +3,12 @@
 const { hashKey, parseIso, rest, json, handleOptions, readBody } = require('./_lib/supabase.js');
 
 async function currentDeviceCount(licenseId) {
-  const rows = await rest('license_activations?select=id&license_id=eq.' + encodeURIComponent(licenseId) + '&not.is.null.device_hash&discord_user_id=is.null', {});
+  const rows = await rest('license_activations?select=id&license_id=eq.' + encodeURIComponent(licenseId) + '&device_hash=not.is.null&discord_user_id=is.null', {});
   return (rows && rows.length) || 0;
 }
 
 async function currentAccountCount(licenseId) {
-  const rows = await rest('license_activations?select=discord_user_id&license_id=eq.' + encodeURIComponent(licenseId) + '&not.is.null.discord_user_id', {});
+  const rows = await rest('license_activations?select=discord_user_id&license_id=eq.' + encodeURIComponent(licenseId) + '&discord_user_id=not.is.null', {});
   return (rows && rows.length) || 0;
 }
 

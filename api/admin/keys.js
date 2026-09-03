@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
     let acts = [];
     if (true) {
       try {
-        acts = await rest('license_activations?select=license_id,id&not.is.null.discord_user_id', {}) || [];
+        acts = await rest('license_activations?select=license_id,id&discord_user_id=not.is.null', {}) || [];
       } catch (e) {
         acts = [];
       }
@@ -46,7 +46,7 @@ module.exports = async function handler(req, res) {
 
     let devices = [];
     try {
-      devices = await rest('license_activations?select=license_id,id&not.is.null.device_hash&discord_user_id=is.null', {}) || [];
+      devices = await rest('license_activations?select=license_id,id&device_hash=not.is.null&discord_user_id=is.null', {}) || [];
     } catch (e) {
       devices = [];
     }

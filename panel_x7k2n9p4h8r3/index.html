@@ -121,6 +121,7 @@
 
           <div class="toolbar">
             <input id="searchInput" class="input search" type="text" placeholder="Search by key, owner or plan...">
+            <button id="exportKeysBtn" class="btn btn-ghost mini-btn" type="button" title="Download keys as CSV">Export CSV</button>
             <span id="resultCount" class="result-count"></span>
           </div>
 
@@ -325,6 +326,7 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <script src="/mythicisadminofthisapp/admin.js?v=3"></script>
+  <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {
       document.querySelectorAll('.login-foot-year').forEach(function (n) {

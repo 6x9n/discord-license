@@ -23,6 +23,7 @@
       keysBody: g('keysBody'),
       searchInput: g('searchInput'),
       resultCount: g('resultCount'),
+      exportKeysBtn: g('exportKeysBtn'),
       emptyMsg: g('emptyMsg'),
       openCreateBtn: g('openCreateBtn'),
       statTotal: g('statTotal'),
@@ -267,10 +268,14 @@
         '<td>' + esc(k.last_validated_at ? fmtDate(k.last_validated_at) : '—') + '</td>' +
         '<td>' + esc(k.created_at ? fmtDate(k.created_at) : '—') + '</td>' +
         '<td><div class="row-actions">' +
+        '<button class="btn btn-ghost mini-btn" data-act="copy" data-id="' + esc(k.id) + '" title="Copy key">Copy</button>' +
+        '<button class="btn btn-ghost mini-btn" data-act="extend" data-id="' + esc(k.id) + '" title="Add 30 days">+30d</button>' +
         '<button class="btn btn-ghost mini-btn" data-act="edit" data-id="' + esc(k.id) + '">Edit</button>' +
         '<button class="btn btn-ghost mini-btn" data-act="clear" data-id="' + esc(k.id) + '">Reset</button>' +
         '<button class="btn btn-danger mini-btn" data-act="delete" data-id="' + esc(k.id) + '">Delete</button>' +
         '</div></td>';
+      tr.querySelector('[data-act="copy"]').addEventListener('click', function () { copyKey(k); });
+      tr.querySelector('[data-act="extend"]').addEventListener('click', function () { extendKey(k); });
       tr.querySelector('[data-act="edit"]').addEventListener('click', function () { openEdit(k); });
       tr.querySelector('[data-act="clear"]').addEventListener('click', function () { confirmClear(k); });
       tr.querySelector('[data-act="delete"]').addEventListener('click', function () { confirmDelete(k); });
@@ -306,6 +311,81 @@
     if (el.statPlans) {
       el.statPlans.textContent = plans.length;
     }
+  }
+
+  function copyKey(k) {
+    const text = k.plain_key || k.key_hash || '';
+    if (!text) {
+      toast('No key to copy.', 'error');
+      return;
+    }
+    const done = function () {
+      toast('Key copied to clipboard.', 'success');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        fallbackCopy(text);
+        done();
+      });
+    } else {
+      fallbackCopy(text);
+      done();
+    }
+  }
+
+  function fallbackCopy(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) { }
+  }
+
+  function extendKey(k) {
+    const n = k.max_days_extend || 30;
+    api('/api/admin/keys/' + k.id, {
+      method: 'PATCH',
+      body: JSON.stringify({ days: n })
+    }).then(function () {
+      toast('Extended "' + (k.plain_key || 'key') + '" by ' + n + ' days.', 'success');
+      loadKeys();
+    }).catch(function (err) {
+      toast(err && err.message ? err.message : 'Failed to extend key.', 'error');
+    });
+  }
+
+  function exportKeysCsv() {
+    if (!keys.length) {
+      toast('No keys to export.', 'info');
+      return;
+    }
+    const escCsv = function (s) {
+      const str = String(s == null ? '' : s);
+      return /[",\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+    };
+    const headers = ['Key', 'Owner', 'Plan', 'Status', 'Expires', 'Max Accounts', 'Accounts Used', 'Max Devices', 'Devices Used', 'Created'];
+    const lines = keys.map(function (k) {
+      return [k.plain_key || k.key_hash, k.owner, k.label, k.revoked ? 'Revoked' : 'Active',
+        k.expires_at ? new Date(k.expires_at).toISOString().slice(0, 10) : 'Lifetime',
+        k.max_activations || 1, k.activationCount || 0,
+        k.max_devices || 1, k.deviceCount || 0,
+        k.created_at ? new Date(k.created_at).toISOString().slice(0, 10) : ''].map(escCsv).join(',');
+    });
+    const csv = '\uFEFF' + headers.join(',') + '\n' + lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'license-keys-export.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    toast('Exported ' + keys.length + ' keys.', 'success');
   }
 
   async function loadKeys() {
@@ -738,6 +818,9 @@
     }
     if (el.keysRefreshBtn) {
       el.keysRefreshBtn.addEventListener('click', function () { loadKeys(); });
+    }
+    if (el.exportKeysBtn) {
+      el.exportKeysBtn.addEventListener('click', exportKeysCsv);
     }
 
     el.openCreateBtn.addEventListener('click', openCreate);
