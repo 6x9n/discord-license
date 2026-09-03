@@ -10,7 +10,6 @@
     return;
   }
 
-  const dot = cursorEl.querySelector('.cursor-dot');
   const ring = cursorEl.querySelector('.cursor-ring');
 
   let x = -100;
@@ -55,13 +54,12 @@
     const dX = x - ringX;
     const dY = y - ringY;
     const dist = Math.sqrt(dX * dX + dY * dY);
+
     ring.style.left = (ringX - 12) + 'px';
     ring.style.top = (ringY - 12) + 'px';
 
     const scale = Math.min(1.5, 1 + dist * 0.008);
     ring.style.transform = 'translate(0,0) scale(' + scale.toFixed(3) + ')';
-    dot.style.left = x + 'px';
-    dot.style.top = y + 'px';
 
     if (Math.abs(dist) > 2) {
       rafId = requestAnimationFrame(frame);

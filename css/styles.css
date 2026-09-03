@@ -5088,23 +5088,24 @@ html[data-theme="light"] .btn-ops:hover {
   .custom-cursor.enabled {
     display: block;
   }
-  .custom-cursor .cursor-dot {
-    position: fixed;
-    width: 6px;
-    height: 6px;
-    margin: -3px 0 0 -3px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 0 8px rgba(88, 101, 242, 0.7);
-  }
   .custom-cursor .cursor-ring {
     position: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 24px;
     height: 24px;
     margin: -12px 0 0 -12px;
     border-radius: 50%;
     border: 1.5px solid var(--accent);
     transition: opacity 0.18s var(--spring);
+  }
+  .custom-cursor .cursor-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px rgba(88, 101, 242, 0.8);
   }
   .custom-cursor .cursor-ring {
     opacity: 0.72;
