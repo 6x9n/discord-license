@@ -1,11 +1,13 @@
 {
   "rewrites": [
-    { "source": "/mythicisadminofthisapp", "destination": "/admin/index.html" },
-    { "source": "/mythicisadminofthisapp/", "destination": "/admin/index.html" },
-    { "source": "/mythicisadminofthisapp/admin.css", "destination": "/admin/admin.css" },
-    { "source": "/mythicisadminofthisapp/admin.js", "destination": "/admin/admin.js" },
-    { "source": "/admin", "destination": "/index.html" },
-    { "source": "/admin/", "destination": "/index.html" }
+    { "source": "/mythicisadminofthisapp", "destination": "/panel_x7k2n9p4h8r3/index.html" },
+    { "source": "/mythicisadminofthisapp/", "destination": "/panel_x7k2n9p4h8r3/index.html" },
+    { "source": "/mythicisadminofthisapp/admin.css", "destination": "/panel_x7k2n9p4h8r3/admin.css" },
+    { "source": "/mythicisadminofthisapp/admin.js", "destination": "/panel_x7k2n9p4h8r3/admin.js" }
+  ],
+  "redirects": [
+    { "source": "/admin", "destination": "/", "permanent": true },
+    { "source": "/admin/", "destination": "/", "permanent": true }
   ],
   "headers": [
     {

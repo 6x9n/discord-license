@@ -5068,6 +5068,19 @@ html[data-theme="light"] .btn-ops:hover {
 .lic-foot a {
   color: var(--accent);
 }
+.lic-telegram-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 2px;
+  width: 100%;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+.lic-telegram-btn svg {
+  flex-shrink: 0;
+}
 
 /* ============================================================
    Custom Cursor
