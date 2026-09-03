@@ -589,6 +589,11 @@ button {
   color: var(--warn);
 }
 
+.badge-muted {
+  background: rgba(139, 147, 167, 0.14);
+  color: var(--muted);
+}
+
 /* ---------- Row actions ---------- */
 .row-actions {
   display: flex;

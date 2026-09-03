@@ -182,6 +182,25 @@
     return '<span class="badge badge-ok">Active</span>';
   }
 
+  function activationBadge(k) {
+    const used = (k.activationCount || 0);
+    const max = (k.max_activations || 1);
+    if (used >= max) {
+      return '<span class="badge badge-ok">Activated</span>';
+    }
+    if (used > 0) {
+      return '<span class="badge badge-warn">Partial</span>';
+    }
+    return '<span class="badge badge-muted">Unused</span>';
+  }
+
+  function usageText(k) {
+    const used = (k.activationCount || 0);
+    const max = (k.max_activations || 1);
+    const left = Math.max(0, max - used);
+    return used + ' of ' + max + ' used' + (left > 0 ? ' &mdash; ' + left + ' left' : ' &mdash; full');
+  }
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -212,9 +231,10 @@
         '<td>' + (esc(k.owner || '—')) + '</td>' +
         '<td>' + esc(k.label || '—') + '</td>' +
         '<td>' + duration + '</td>' +
+        '<td>' + activationBadge(k) + '</td>' +
         '<td>' +
           '<div class="acc-bar"><div class="acc-fill" style="width:' + usedWidth + '%"></div></div>' +
-          '<span class="acc-count">' + esc(activations) + ' / ' + esc(maxAccounts) + '</span>' +
+          '<span class="acc-count">' + usageText(k) + '</span>' +
         '</td>' +
         '<td>' + statusBadge(k) + '</td>' +
         '<td>' + esc(k.last_validated_at ? fmtDate(k.last_validated_at) : '—') + '</td>' +
