@@ -16,8 +16,10 @@
       loginBtn: g('loginBtn'),
       logoutBtn: g('logoutBtn'),
       overviewView: g('overviewView'),
-      keysView: g('keysView'),
+      settingsView: g('settingsView'),
       overviewClock: g('overviewClock'),
+      overviewRefreshBtn: g('overviewRefreshBtn'),
+      keysRefreshBtn: g('keysRefreshBtn'),
       keysBody: g('keysBody'),
       searchInput: g('searchInput'),
       resultCount: g('resultCount'),
@@ -26,7 +28,8 @@
       statTotal: g('statTotal'),
       statActive: g('statActive'),
       statRevoked: g('statRevoked'),
-      statTable: g('statTable'),
+      statAccounts: g('statAccounts'),
+      statPlans: g('statPlans'),
       keyModal: g('keyModal'),
       modalTitle: g('modalTitle'),
       newKeyBox: g('newKeyBox'),
@@ -40,11 +43,27 @@
       fLabel: g('fLabel'),
       fDays: g('fDays'),
       fMax: g('fMax'),
+      fMaxDevices: g('fMaxDevices'),
       fNotes: g('fNotes'),
       fRevoked: g('fRevoked'),
       keyFormMsg: g('keyFormMsg'),
       cancelModalBtn: g('cancelModalBtn'),
       submitKeyBtn: g('submitKeyBtn'),
+      openPlanCreateBtn: g('openPlanCreateBtn'),
+      planModal: g('planModal'),
+      planModalTitle: g('planModalTitle'),
+      planForm: g('planForm'),
+      planEditId: g('planEditId'),
+      planName: g('planName'),
+      planMaxAccounts: g('planMaxAccounts'),
+      planMaxDevices: g('planMaxDevices'),
+      planDuration: g('planDuration'),
+      planNotes: g('planNotes'),
+      planFormMsg: g('planFormMsg'),
+      planCancelBtn: g('planCancelBtn'),
+      submitPlanBtn: g('submitPlanBtn'),
+      plansBody: g('plansBody'),
+      plansEmptyMsg: g('plansEmptyMsg'),
       confirmModal: g('confirmModal'),
       confirmText: g('confirmText'),
       confirmMsg: g('confirmMsg'),
@@ -55,42 +74,16 @@
   })();
 
   let keys = [];
+  let plans = [];
   let pending = null;
 
-  // Predefined plan presets: name, default account limit, default instructions.
-  // 'custom' leaves plan/accounts/notes free for the admin to define.
-  const PLANS = {
-    trial: {
-      name: 'Trial',
-      maxAccounts: 1,
-      durationHint: 7,
-      notes: 'Welcome to the Trial plan!\n\nWhat you get:\n\u2022 Test the Discord tool with limited access.\n\u2022 1 account allowed on this key.\n\u2022 Full feature review before upgrading.\n\nHow to start:\n\u2022 Open the tool and paste your license key to activate.\n\u2022 Load the account and try the dashboard.\n\nNeed more? Contact the owner on Telegram to upgrade to Standard, Pro or Vip.'
-    },
-    standard: {
-      name: 'Standard',
-      maxAccounts: 1,
-      durationHint: 30,
-      notes: 'Welcome to the Standard plan!\n\nWhat you get:\n\u2022 1 account allowed on this key.\n\u2022 Core dashboard features and saved accounts.\n\u2022 Standard support.\n\nHow to start:\n\u2022 Open the tool and paste your license key to activate.\n\u2022 Your account usage shows in the activation screen.\n\nNeed help? Contact the owner on Telegram: https://t.me/mythicxd'
-    },
-    pro: {
-      name: 'Pro',
-      maxAccounts: 3,
-      durationHint: 30,
-      notes: 'Welcome to the Pro plan!\n\nWhat you get:\n\u2022 Up to 3 accounts on this key.\n\u2022 All dashboard features and automations.\n\u2022 Priority support.\n\nHow to start:\n\u2022 Activate with your key, then switch between up to 3 accounts.\n\u2022 Watch your usage in the activation confirmation.\n\nLimit reached? Use a higher plan (Vip) or contact the owner.'
-    },
-    vip: {
-      name: 'Vip',
-      maxAccounts: 10,
-      durationHint: 90,
-      notes: 'Welcome to the Vip plan!\n\nWhat you get:\n\u2022 Up to 10 accounts on this key.\n\u2022 Everything in Pro plus fully unlocked limits.\n\u2022 Direct support from the owner.\n\nHow to start:\n\u2022 Activate with your key and manage up to 10 accounts.\n\u2022 Your activation screen shows live usage.\n\nQuestions? Contact the owner on Telegram: https://t.me/mythicxd'
-    },
-    custom: {
-      name: '',
-      maxAccounts: null,
-      durationHint: null,
-      notes: ''
-    }
-  };
+  // Static fallback presets used only if the plans endpoint is unavailable.
+  const FALLBACK_PLANS = [
+    { name: 'Trial', max_accounts: 1, max_devices: 1, duration_days: 7 },
+    { name: 'Standard', max_accounts: 1, max_devices: 1, duration_days: 30 },
+    { name: 'Pro', max_accounts: 3, max_devices: 1, duration_days: 30 },
+    { name: 'Vip', max_accounts: 10, max_devices: 1, duration_days: 90 }
+  ];
 
   function getSecret() {
     return sessionStorage.getItem(SES_KEY) || '';
@@ -117,6 +110,11 @@
   function setFormMsg(text, kind) {
     el.keyFormMsg.textContent = text || '';
     el.keyFormMsg.className = 'msg' + (kind ? ' msg-' + kind : '');
+  }
+
+  function setPlanFormMsg(text, kind) {
+    el.planFormMsg.textContent = text || '';
+    el.planFormMsg.className = 'msg' + (kind ? ' msg-' + kind : '');
   }
 
   async function api(path, options) {
@@ -201,6 +199,15 @@
     return used + ' of ' + max + ' used' + (left > 0 ? ' &mdash; ' + left + ' left' : ' &mdash; full');
   }
 
+  function deviceText(k) {
+    const used = (k.deviceCount || 0);
+    const max = (k.max_devices || 1);
+    if (used >= max) {
+      return '<span class="badge badge-warn">' + used + '/' + max + ' full</span>';
+    }
+    return '<span class="muted-text">' + used + ' / ' + max + '</span>';
+  }
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -231,6 +238,7 @@
         '<td>' + (esc(k.owner || '—')) + '</td>' +
         '<td>' + esc(k.label || '—') + '</td>' +
         '<td>' + duration + '</td>' +
+        '<td>' + deviceText(k) + '</td>' +
         '<td>' + activationBadge(k) + '</td>' +
         '<td>' +
           '<div class="acc-bar"><div class="acc-fill" style="width:' + usedWidth + '%"></div></div>' +
@@ -273,7 +281,12 @@
     el.statTotal.textContent = total;
     el.statActive.textContent = active;
     el.statRevoked.textContent = revoked;
-    el.statTable.textContent = acts;
+    if (el.statAccounts) {
+      el.statAccounts.textContent = acts;
+    }
+    if (el.statPlans) {
+      el.statPlans.textContent = plans.length;
+    }
   }
 
   async function loadKeys() {
@@ -288,25 +301,61 @@
     }
   }
 
-  function showLogin() {
-    el.appView.hidden = true;
-    el.loginView.hidden = false;
-    el.secret.focus();
-  }
-
-  function showApp() {
-    el.loginView.hidden = true;
-    el.appView.hidden = false;
-    loadKeys();
-    setNav('overview');
-  }
-
-  function setNav(name) {
-    el.overviewView.hidden = name !== 'overview';
-    el.keysView.hidden = name !== 'keys';
-    document.querySelectorAll('.sidebar-link[data-nav]').forEach(function (a) {
-      a.classList.toggle('active', a.getAttribute('data-nav') === name);
+  function buildPresetOptions() {
+    if (!el.fPreset) {
+      return;
+    }
+    const sel = el.fPreset;
+    const current = sel.value;
+    const list = Array.isArray(plans) && plans.length ? plans : FALLBACK_PLANS;
+    let html = '<option value="">Choose a plan...</option>';
+    list.forEach(function (p) {
+      html += '<option value="' + esc(p.name) + '" data-maxac="' + (p.max_accounts != null ? p.max_accounts : 1) + '" data-maxdev="' + (p.max_devices != null ? p.max_devices : 1) + '" data-dur="' + (p.duration_days != null ? p.duration_days : 0) + '" data-notes="' + esc(p.notes || '') + '">' + esc(p.name) + '</option>';
     });
+    html += '<option value="__custom">Custom Plan</option>';
+    sel.innerHTML = html;
+    // Restore selection if it matches a plan name.
+    const wanted = current || (Array.apply(null, document.querySelectorAll('#fPreset option')).some(function (o) { return o.value === current; }) ? current : '');
+    sel.value = wanted;
+  }
+
+  function lookupPlanOption(name) {
+    const escName = String(name || '').replace(/"/g, '&quot;');
+    const opt = el.fPreset.querySelector('option[value="' + escName + '"]');
+    if (!opt) {
+      return null;
+    }
+    return {
+      name: name,
+      max_accounts: parseInt(opt.getAttribute('data-maxac'), 10),
+      max_devices: parseInt(opt.getAttribute('data-maxdev'), 10),
+      duration_days: parseInt(opt.getAttribute('data-dur'), 10),
+      notes: opt.getAttribute('data-notes') || ''
+    };
+  }
+
+  function applyPreset() {
+    const val = el.fPreset.value;
+    if (!val || val === '__custom') {
+      return;
+    }
+    const plan = lookupPlanOption(val);
+    if (!plan) {
+      return;
+    }
+    el.fLabel.value = plan.name;
+    if (plan.max_accounts) {
+      el.fMax.value = String(plan.max_accounts);
+    }
+    if (plan.max_devices) {
+      el.fMaxDevices.value = String(plan.max_devices);
+    }
+    if (plan.duration_days !== undefined && plan.duration_days > 0) {
+      el.fDays.value = String(plan.duration_days);
+    }
+    if (plan.notes) {
+      el.fNotes.value = plan.notes;
+    }
   }
 
   function openCreate() {
@@ -319,42 +368,6 @@
     el.fOwner.focus();
   }
 
-  function applyPreset() {
-    const val = el.fPreset.value;
-    const plan = PLANS[val];
-    if (!plan) {
-      return;
-    }
-    if (val === 'custom') {
-      return;
-    }
-    el.fLabel.value = plan.name;
-    if (plan.maxAccounts !== null) {
-      el.fMax.value = String(plan.maxAccounts);
-    }
-    if (plan.durationHint !== null) {
-      el.fDays.value = String(plan.durationHint);
-    }
-    if (plan.notes) {
-      el.fNotes.value = plan.notes;
-    }
-  }
-
-  function matchPreset(k) {
-    const name = String(k.label || '').trim().toLowerCase();
-    let found = '';
-    Object.keys(PLANS).forEach(function (key) {
-      const val = PLANS[key];
-      if (!val.durationHint) {
-        return;
-      }
-      if (name === String(val.name).toLowerCase()) {
-        found = key;
-      }
-    });
-    return found;
-  }
-
   function openEdit(k) {
     resetForm();
     el.modalTitle.textContent = 'Edit License Key';
@@ -365,10 +378,11 @@
     const dl = daysLeft(k.expires_at);
     el.fDays.value = dl === null ? '' : String(dl);
     el.fMax.value = k.max_activations || 1;
+    el.fMaxDevices.value = k.max_devices || 1;
     el.fNotes.value = k.notes || '';
     el.fRevoked.checked = !!k.revoked;
-    const preset = matchPreset(k);
-    el.fPreset.value = preset || '';
+    buildPresetOptions();
+    el.fPreset.value = k.label && Array.prototype.some.call(el.fPreset.querySelectorAll('option'), function (o) { return o.value === k.label; }) ? k.label : '';
     el.keyModal.hidden = false;
   }
 
@@ -378,6 +392,7 @@
     el.fLabel.value = '';
     el.fDays.value = '';
     el.fMax.value = '1';
+    el.fMaxDevices.value = '1';
     el.fNotes.value = '';
     el.fRevoked.checked = false;
     setFormMsg('');
@@ -416,7 +431,7 @@
 
   function confirmClear(k) {
     showConfirm(
-      'Reset all account activations for this key? Users will need to reactivate.',
+      'Reset all activations (devices + accounts) for this key? Users will need to reactivate.',
       async function () {
         await api('/api/admin/keys/' + encodeURIComponent(k.id) + '/activations', { method: 'DELETE' });
         toast('Activations cleared.');
@@ -436,6 +451,7 @@
       label: el.fLabel.value.trim() || 'Standard',
       days: daysRaw === '' ? 0 : parseInt(daysRaw, 10),
       max_activations: parseInt(el.fMax.value, 10) || 1,
+      max_devices: parseInt(el.fMaxDevices.value, 10) || 1,
       notes: el.fNotes.value.trim(),
       revoked: el.fRevoked.checked
     };
@@ -465,13 +481,165 @@
     }
   }
 
+  // ---------- Plans ----------
+
+  async function loadPlans() {
+    try {
+      const res = await api('/api/admin/plans');
+      plans = res.data || [];
+      renderPlans();
+      buildPresetOptions();
+    } catch (err) {
+      plans = [];
+      renderPlans();
+      buildPresetOptions();
+      toast(err.message, 'error');
+    }
+  }
+
+  function renderPlans() {
+    if (!el.plansBody) {
+      return;
+    }
+    el.plansBody.innerHTML = '';
+    plans.forEach(function (p) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><strong>' + esc(p.name || '—') + '</strong></td>' +
+        '<td>' + esc(String(p.max_accounts != null ? p.max_accounts : 1)) + '</td>' +
+        '<td>' + esc(String(p.max_devices != null ? p.max_devices : 1)) + '</td>' +
+        '<td>' + ((p.duration_days > 0) ? esc(String(p.duration_days)) : '<span class="badge badge-lifetime">Lifetime</span>') + '</td>' +
+        '<td class="note-cell">' + esc(p.notes || '—') + '</td>' +
+        '<td>' + esc(p.created_at ? fmtDate(p.created_at) : '—') + '</td>' +
+        '<td><div class="row-actions">' +
+        '<button class="btn btn-ghost mini-btn" data-plan="edit" data-id="' + esc(p.id) + '">Edit</button>' +
+        '<button class="btn btn-danger mini-btn" data-plan="delete" data-id="' + esc(p.id) + '">Delete</button>' +
+        '</div></td>';
+      tr.querySelector('[data-plan="edit"]').addEventListener('click', function () { openPlanEdit(p); });
+      tr.querySelector('[data-plan="delete"]').addEventListener('click', function () { confirmDeletePlan(p); });
+      el.plansBody.appendChild(tr);
+    });
+    if (el.plansEmptyMsg) {
+      el.plansEmptyMsg.hidden = plans.length !== 0;
+    }
+    renderStats();
+  }
+
+  function openPlanCreate() {
+    el.planModalTitle.textContent = 'New Plan';
+    el.planEditId.value = '';
+    el.planName.value = '';
+    el.planMaxAccounts.value = '1';
+    el.planMaxDevices.value = '1';
+    el.planDuration.value = '30';
+    el.planNotes.value = '';
+    setPlanFormMsg('');
+    el.planModal.hidden = false;
+    el.planName.focus();
+  }
+
+  function openPlanEdit(p) {
+    el.planModalTitle.textContent = 'Edit Plan';
+    el.planEditId.value = p.id;
+    el.planName.value = p.name || '';
+    el.planMaxAccounts.value = String(p.max_accounts != null ? p.max_accounts : 1);
+    el.planMaxDevices.value = String(p.max_devices != null ? p.max_devices : 1);
+    el.planDuration.value = String(p.duration_days != null ? p.duration_days : 0);
+    el.planNotes.value = p.notes || '';
+    setPlanFormMsg('');
+    el.planModal.hidden = false;
+    el.planName.focus();
+  }
+
+  function closePlanModal() {
+    el.planModal.hidden = true;
+  }
+
+  function confirmDeletePlan(p) {
+    showConfirm(
+      'Delete the "' + (p.name || '') + '" plan template? Existing keys are not affected.',
+      async function () {
+        await api('/api/admin/plans/' + encodeURIComponent(p.id), { method: 'DELETE' });
+        toast('Plan deleted.');
+        closeConfirm();
+        loadPlans();
+      },
+      'Delete Plan'
+    );
+  }
+
+  async function handlePlanSubmit(e) {
+    e.preventDefault();
+    const id = el.planEditId.value;
+    const body = {
+      name: el.planName.value.trim(),
+      max_accounts: parseInt(el.planMaxAccounts.value, 10) || 1,
+      max_devices: parseInt(el.planMaxDevices.value, 10) || 1,
+      duration_days: parseInt(el.planDuration.value, 10) || 0,
+      notes: el.planNotes.value.trim()
+    };
+    if (!body.name) {
+      setPlanFormMsg('Plan name is required.', 'error');
+      return;
+    }
+    el.submitPlanBtn.disabled = true;
+    setPlanFormMsg('Saving...', 'info');
+    try {
+      if (id) {
+        await api('/api/admin/plans/' + encodeURIComponent(id), { method: 'PATCH', body: body });
+        toast('Plan updated.');
+      } else {
+        await api('/api/admin/plans', { method: 'POST', body: body });
+        toast('Plan created.');
+      }
+      setPlanFormMsg('');
+      closePlanModal();
+      loadPlans();
+    } catch (err) {
+      setPlanFormMsg(err.message, 'error');
+    } finally {
+      el.submitPlanBtn.disabled = false;
+    }
+  }
+
   function tickClock() {
     if (el.overviewClock) {
       el.overviewClock.textContent = new Date().toLocaleString();
     }
   }
 
+  function setNav(name) {
+    if (el.overviewView) {
+      el.overviewView.hidden = name !== 'overview';
+    }
+    if (el.settingsView) {
+      el.settingsView.hidden = name !== 'settings';
+    }
+    document.querySelectorAll('.sidebar-link[data-nav]').forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('data-nav') === name);
+    });
+    if (name === 'settings') {
+      loadPlans();
+    }
+  }
+
+  function showLogin() {
+    el.appView.hidden = true;
+    el.loginView.hidden = false;
+    el.secret.focus();
+  }
+
+  function showApp() {
+    el.loginView.hidden = true;
+    el.appView.hidden = false;
+    loadKeys();
+    loadPlans();
+    setNav('overview');
+  }
+
   function init() {
+    buildPresetOptions();
+
     if (getSecret()) {
       showApp();
     } else {
@@ -515,13 +683,20 @@
       });
     });
 
+    if (el.overviewRefreshBtn) {
+      el.overviewRefreshBtn.addEventListener('click', function () { loadKeys(); loadPlans(); });
+    }
+    if (el.keysRefreshBtn) {
+      el.keysRefreshBtn.addEventListener('click', function () { loadKeys(); });
+    }
+
     el.openCreateBtn.addEventListener('click', openCreate);
     el.applyPresetBtn.addEventListener('click', function () {
       applyPreset();
       toast('Plan preset applied.');
     });
     el.fPreset.addEventListener('change', function () {
-      if (el.fPreset.value === 'custom') {
+      if (el.fPreset.value === '__custom') {
         el.fNotes.focus();
       } else if (el.fPreset.value) {
         applyPreset();
@@ -535,6 +710,16 @@
       }
     });
     el.keyForm.addEventListener('submit', handleKeySubmit);
+
+    el.openPlanCreateBtn.addEventListener('click', openPlanCreate);
+    el.planCancelBtn.addEventListener('click', closePlanModal);
+    el.planModal.addEventListener('click', function (e) {
+      if (e.target === el.planModal) {
+        closePlanModal();
+      }
+    });
+    el.planForm.addEventListener('submit', handlePlanSubmit);
+
     el.confirmCancel.addEventListener('click', closeConfirm);
     el.confirmOk.addEventListener('click', function () {
       el.confirmOk.disabled = true;

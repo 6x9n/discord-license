@@ -8,6 +8,8 @@
   const msg = document.getElementById('licMsg');
   const submitBtn = document.getElementById('licSubmit');
 
+  let deviceLimitHit = false;
+
   function setMsg(text, kind) {
     if (!msg) {
       return;
@@ -69,7 +71,7 @@
     }
     setMsg('Validating key...', 'info');
 
-    const payload = { key: String(key || '').trim() };
+    const payload = { key: String(key || '').trim(), deviceId: deviceId() };
 
     return fetch(String(CONFIG.apiBase).replace(/\/+$/, '') + '/api/activate', {
       method: 'POST',
@@ -101,7 +103,9 @@
             key: String(key || '').trim(),
             notes: data.notes || '',
             maxActivations: data.maxActivations || 1,
-            activationsUsed: data.activationsUsed || 0
+            maxDevices: data.maxDevices || 1,
+            activationsUsed: data.activationsUsed || 0,
+            devicesUsed: data.devicesUsed || 0
           };
           if (manager && typeof manager.setLicenseCache === 'function') {
             manager.setLicenseCache(licenseInfo);
@@ -113,10 +117,18 @@
           return true;
         }
         const err = (body && (body.error || body.message)) || 'Invalid license key.';
-        throw new Error(err);
+        const errObj = new Error(err);
+        if (body && (body.code === 'DEVICE_LIMIT')) {
+          errObj.deviceLimit = true;
+        }
+        throw errObj;
       })
       .catch(function (err) {
-        const message = (err && err.message) ? err.message : 'Unable to validate key. Check your connection.';
+        let message = (err && err.message) ? err.message : 'Unable to validate key. Check your connection.';
+        deviceLimitHit = !!(err && err.deviceLimit);
+        if (!deviceLimitHit) {
+          message = (err && err.message) ? err.message : 'Unable to validate key. Check your connection.';
+        }
         setMsg(message, 'error');
         if (submitBtn) {
           submitBtn.disabled = false;

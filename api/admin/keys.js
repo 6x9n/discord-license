@@ -36,10 +36,19 @@ module.exports = async function handler(req, res) {
     }
 
     let acts = [];
+    if (true) {
+      try {
+        acts = await rest('license_activations?select=license_id,id&not.is.null.discord_user_id', {}) || [];
+      } catch (e) {
+        acts = [];
+      }
+    }
+
+    let devices = [];
     try {
-      acts = await rest('license_activations?select=license_id,id', {}) || [];
+      devices = await rest('license_activations?select=license_id,id&not.is.null.device_hash&discord_user_id=is.null', {}) || [];
     } catch (e) {
-      acts = [];
+      devices = [];
     }
 
     const counts = {};
@@ -48,9 +57,16 @@ module.exports = async function handler(req, res) {
       counts[lid] = (counts[lid] || 0) + 1;
     });
 
+    const deviceCounts = {};
+    devices.forEach(function (d) {
+      const lid = d.license_id;
+      deviceCounts[lid] = (deviceCounts[lid] || 0) + 1;
+    });
+
     const rowsOut = (rows || []).map(function (r) {
       const copy = Object.assign({}, r);
       copy.activationCount = counts[r.id] || 0;
+      copy.deviceCount = deviceCounts[r.id] || 0;
       return copy;
     });
 
@@ -70,6 +86,7 @@ module.exports = async function handler(req, res) {
       expiresIso = String(body.expires_at);
     }
     const maxActivations = parseInt(body.max_activations, 10);
+    const maxDevices = parseInt(body.max_devices, 10);
     const activatedAt = new Date().toISOString();
     const plain = generateKey();
     const payload = {
@@ -80,6 +97,7 @@ module.exports = async function handler(req, res) {
       notes: notes || null,
       expires_at: expiresIso,
       max_activations: isNaN(maxActivations) || maxActivations < 1 ? 1 : maxActivations,
+      max_devices: isNaN(maxDevices) || maxDevices < 1 ? 1 : maxDevices,
       revoked: false,
       created_at: activatedAt
     };
@@ -97,6 +115,7 @@ module.exports = async function handler(req, res) {
           notes: row.notes,
           expires_at: row.expires_at,
           max_activations: row.max_activations,
+          max_devices: row.max_devices,
           revoked: row.revoked,
           created_at: row.created_at
         }

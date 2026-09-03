@@ -54,10 +54,18 @@ window.manager = {
       return Promise.resolve(false);
     }
     const url = String(window.CONFIG.apiBase || '').replace(/\/+$/, '') + '/api/activate';
+    let deviceId = '';
+    try {
+      deviceId = localStorage.getItem('dmt.device.id') || '';
+    } catch (e) { }
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: key, accountId: String(accountId || '').trim() })
+      body: JSON.stringify({
+        key: key,
+        accountId: String(accountId || '').trim(),
+        deviceId: String(deviceId).trim()
+      })
     })
       .then(function (res) {
         return res.json().catch(function () { return null; });
@@ -70,6 +78,8 @@ window.manager = {
         if (d.maxActivations || d.activationsUsed !== undefined) {
           cache.maxActivations = d.maxActivations;
           cache.activationsUsed = d.activationsUsed;
+          cache.maxDevices = d.maxDevices;
+          cache.devicesUsed = d.devicesUsed;
           try {
             this.setLicenseCache(cache);
           } catch (e) { }

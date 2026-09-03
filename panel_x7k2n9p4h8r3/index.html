@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css">
+  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=3">
 </head>
 <body>
   <div id="loginView" class="view login-view">
@@ -43,9 +43,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13h6V4H4v9zM14 20h6v-9h-6v9zM4 20h6v-4H4v4zM14 13h6v-4h-6v4z"/></svg>
           <span>Overview</span>
         </a>
-        <a class="sidebar-link" href="#" data-nav="keys">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-          <span>License Keys</span>
+        <a class="sidebar-link" href="#" data-nav="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
         </a>
         <a class="sidebar-link" href="/" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10"/></svg>
@@ -62,10 +62,17 @@
         <header class="page-head">
           <div>
             <h2 class="page-title">Overview</h2>
-            <p class="page-sub">Live view of your license inventory.</p>
+            <p class="page-sub">Live view of your license inventory and plan templates.</p>
           </div>
-          <div class="head-meta"><span id="overviewClock" class="clock"></span></div>
+          <div class="head-actions">
+            <button id="overviewRefreshBtn" class="btn btn-ghost head-btn" type="button" title="Refresh data">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+              Refresh
+            </button>
+            <span id="overviewClock" class="clock"></span>
+          </div>
         </header>
+
         <div class="stats">
           <div class="stat">
             <div class="stat-icon accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div>
@@ -84,56 +91,101 @@
           </div>
           <div class="stat">
             <div class="stat-icon dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></div>
-            <div id="statTable" class="stat-num">0</div>
+            <div id="statAccounts" class="stat-num">0</div>
             <div class="stat-label">Accounts In Use</div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 9h8M8 13h5"/></svg></div>
+            <div id="statPlans" class="stat-num">0</div>
+            <div class="stat-label">Plans</div>
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-head">
+            <div>
+              <h3 class="section-title">License Keys</h3>
+              <p class="section-sub">Create, edit and manage every license.</p>
+            </div>
+            <div class="head-actions">
+              <button id="keysRefreshBtn" class="btn btn-ghost head-btn" type="button" title="Refresh keys">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+                Refresh
+              </button>
+              <button id="openCreateBtn" class="btn btn-primary head-btn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+                New Key
+              </button>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <input id="searchInput" class="input search" type="text" placeholder="Search by key, owner or plan...">
+            <span id="resultCount" class="result-count"></span>
+          </div>
+
+          <div class="card table-card">
+            <div class="table-wrap">
+              <table class="keys-table">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Owner</th>
+                    <th>Plan</th>
+                    <th>Duration</th>
+                    <th>Devices</th>
+                    <th>Activation</th>
+                    <th>Accounts</th>
+                    <th>Status</th>
+                    <th>Last Valid</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="keysBody"></tbody>
+              </table>
+            </div>
+            <div id="emptyMsg" class="empty" hidden>No keys found.</div>
           </div>
         </div>
       </section>
 
-      <section id="keysView" class="subview" hidden>
+      <section id="settingsView" class="subview" hidden>
         <header class="page-head">
           <div>
-            <h2 class="page-title">License Keys</h2>
-            <p class="page-sub">Create, edit and manage every license.</p>
+            <h2 class="page-title">Settings</h2>
+            <p class="page-sub">Manage plan templates used when creating license keys.</p>
           </div>
-          <button id="openCreateBtn" class="btn btn-primary head-btn" type="button">
+          <button id="openPlanCreateBtn" class="btn btn-primary head-btn" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-            New Key
+            New Plan
           </button>
         </header>
-
-        <div class="toolbar">
-          <input id="searchInput" class="input search" type="text" placeholder="Search by key, owner or plan...">
-          <span id="resultCount" class="result-count"></span>
-        </div>
 
         <div class="card table-card">
           <div class="table-wrap">
             <table class="keys-table">
               <thead>
                 <tr>
-                  <th>Key</th>
-                  <th>Owner</th>
-                  <th>Plan</th>
-                  <th>Duration</th>
-                  <th>Activation</th>
-                  <th>Accounts</th>
-                  <th>Status</th>
-                  <th>Last Valid</th>
+                  <th>Name</th>
+                  <th>Max Accounts</th>
+                  <th>Max Devices</th>
+                  <th>Duration (days)</th>
+                  <th>Notes</th>
                   <th>Created</th>
                   <th>Actions</th>
                 </tr>
               </thead>
-              <tbody id="keysBody"></tbody>
+              <tbody id="plansBody"></tbody>
             </table>
           </div>
-          <div id="emptyMsg" class="empty" hidden>No keys found.</div>
+          <div id="plansEmptyMsg" class="empty" hidden>No plans yet. Add your first plan template.</div>
         </div>
       </section>
     </main>
   </div>
 
-  <!-- Create / Edit modal -->
+  <!-- Key create / edit modal -->
   <div id="keyModal" class="modal" hidden>
     <div class="modal-card">
       <h3 id="modalTitle" class="modal-title">New License Key</h3>
@@ -151,15 +203,10 @@
           <div class="preset-row">
             <select id="fPreset" class="input select">
               <option value="">Choose a plan...</option>
-              <option value="trial">Trial</option>
-              <option value="standard">Standard</option>
-              <option value="pro">Pro</option>
-              <option value="vip">Vip</option>
-              <option value="custom">Custom Plan</option>
             </select>
             <button id="applyPresetBtn" class="btn btn-ghost mini-btn" type="button">Apply</button>
           </div>
-          <span class="field-hint">Pick a preset to auto-fill plan, accounts and instructions.</span>
+          <span class="field-hint">Pick a preset to auto-fill plan, limits and instructions.</span>
         </div>
         <div class="form-grid">
           <div class="form-field">
@@ -182,6 +229,14 @@
             <input id="fMax" class="input" type="number" min="1" value="1">
           </div>
         </div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label" for="fMaxDevices">Max Devices</label>
+            <input id="fMaxDevices" class="input" type="number" min="1" value="1">
+            <span class="field-hint">Devices that may activate this key.</span>
+          </div>
+          <div class="form-field"></div>
+        </div>
         <div class="form-field">
           <label class="field-label" for="fNotes">Plan Instructions</label>
           <textarea id="fNotes" class="input textarea" placeholder="How to use, features, support link..."></textarea>
@@ -196,6 +251,44 @@
         <div class="modal-actions">
           <button id="cancelModalBtn" class="btn btn-ghost" type="button">Cancel</button>
           <button id="submitKeyBtn" class="btn btn-primary" type="submit">Save Key</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Plan create / edit modal -->
+  <div id="planModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 id="planModalTitle" class="modal-title">New Plan</h3>
+      <form id="planForm">
+        <input id="planEditId" type="hidden">
+        <div class="form-field">
+          <label class="field-label" for="planName">Plan Name</label>
+          <input id="planName" class="input" type="text" placeholder="Pro">
+        </div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label" for="planMaxAccounts">Max Accounts</label>
+            <input id="planMaxAccounts" class="input" type="number" min="1" value="1">
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="planMaxDevices">Max Devices</label>
+            <input id="planMaxDevices" class="input" type="number" min="1" value="1">
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="field-label" for="planDuration">Duration (days)</label>
+          <input id="planDuration" class="input" type="number" min="0" step="1" value="30">
+          <span class="field-hint">0 = lifetime.</span>
+        </div>
+        <div class="form-field">
+          <label class="field-label" for="planNotes">Plan Instructions</label>
+          <textarea id="planNotes" class="input textarea" placeholder="What this plan includes, how to use it..."></textarea>
+        </div>
+        <div id="planFormMsg" class="msg" role="status"></div>
+        <div class="modal-actions">
+          <button id="planCancelBtn" class="btn btn-ghost" type="button">Cancel</button>
+          <button id="submitPlanBtn" class="btn btn-primary" type="submit">Save Plan</button>
         </div>
       </form>
     </div>
@@ -216,7 +309,7 @@
 
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="/mythicisadminofthisapp/admin.js?v=2"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=3"></script>
   <script>
     (function () {
       document.querySelectorAll('.login-foot-year').forEach(function (n) {

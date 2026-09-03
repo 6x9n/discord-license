@@ -36,6 +36,10 @@ module.exports = async function handler(req, res) {
       const m = parseInt(body.max_activations, 10);
       patch.max_activations = isNaN(m) || m < 1 ? 1 : m;
     }
+    if (body.max_devices !== undefined) {
+      const m = parseInt(body.max_devices, 10);
+      patch.max_devices = isNaN(m) || m < 1 ? 1 : m;
+    }
     if (body.revoked !== undefined) patch.revoked = !!body.revoked;
     try {
       const updated = await rest('license_keys?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: patch, headers: { 'Prefer': 'return=representation' } });
