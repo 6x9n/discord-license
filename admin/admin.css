@@ -697,6 +697,14 @@ button {
   border-left-color: var(--error);
 }
 
+.login-foot {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
 @keyframes toastIn {
   from {
     opacity: 0;

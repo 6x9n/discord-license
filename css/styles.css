@@ -5289,3 +5289,39 @@ html[data-theme="light"] .btn-ops:hover {
 #welcomeOk {
   margin-top: 4px;
 }
+
+/* ============================================================
+   Footer / Copyright
+   ============================================================ */
+.site-footer {
+  border-top: 1px solid var(--border-glass);
+  background: rgba(11, 17, 23, 0.6);
+  padding: 18px 22px;
+  margin-top: 32px;
+}
+.site-footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+.footer-brand {
+  font-weight: 700;
+  color: var(--text-2);
+}
+.footer-copy {
+  color: var(--muted);
+}
+.footer-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.footer-link:hover {
+  text-decoration: underline;
+}

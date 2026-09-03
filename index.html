@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Discord Account Manager</title>
+  <link rel="icon" type="image/png" href="assets/images/favicon.png">
+  <link rel="icon" type="image/x-icon" href="assets/images/icon.ico">
+  <link rel="apple-touch-icon" href="assets/images/favicon.png">
+  <meta name="theme-color" content="#5865f2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -842,8 +846,24 @@
     <span class="cursor-ring"><span class="cursor-dot"></span></span>
   </div>
 
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <span class="footer-brand">Discord Account Manager</span>
+      <span class="footer-copy">&copy; <span id="footerYear"></span> Mythic. All rights reserved.</span>
+      <a class="footer-link" href="https://t.me/mythicxd" target="_blank" rel="noopener">Contact seller</a>
+    </div>
+  </footer>
+
   <script src="js/manager.js?v=4.8"></script>
   <script src="js/license.js?v=1"></script>
   <script src="js/cursor.js?v=1"></script>
+  <script>
+    (function () {
+      var y = document.getElementById('footerYear');
+      if (y) {
+        y.textContent = new Date().getFullYear();
+      }
+    })();
+  </script>
 </body>
 </html>
