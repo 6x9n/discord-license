@@ -4078,11 +4078,15 @@ window.manager = {
     }
 
     if (logoutBtn) {
+      // Profile-card logout: sign out the CURRENT Discord account only and
+      // return to the saved-accounts list so the user can switch accounts. It
+      // does NOT deactivate the license key or sign out of the license session.
       logoutBtn.addEventListener('click', function () {
-        const modal = byId('logoutConfirmModal');
-        if (modal) {
-          modal.classList.add('active');
-        }
+        cancelOperationForExit();
+        clearActiveAccount();
+        renderSavedAccounts();
+        showView('login');
+        toast('Logged out of current account.', 'info');
       });
     }
 
@@ -5029,14 +5033,24 @@ window.manager = {
     }
     if (deactivate) {
       deactivate.addEventListener('click', function () {
-        if (!window.confirm('Deactivate the current session and keep saved accounts?')) {
+        if (!window.confirm('Deactivate the license on this device? It will be released so you can use it elsewhere.')) {
           return;
+        }
+        // Release the device on the server so the key is re-marked as unused,
+        // then clear the local license session and return to the license screen.
+        releaseActiveKey();
+        if (window.manager && typeof window.manager.clearLicenseCache === 'function') {
+          window.manager.clearLicenseCache();
         }
         cancelOperationForExit();
         clearActiveAccount();
         renderSavedAccounts();
+        renderTopbar();
         showView('login');
-        toast('Session deactivated.', 'info');
+        if (window.licenseGate && typeof window.licenseGate.lock === 'function') {
+          window.licenseGate.lock();
+        }
+        toast('License deactivated on this device.', 'info');
       });
     }
     if (clearAll) {
