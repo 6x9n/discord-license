@@ -50,17 +50,16 @@
   }, false);
 
   // Devtools-open detection (approximate, best-effort).
+  // Only treat the window as "popped out" when the shrink is clearly the size of
+  // a devtools panel (>= MIN_GAP). A small or zero diff (maximized/fullscreen
+  // browser, normal scrollbar) must NOT trigger a popup.
   var detected = false;
+  var MIN_GAP = 140;
   function interval() {
-    var widthThreshold = window.outerWidth - window.innerWidth > 160;
-    var heightThreshold = window.outerHeight - window.innerHeight > 160;
-    var pre = document.documentElement.offsetTop || 1;
-    document.documentElement.setAttribute('style', 'position: fixed;');
     var widthDiff = window.outerWidth - window.innerWidth;
     var heightDiff = window.outerHeight - window.innerHeight;
-    document.documentElement.setAttribute('style', '');
-    var docked = widthDiff > 200 || heightDiff > 200;
-    if (widthThreshold || heightThreshold || Math.abs(widthDiff) < pre || docked) {
+    var popped = widthDiff >= MIN_GAP || heightDiff >= MIN_GAP;
+    if (popped) {
       if (!detected) {
         detected = true;
         try {
