@@ -24,6 +24,16 @@
     }
     gate.hidden = false;
     gate.classList.add('active');
+    // Reset the submit button so a stale "Activating..." loading state from a
+    // previous attempt/session never leaves the button stuck on this screen.
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('loading');
+    }
+    if (msg) {
+      msg.textContent = '';
+      msg.className = 'lic-msg';
+    }
   }
 
   function hideGate() {

@@ -4079,12 +4079,10 @@ window.manager = {
 
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function () {
-        releaseActiveKey();
-        cancelOperationForExit();
-        clearActiveAccount();
-        renderSavedAccounts();
-        showView('login');
-        toast('Logged out.', 'info');
+        const modal = byId('logoutConfirmModal');
+        if (modal) {
+          modal.classList.add('active');
+        }
       });
     }
 
@@ -4136,6 +4134,9 @@ window.manager = {
       if (window.manager && typeof window.manager.clearLicenseCache === 'function') {
         window.manager.clearLicenseCache();
       }
+      // Reset the top-bar status badge (plan "Licensed" -> "Open Access") and
+      // the session key badge so they don't stay stale after logout.
+      renderTopbar();
       // Land back on the license-key screen rather than the token/login view.
       if (window.licenseGate && typeof window.licenseGate.lock === 'function') {
         window.licenseGate.lock();
