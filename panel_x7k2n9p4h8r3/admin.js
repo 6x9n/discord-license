@@ -19,7 +19,6 @@
       settingsView: g('settingsView'),
       overviewClock: g('overviewClock'),
       overviewRefreshBtn: g('overviewRefreshBtn'),
-      keysRefreshBtn: g('keysRefreshBtn'),
       keysBody: g('keysBody'),
       searchInput: g('searchInput'),
       resultCount: g('resultCount'),
@@ -815,9 +814,6 @@
 
     if (el.overviewRefreshBtn) {
       el.overviewRefreshBtn.addEventListener('click', function () { loadKeys(); loadPlans(); });
-    }
-    if (el.keysRefreshBtn) {
-      el.keysRefreshBtn.addEventListener('click', function () { loadKeys(); });
     }
     if (el.exportKeysBtn) {
       el.exportKeysBtn.addEventListener('click', exportKeysCsv);
