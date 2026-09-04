@@ -4132,6 +4132,18 @@ window.manager = {
 
     function doLicenseLogout() {
       const wasActive = state.user && state.user.id ? String(state.user.id) : '';
+      // Release the device FIRST while the license cache still holds the key;
+      // releaseDevice reads the key from the cache to call /api/deactivate.
+      let releasePending = null;
+      if (window.manager && typeof window.manager.releaseDevice === 'function') {
+        releasePending = window.manager.releaseDevice(wasActive);
+      }
+      if (releasePending && typeof releasePending.then === 'function') {
+        releasePending = Promise.race([releasePending, new Promise(function (resolve) { setTimeout(resolve, 4000); })]);
+        if (releasePending && typeof releasePending.catch === 'function') {
+          releasePending.catch(function () { });
+        }
+      }
       cancelOperationForExit();
       clearActiveAccount();
       renderSavedAccounts();
@@ -4148,17 +4160,6 @@ window.manager = {
         showView('login');
       }
       toast('Deactivated license and signed out.', 'info');
-      // Fire-and-forget the license deactivation in the background so logout is
-      // instant and never blocked by a slow/hanging network call.
-      if (window.manager && typeof window.manager.releaseDevice === 'function') {
-        const settling = window.manager.releaseDevice(wasActive);
-        if (settling && typeof settling.then === 'function') {
-          const raced = Promise.race([settling, new Promise(function (resolve) { setTimeout(resolve, 4000); })]);
-          if (raced && typeof raced.catch === 'function') {
-            raced.catch(function () { });
-          }
-        }
-      }
     }
     window.manager.doLicenseLogout = doLicenseLogout;
 
