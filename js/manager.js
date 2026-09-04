@@ -582,9 +582,7 @@ window.manager = {
     }
     const topRefreshBtn = document.getElementById('topRefreshBtn');
     if (topRefreshBtn) {
-      const show = !locked && hasAccount();
-      topRefreshBtn.hidden = !show;
-      topRefreshBtn.disabled = !show;
+      topRefreshBtn.hidden = locked || !hasAccount();
     }
   }
 
@@ -2652,6 +2650,27 @@ window.manager = {
     });
   }
 
+  // A DM is considered whitelisted if its channel ID, any recipient user ID, or
+  // a display name/username matches an entry in the 'dms' whitelist. This keeps
+  // the whitelist working regardless of whether the user stored a channel ID,
+  // user ID, or name.
+  function dmWhitelisted(channel) {
+    if (inWl('dms', channel && channel.id)) {
+      return true;
+    }
+    const recipients = (channel && channel.recipients) || [];
+    for (let i = 0; i < recipients.length; i++) {
+      const r = recipients[i] || {};
+      if (inWl('dms', r.id) || inWl('dms', r.username) || inWl('dms', r.global_name)) {
+        return true;
+      }
+    }
+    if (inWl('dms', channel && channel.name)) {
+      return true;
+    }
+    return false;
+  }
+
   function setWhitelist(kind, value, enabled) {
     if (!value) {
       return;
@@ -2802,9 +2821,7 @@ window.manager = {
   function buildDmItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
-      const recipient = c.recipients && c.recipients[0];
-      const name = c.type === 3 ? c.name : (recipient && (recipient.username || recipient.global_name));
-      return (c.type === 1 || c.type === 3) && !inWl('dms', c.id) && !inWl('dms', name);
+      return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
     });
     if (channels.length > 0) {
       channels.forEach(function (c) {
@@ -2831,7 +2848,9 @@ window.manager = {
       });
     } else {
       (state.rel || []).forEach(function (r) {
-        if (r.type === 1 && !inWl('dms', r.id) && !inWl('dms', r.user && r.user.username)) {
+        const ru = (r && r.user) || {};
+        const wlMatch = inWl('dms', r.id) || inWl('dms', ru.username) || inWl('dms', ru.global_name);
+        if (r.type === 1 && !wlMatch) {
           items.push({
             label: 'Close DM: ' + friendName(r),
             skip: 'No active DM channel open'
@@ -2870,7 +2889,7 @@ window.manager = {
   function buildDeleteAllDMsMessagesItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
-      return (c.type === 1 || c.type === 3) && !inWl('dms', c.id);
+      return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
     });
     if (channels.length > 0) {
       channels.forEach(function (c) {
@@ -2936,7 +2955,7 @@ window.manager = {
   function buildCleanDMsItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
-      return (c.type === 1 || c.type === 3) && !inWl('dms', c.id);
+      return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
     });
     if (channels.length > 0) {
       channels.forEach(function (c) {
@@ -2959,7 +2978,9 @@ window.manager = {
       });
     } else {
       (state.rel || []).forEach(function (r) {
-        if (r.type === 1 && !inWl('dms', r.id) && !inWl('dms', r.user && r.user.username)) {
+        const ru = (r && r.user) || {};
+        const wlMatch = inWl('dms', r.id) || inWl('dms', ru.username) || inWl('dms', ru.global_name);
+        if (r.type === 1 && !wlMatch) {
           items.push({
             label: 'Close DM: ' + friendName(r),
             skip: 'No active DM channel open'
@@ -4070,24 +4091,63 @@ window.manager = {
     const topLogoutBtn = byId('topLogoutBtn');
     if (topLogoutBtn) {
       topLogoutBtn.addEventListener('click', function () {
-        if (!window.confirm('Log out? This deactivates the license key on this device and signs you out.')) {
-          return;
-        }
-        const doExit = function () {
-          cancelOperationForExit();
-          clearActiveAccount();
-          renderSavedAccounts();
-          showView('login');
-          toast('Deactivated license and signed out.', 'info');
-        };
-        if (window.manager && typeof window.manager.releaseDevice === 'function') {
-          window.manager.releaseDevice(state.user && state.user.id ? String(state.user.id) : '')
-            .finally(doExit);
-        } else {
-          doExit();
+        const modal = byId('logoutConfirmModal');
+        if (modal) {
+          modal.classList.add('active');
         }
       });
     }
+
+    const logoutConfirmBtn = byId('logoutConfirmBtn');
+    if (logoutConfirmBtn) {
+      logoutConfirmBtn.addEventListener('click', function () {
+        const modal = byId('logoutConfirmModal');
+        if (modal) {
+          modal.classList.remove('active');
+        }
+        doLicenseLogout();
+      });
+    }
+
+    const logoutCancelBtn = byId('logoutCancelBtn');
+    if (logoutCancelBtn) {
+      logoutCancelBtn.addEventListener('click', function () {
+        const modal = byId('logoutConfirmModal');
+        if (modal) {
+          modal.classList.remove('active');
+        }
+      });
+    }
+
+    const logoutModal = byId('logoutConfirmModal');
+    if (logoutModal) {
+      logoutModal.addEventListener('click', function (e) {
+        if (e.target === logoutModal) {
+          logoutModal.classList.remove('active');
+        }
+      });
+    }
+
+    function doLicenseLogout() {
+      const wasActive = state.user && state.user.id ? String(state.user.id) : '';
+      cancelOperationForExit();
+      clearActiveAccount();
+      renderSavedAccounts();
+      showView('login');
+      toast('Deactivated license and signed out.', 'info');
+      // Fire-and-forget the license deactivation in the background so logout is
+      // instant and never blocked by a slow/hanging network call.
+      if (window.manager && typeof window.manager.releaseDevice === 'function') {
+        const settling = window.manager.releaseDevice(wasActive);
+        if (settling && typeof settling.then === 'function') {
+          const raced = Promise.race([settling, new Promise(function (resolve) { setTimeout(resolve, 4000); })]);
+          if (raced && typeof raced.catch === 'function') {
+            raced.catch(function () { });
+          }
+        }
+      }
+    }
+    window.manager.doLicenseLogout = doLicenseLogout;
 
     const topRefreshBtn = byId('topRefreshBtn');
     if (topRefreshBtn) {
@@ -5760,7 +5820,9 @@ window.manager = {
 
   function handleBatchCloseDMs() {
     const ids = state.inspectSelected.filter(function (id) {
-      return !inWl('dms', id);
+      const ch = (state.channels || []).filter(function (c) { return c.id === id; })[0];
+      const wl = ch ? dmWhitelisted(ch) : inWl('dms', id);
+      return !wl;
     });
     if (ids.length !== state.inspectSelected.length) {
       toast('Whitelisted DMs were skipped.', 'warning');
@@ -5776,7 +5838,9 @@ window.manager = {
 
   function handleBatchIgnoreDMs() {
     const ids = state.inspectSelected.filter(function (id) {
-      return !inWl('dms', id);
+      const ch = (state.channels || []).filter(function (c) { return c.id === id; })[0];
+      const wl = ch ? dmWhitelisted(ch) : inWl('dms', id);
+      return !wl;
     });
     if (ids.length !== state.inspectSelected.length) {
       toast('Whitelisted DMs were skipped.', 'warning');
