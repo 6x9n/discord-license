@@ -19,6 +19,9 @@
   let visible = false;
   let rafId = null;
 
+  const FOLLOW = 0.7;
+  const SNAP_DIST = 80;
+
   const CS_STYLE = getComputedStyle(document.documentElement);
   const accent = CS_STYLE.getPropertyValue('--accent').trim() || '#5865f2';
 
@@ -38,6 +41,12 @@
     x = e.clientX;
     y = e.clientY;
     setVisible(true);
+    const dX = x - ringX;
+    const dY = y - ringY;
+    if (dX * dX + dY * dY > SNAP_DIST * SNAP_DIST) {
+      ringX = x;
+      ringY = y;
+    }
     if (!rafId) {
       rafId = requestAnimationFrame(frame);
     }
@@ -48,8 +57,8 @@
     if (!visible) {
       return;
     }
-    ringX += (x - ringX) * 0.5;
-    ringY += (y - ringY) * 0.5;
+    ringX += (x - ringX) * FOLLOW;
+    ringY += (y - ringY) * FOLLOW;
 
     const dX = x - ringX;
     const dY = y - ringY;
@@ -61,7 +70,7 @@
     const scale = Math.min(1.2, 1 + dist * 0.003);
     ring.style.transform = 'translate(0,0) scale(' + scale.toFixed(3) + ')';
 
-    if (Math.abs(dist) > 0.5) {
+    if (dist > 0.25) {
       rafId = requestAnimationFrame(frame);
     }
   }

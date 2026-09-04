@@ -139,8 +139,8 @@ body::after {
   gap: 16px;
   overflow: hidden;
   background: rgba(22, 24, 29, 0.85);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .license-card .card-glow {
@@ -460,8 +460,8 @@ body::after {
   border-right: none;
   border-top: none;
   box-shadow: none;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   position: relative;
   z-index: 5;
 }
@@ -577,8 +577,8 @@ body::after {
   position: fixed;
   inset: 0;
   background: rgba(5, 7, 12, 0.72);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   padding: 24px;
   z-index: 50;
   align-items: center;
@@ -1297,8 +1297,8 @@ body::after {
   gap: 8px;
   padding: 14px 12px 66px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-right: 1px solid var(--border-glass);
   overflow: hidden;
   transition: width 0.25s ease-in-out, padding 0.25s ease-in-out;
@@ -1561,8 +1561,8 @@ html[data-theme="light"] .icon-moon {
   gap: 8px;
   padding: 16px 14px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)), var(--surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-right: 1px solid var(--border-glass-strong);
   box-shadow: var(--shadow-2);
   transform: translateX(-105%);
@@ -4119,8 +4119,8 @@ html[data-theme="light"] .density-option span {
   text-align: left;
   border-radius: var(--radius);
   background: rgba(18, 21, 28, 0.94);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -4638,7 +4638,7 @@ html[data-theme="light"] .density-option span {
   padding: 13px 20px;
   background: rgba(14, 16, 22, 0.96);
   border-top: 1px solid rgba(88, 101, 242, 0.35);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(14px);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
   animation: slide-up-bar 0.3s var(--spring);
 }
@@ -5156,7 +5156,7 @@ html[data-theme="light"] .btn-ops:hover {
   border: 1px solid var(--border-glass-strong);
   border-radius: 22px;
   box-shadow: var(--shadow-2);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(14px);
   text-align: center;
   animation: lic-in 0.35s var(--spring);
 }
@@ -5384,7 +5384,7 @@ html[data-theme="light"] .btn-ops:hover {
   border: 1px solid var(--border-glass-strong);
   border-radius: 24px;
   box-shadow: var(--shadow-2);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(14px);
   text-align: center;
   animation: lic-in 0.35s var(--spring);
 }
