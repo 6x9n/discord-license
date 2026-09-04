@@ -709,10 +709,7 @@ window.manager = {
   }
 
   function applyBadge() {
-    const badge = byId('sessionPlan');
-    if (badge) {
-      badge.textContent = state.user ? state.user.username : 'Not Logged In';
-    }
+    renderTopbar();
   }
 
   function avatarUrl(user, size) {
@@ -1480,6 +1477,10 @@ window.manager = {
   }
 
   function upsertAccount(token, user) {
+    token = normalizeToken(token);
+    if (!token) {
+      return;
+    }
     const accounts = loadAccounts();
     const existing = accounts.filter(function (acc) {
       return acc.token !== token;
@@ -3102,6 +3103,10 @@ window.manager = {
   }
 
   function runLeaveServersOperation(targetServer) {
+    if (state.running) {
+      toast('An operation is already running.', 'error');
+      return;
+    }
     const candidates = getLeaveServerCandidates();
     const leaveable = targetServer
       ? candidates.filter(function (server) { return String(server.id) === String(targetServer.id) && server.leaveable; })
@@ -3117,7 +3122,6 @@ window.manager = {
     if (!leaveable.length) {
       closeLeaveServersConfirmModal();
       showView('operation', { persist: true });
-      closeLeaveServersConfirmModal();
       resetTerminal('Leave Servers');
       emitLine('No leaveable servers found.');
       toast('No leaveable servers found.', 'info');
@@ -3130,7 +3134,6 @@ window.manager = {
     closeLeaveServersConfirmModal();
     lockOperationButtons(byId('leaveServersBtn'));
     showView('operation', { persist: true });
-    closeLeaveServersConfirmModal();
     resetTerminal('Leave Servers');
     emitLine('Starting Leave Servers');
     emitLine('Total leaveable servers: ' + leaveable.length);
@@ -3203,6 +3206,10 @@ window.manager = {
   }
 
   function runRemoveFriendsOperation() {
+    if (state.running) {
+      toast('An operation is already running.', 'error');
+      return;
+    }
     const candidates = getRemoveFriendCandidates();
     const results = candidates.map(function (entry) {
       return {
@@ -3214,7 +3221,6 @@ window.manager = {
     if (!candidates.length) {
       closeRemoveFriendsConfirmModal();
       showView('operation', { persist: true });
-      closeRemoveFriendsConfirmModal();
       resetTerminal('Remove Friends');
       emitLine('No removable friends, blocked users, ignored users, or pending requests found.');
       toast('No removable friends, blocked users, ignored users, or pending requests found.', 'info');
@@ -3227,7 +3233,6 @@ window.manager = {
     closeRemoveFriendsConfirmModal();
     lockOperationButtons(byId('removeFriendsBtn'));
     showView('operation', { persist: true });
-    closeRemoveFriendsConfirmModal();
     resetTerminal('Remove Friends');
     emitLine('Starting Remove Friends');
     emitLine('Total removable relationships: ' + candidates.length);
@@ -5108,6 +5113,9 @@ window.manager = {
             }
           });
         } catch (e) { }
+        if (window.manager && typeof window.manager.clearLicenseCache === 'function') {
+          window.manager.clearLicenseCache();
+        }
         window.location.reload();
       });
     }
