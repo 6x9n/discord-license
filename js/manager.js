@@ -30,9 +30,35 @@ window.CONFIG = {
 };
 
 window.manager = {
+  _cookieName: 'dmt_license_cache',
+
+  _getCookie() {
+    try {
+      const parts = ('; ' + document.cookie).split('; dmt_license_cache=');
+      if (parts.length === 2) {
+        return decodeURIComponent(parts.pop().split(';').shift());
+      }
+    } catch (e) {}
+    return null;
+  },
+
+  _setCookie(value, maxAgeDays) {
+    try {
+      const days = Math.max(1, Math.round(Number(maxAgeDays) || 365));
+      document.cookie = 'dmt_license_cache=' + encodeURIComponent(value) +
+        '; path=/; max-age=' + (days * 86400) + '; SameSite=Lax';
+    } catch (e) {}
+  },
+
+  _eraseCookie() {
+    try {
+      document.cookie = 'dmt_license_cache=; path=/; max-age=0; SameSite=Lax';
+    } catch (e) {}
+  },
+
   getLicenseCache() {
     try {
-      const raw = localStorage.getItem(window.CONFIG.storage.license);
+      const raw = localStorage.getItem(window.CONFIG.storage.license) || this._getCookie();
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
@@ -41,10 +67,13 @@ window.manager = {
 
   setLicenseCache(data) {
     localStorage.setItem(window.CONFIG.storage.license, JSON.stringify(data));
+    // Mirror to a cookie so the key survives cleared/blocked localStorage.
+    this._setCookie(JSON.stringify(data));
   },
 
   clearLicenseCache() {
     localStorage.removeItem(window.CONFIG.storage.license);
+    this._eraseCookie();
   },
 
   reportAccountLogin(accountId) {
@@ -625,7 +654,12 @@ window.manager = {
 
   function managerLicenseInfo() {
     try {
-      const raw = localStorage.getItem('dmt.license.cache') || localStorage.getItem('dmt.welcome.pending');
+      const cached = window.manager && typeof window.manager.getLicenseCache === 'function'
+        ? window.manager.getLicenseCache() : null;
+      if (cached) {
+        return cached;
+      }
+      const raw = localStorage.getItem('dmt.welcome.pending');
       if (raw) {
         return JSON.parse(raw);
       }
