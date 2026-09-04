@@ -582,7 +582,9 @@ window.manager = {
     }
     const topRefreshBtn = document.getElementById('topRefreshBtn');
     if (topRefreshBtn) {
-      topRefreshBtn.hidden = locked || !hasAccount();
+      const show = !locked && hasAccount();
+      topRefreshBtn.hidden = !show;
+      topRefreshBtn.disabled = !show;
     }
   }
 

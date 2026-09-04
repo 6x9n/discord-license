@@ -1348,9 +1348,14 @@ body::after {
   font-weight: 600;
   font-size: 0.9em;
   white-space: nowrap;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   animation: slideFromLeft 0.4s var(--spring);
+}
+
+.nav-link:active:not(.locked) {
+  transform: scale(0.97);
 }
 
 .nav-link svg {
