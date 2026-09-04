@@ -4133,7 +4133,15 @@ window.manager = {
       cancelOperationForExit();
       clearActiveAccount();
       renderSavedAccounts();
-      showView('login');
+      if (window.manager && typeof window.manager.clearLicenseCache === 'function') {
+        window.manager.clearLicenseCache();
+      }
+      // Land back on the license-key screen rather than the token/login view.
+      if (window.licenseGate && typeof window.licenseGate.lock === 'function') {
+        window.licenseGate.lock();
+      } else {
+        showView('login');
+      }
       toast('Deactivated license and signed out.', 'info');
       // Fire-and-forget the license deactivation in the background so logout is
       // instant and never blocked by a slow/hanging network call.
