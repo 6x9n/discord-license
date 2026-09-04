@@ -580,6 +580,10 @@ window.manager = {
     if (topLogoutBtn) {
       topLogoutBtn.hidden = locked;
     }
+    const topRefreshBtn = document.getElementById('topRefreshBtn');
+    if (topRefreshBtn) {
+      topRefreshBtn.hidden = locked || !hasAccount();
+    }
   }
 
   function renderTopbar() {
@@ -4064,12 +4068,44 @@ window.manager = {
     const topLogoutBtn = byId('topLogoutBtn');
     if (topLogoutBtn) {
       topLogoutBtn.addEventListener('click', function () {
-        releaseActiveKey();
-        cancelOperationForExit();
-        clearActiveAccount();
-        renderSavedAccounts();
-        showView('login');
-        toast('Logged out.', 'info');
+        if (!window.confirm('Log out? This deactivates the license key on this device and signs you out.')) {
+          return;
+        }
+        const doExit = function () {
+          cancelOperationForExit();
+          clearActiveAccount();
+          renderSavedAccounts();
+          showView('login');
+          toast('Deactivated license and signed out.', 'info');
+        };
+        if (window.manager && typeof window.manager.releaseDevice === 'function') {
+          window.manager.releaseDevice(state.user && state.user.id ? String(state.user.id) : '')
+            .finally(doExit);
+        } else {
+          doExit();
+        }
+      });
+    }
+
+    const topRefreshBtn = byId('topRefreshBtn');
+    if (topRefreshBtn) {
+      topRefreshBtn.addEventListener('click', function () {
+        if (!hasAccount()) {
+          toast('No active account to refresh.', 'info');
+          return;
+        }
+        topRefreshBtn.disabled = true;
+        topRefreshBtn.classList.add('spinning');
+        (window.manager && typeof window.manager.refreshAccountDetails === 'function'
+          ? window.manager.refreshAccountDetails()
+          : Promise.resolve(false))
+          .then(function (ok) {
+            toast(ok ? 'Account details refreshed.' : 'Could not refresh account details.', ok ? 'success' : 'error');
+          })
+          .finally(function () {
+            topRefreshBtn.disabled = false;
+            topRefreshBtn.classList.remove('spinning');
+          });
       });
     }
   }
@@ -4093,6 +4129,26 @@ window.manager = {
 
   window.manager.activeAccountId = function () {
     return state.user && state.user.id ? String(state.user.id) : '';
+  };
+
+  // Manually re-fetch the active Discord account's profile and details from the
+  // saved token, then re-render the dashboard. Returns a Promise (resolves true
+  // on success, false when no account/token is available).
+  window.manager.refreshAccountDetails = function () {
+    const token = normalizeToken(state.token || storageGet(localStorage, CONFIG.dsc.token));
+    if (!token) {
+      return Promise.resolve(false);
+    }
+    return refreshActiveAccountFromToken()
+      .then(function () {
+        return refreshAccountStateAfterOp();
+      })
+      .then(function (data) {
+        return !!(data || state.user);
+      })
+      .catch(function () {
+        return false;
+      });
   };
 
   function initOps() {
