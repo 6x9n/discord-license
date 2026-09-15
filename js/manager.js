@@ -1748,6 +1748,7 @@ window.manager = {
     renderEvolutionView();
     renderDashboardEvolution();
     refreshMetrics();
+    syncProfileEditor();
   }
 
   /* ---------- Details view ---------- */
@@ -4050,6 +4051,76 @@ window.manager = {
     }
   }
 
+  function syncProfileEditor() {
+    const editName = byId('editProfileName');
+    const editAvatarFile = byId('editProfileAvatarFile');
+    const editAvatarPreview = byId('editProfileAvatarPreview');
+    const editAvatarName = byId('editProfileAvatarName');
+    const editSave = byId('editProfileSaveBtn');
+    const editStatus = byId('editProfileStatus');
+    if (!editName && !editAvatarFile && !editSave) {
+      return;
+    }
+    if (editName) {
+      editName.value = (state.user && (state.user.global_name || state.user.username)) || '';
+    }
+    if (editAvatarFile) {
+      editAvatarFile.value = '';
+    }
+    if (editAvatarName) {
+      editAvatarName.textContent = '';
+    }
+    if (editAvatarPreview) {
+      editAvatarPreview.style.backgroundImage = '';
+      if (enabled && state.user) {
+        const avUrl = avatarUrl(state.user, 128);
+        if (avUrl) {
+          editAvatarPreview.style.backgroundImage = 'url("' + avUrl + '")';
+        }
+      } else if (!enabled) {
+        editAvatarPreview.style.backgroundImage = 'url("https://cdn.discordapp.com/embed/avatars/1.png")';
+      }
+    }
+    const enabled = hasAccount();
+    if (editName) {
+      editName.disabled = !enabled;
+    }
+    if (editAvatarFile) {
+      editAvatarFile.disabled = !enabled;
+    }
+    if (editSave) {
+      editSave.disabled = !enabled;
+    }
+    if (editStatus) {
+      editStatus.textContent = enabled ? '' : 'Log in to edit this account.';
+      editStatus.classList.remove('ok', 'err');
+    }
+  }
+
+  function setProfileStatus(text, kind) {
+    const editStatus = byId('editProfileStatus');
+    if (!editStatus) {
+      return;
+    }
+    editStatus.textContent = text || '';
+    editStatus.classList.toggle('ok', kind === 'ok');
+    editStatus.classList.toggle('err', kind === 'err');
+  }
+
+  function reloadActiveProfile() {
+    return makeRequest('GET', '/users/@me').then(function (res) {
+      if (!res || res.status < 200 || res.status >= 300 || !res.data || !res.data.id) {
+        throw new Error('Could not refresh the updated profile.');
+      }
+      state.user = res.data;
+      jsonSet(localStorage, CONFIG.dsc.user, {
+        username: res.data.global_name || res.data.username || 'Unknown',
+        token: state.token
+      });
+      return res.data;
+    });
+  }
+
   function applySettings() {
     applyAccent(storageGet2(localStorage, CONFIG.dsc.accent, 'violet'));
     applySpeed();
@@ -5238,6 +5309,91 @@ window.manager = {
           window.manager.clearLicenseCache();
         }
         window.location.reload();
+      });
+    }
+
+    const editName = byId('editProfileName');
+    const editAvatarFile = byId('editProfileAvatarFile');
+    const editAvatarPreview = byId('editProfileAvatarPreview');
+    const editAvatarName = byId('editProfileAvatarName');
+    const editSave = byId('editProfileSaveBtn');
+
+    let profileAvatarData = null;
+    let profileEditing = false;
+
+    if (editAvatarFile) {
+      editAvatarFile.addEventListener('change', function () {
+        const file = editAvatarFile.files && editAvatarFile.files[0];
+        if (!file) {
+          return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+          setProfileStatus('Image is larger than 2MB.', 'err');
+          editAvatarFile.value = '';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+          profileAvatarData = String(reader.result || '');
+          if (editAvatarPreview) {
+            editAvatarPreview.style.backgroundImage = 'url("' + profileAvatarData + '")';
+          }
+          if (editAvatarName) {
+            editAvatarName.textContent = file.name;
+          }
+          setProfileStatus('');
+        };
+        reader.onerror = function () {
+          setProfileStatus('Could not read the image file.', 'err');
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (editSave) {
+      editSave.addEventListener('click', function () {
+        if (profileEditing || !hasAccount()) {
+          return;
+        }
+        const name = editName ? String(editName.value || '').trim() : '';
+        const currentName = (state.user && (state.user.global_name || state.user.username)) || '';
+        const body = { global_name: name || null };
+        if (profileAvatarData) {
+          body.avatar = profileAvatarData;
+        }
+        if (!profileAvatarData && name === currentName) {
+          toast('Nothing to update - the display name is unchanged.', 'info');
+          return;
+        }
+        profileEditing = true;
+        setBusy(editSave, true);
+        setProfileStatus('Updating profile...');
+        apiCall('PATCH', '/users/@me', body)
+          .then(function (res) {
+            if (!res || res.status < 200 || res.status >= 300) {
+              const reason = (res && res.data && res.data.message) || handleAuthError((res && res.data) || {});
+              throw new Error(reason || 'Profile update failed.');
+            }
+            return reloadActiveProfile();
+          })
+          .then(function () {
+            applyAccountState();
+            if (state.user) {
+              upsertAccount(state.token, state.user);
+            }
+            renderSavedAccounts();
+            syncProfileEditor();
+            setProfileStatus('Profile updated successfully.', 'ok');
+            toast('Profile updated.', 'success');
+          })
+          .catch(function (err) {
+            setProfileStatus((err && err.message) || 'Profile update failed.', 'err');
+            toast((err && err.message) || 'Profile update failed.', 'error');
+          })
+          .finally(function () {
+            profileEditing = false;
+            setBusy(editSave, false);
+          });
       });
     }
   }
