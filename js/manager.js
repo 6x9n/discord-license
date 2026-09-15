@@ -2964,6 +2964,30 @@ window.manager = {
     });
   }
 
+  function messagePreview(m) {
+    if (!m) {
+      return '(no message data)';
+    }
+    let text = '';
+    if (typeof m.content === 'string' && m.content.trim()) {
+      text = m.content.trim();
+    }
+    if (m.attachments && m.attachments.length) {
+      text = text ? text + ' [attachment]' : '[attachment]';
+    }
+    if (Array.isArray(m.embeds) && m.embeds.length) {
+      text = text ? text + ' [embed]' : '[embed]';
+    }
+    if (m.sticker_items && m.sticker_items.length) {
+      text = text ? text + ' [sticker]' : '[sticker]';
+    }
+    text = text.replace(/\s+/g, ' ').trim();
+    if (text.length > 60) {
+      text = text.slice(0, 60) + '…';
+    }
+    return text ? ('"' + text + '"') : '(no content)';
+  }
+
   function deleteOwnMessagesInChannel(channelId, channelName, messages) {
     const queue = Array.isArray(messages) ? messages : [];
     let deleted = 0;
@@ -2979,7 +3003,7 @@ window.manager = {
         }).then(function (res) {
           if (res && res.status === 404) {
             deleted += 1;
-            emitLine('[' + channelName + '] Message ' + message.id + ' already gone.');
+            emitLine('[' + channelName + '] Message ' + messagePreview(message) + ' already gone (' + message.id + ').');
             emitLine('[' + channelName + '] ' + Math.max(0, queue.length - deleted - failed) + ' message(s) remaining.');
             return;
           }
@@ -2988,12 +3012,12 @@ window.manager = {
             const reason = res && res.status === 429
               ? 'Discord rate limit persisted'
               : (res && res.data && res.data.message) || handleAuthError((res && res.data) || {});
-            emitLine('[' + channelName + '] Could not delete message ' + message.id + '. (' + (reason || 'error') + ')');
+            emitLine('[' + channelName + '] Could not delete message ' + messagePreview(message) + ' (' + message.id + '). (' + (reason || 'error') + ')');
             emitLine('[' + channelName + '] ' + Math.max(0, queue.length - deleted - failed) + ' message(s) remaining.');
             return;
           }
           deleted += 1;
-          emitLine('[' + channelName + '] Deleted message ' + message.id + '.');
+          emitLine('[' + channelName + '] Deleted message ' + messagePreview(message) + ' (' + message.id + ').');
           emitLine('[' + channelName + '] ' + Math.max(0, queue.length - deleted - failed) + ' message(s) remaining.');
         });
       });
