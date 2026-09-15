@@ -4070,6 +4070,7 @@ window.manager = {
     if (editAvatarName) {
       editAvatarName.textContent = '';
     }
+    const enabled = hasAccount();
     if (editAvatarPreview) {
       editAvatarPreview.style.backgroundImage = '';
       if (enabled && state.user) {
@@ -4081,7 +4082,6 @@ window.manager = {
         editAvatarPreview.style.backgroundImage = 'url("https://cdn.discordapp.com/embed/avatars/1.png")';
       }
     }
-    const enabled = hasAccount();
     if (editName) {
       editName.disabled = !enabled;
     }
