@@ -3180,6 +3180,175 @@ window.manager = {
     }];
   }
 
+  function channelDisplayName(c) {
+    if (!c) {
+      return 'Unknown channel';
+    }
+    if (c.type === 3) {
+      return c.name || 'Group Chat (' + ((c.recipients && c.recipients.length) || 0) + ' members)';
+    }
+    return (c.recipients && c.recipients[0] && (c.recipients[0].username || c.recipients[0].id)) || c.name || c.id || 'DM';
+  }
+
+  function searchOwnDMMessages() {
+    const myId = state.user && state.user.id ? String(state.user.id) : '';
+    if (!myId) {
+      return Promise.reject(new Error('No account loaded.'));
+    }
+    const collected = [];
+    const seen = {};
+    let pages = 0;
+    const MAX_PAGES = 2000;
+    function requestPage(cursor) {
+      const body = {
+        tabs: {
+          messages: {
+            sort_by: 'timestamp',
+            sort_order: 'desc',
+            content: '',
+            cursor: cursor || null,
+            limit: 25
+          }
+        },
+        track_exact_total_hits: false
+      };
+      return apiCall('POST', '/users/@me/messages/search/tabs', body).then(function (res) {
+        if (state.stopped) {
+          return null;
+        }
+        if (!res || res.status !== 200) {
+          const reason = (res && res.data && res.data.message) || 'Discord message search unavailable';
+          throw new Error(reason);
+        }
+        const data = res.data || {};
+        const tab = (data.tabs && data.tabs.messages) || {};
+        const groups = tab.messages;
+        if (!Array.isArray(groups)) {
+          if (pages === 0) {
+            throw new Error('Discord message search returned an unexpected response.');
+          }
+          return null;
+        }
+        const found = groups.reduce(function (acc, entry) {
+          return acc.concat(Array.isArray(entry) ? entry : [entry]);
+        }, []);
+        pages += 1;
+        let mine = 0;
+        found.forEach(function (m) {
+          if (m && m.id && m.author && String(m.author.id) === myId && !seen[m.id]) {
+            seen[m.id] = true;
+            mine += 1;
+            collected.push(m);
+          }
+        });
+        emitLine('Search page ' + pages + ': ' + found.length + ' result(s), ' + mine + ' of yours so far.');
+        if (pages >= MAX_PAGES) {
+          emitLine('Reached the search page limit (' + MAX_PAGES + '), stopping early.');
+          return null;
+        }
+        const next = tab.cursor || null;
+        if (!next || found.length === 0) {
+          return null;
+        }
+        return delay(Math.max(150, currentDelay())).then(function () {
+          return next;
+        });
+      });
+    }
+    function loop(cursor) {
+      if (state.stopped) {
+        return null;
+      }
+      return requestPage(cursor || null).then(function (next) {
+        if (!next) {
+          return null;
+        }
+        return loop(next);
+      });
+    }
+    return loop(null).then(function () {
+      emitLine('Search complete: ' + collected.length + ' of your message(s) across all DMs.');
+      return collected;
+    });
+  }
+
+  function groupOwnMessagesByChannel(messages) {
+    const groups = [];
+    const map = {};
+    messages.forEach(function (m) {
+      const channelId = m && (m.channel_id || m.channelId) ? String(m.channel_id || m.channelId) : '';
+      if (!channelId) {
+        return;
+      }
+      if (!map[channelId]) {
+        const ch = (state.channels || []).find(function (c) {
+          return String(c.id) === channelId;
+        }) || null;
+        map[channelId] = {
+          channel: ch,
+          channelId: channelId,
+          channelName: channelDisplayName(ch || { id: channelId, type: 1 }),
+          messages: []
+        };
+        groups.push(map[channelId]);
+      }
+      map[channelId].messages.push(m);
+    });
+    return groups;
+  }
+
+  function deleteAllViaChannelWalk() {
+    const items = buildDeleteAllDMsMessagesItems(true);
+    let seq = Promise.resolve();
+    items.forEach(function (item) {
+      seq = seq.then(function () {
+        if (state.stopped) {
+          return null;
+        }
+        return item.action();
+      });
+    });
+    return seq;
+  }
+
+  function buildSearchDeleteItems() {
+    return [{
+      label: 'Search your message history across every DM, then delete each message you sent.',
+      action: function () {
+        emitLine('Searching all DM history for your messages...');
+        return searchOwnDMMessages().then(function (collected) {
+          if (state.stopped) {
+            return null;
+          }
+          const groups = groupOwnMessagesByChannel(collected).filter(function (group) {
+            if (!group.channel) {
+              return true;
+            }
+            return !dmWhitelisted(group.channel);
+          });
+          const totalMessages = groups.reduce(function (sum, group) {
+            return sum + group.messages.length;
+          }, 0);
+          emitLine('Deleting ' + totalMessages + ' message(s) across ' + groups.length + ' conversation(s).');
+          let seq = Promise.resolve();
+          groups.forEach(function (group) {
+            seq = seq.then(function () {
+              if (state.stopped) {
+                return null;
+              }
+              return deleteOwnMessagesInChannel(group.channelId, group.channelName, group.messages);
+            });
+          });
+          return seq;
+        }).catch(function (err) {
+          emitLine('Search-based deletion unavailable (' + ((err && err.message) || 'error') + ').');
+          emitLine('Falling back to per-channel history fetch for all DMs.');
+          return deleteAllViaChannelWalk();
+        });
+      }
+    }];
+  }
+
   function buildCleanDMsItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
@@ -3746,6 +3915,11 @@ window.manager = {
     if (countEl) countEl.textContent = String(actionable.length);
     if (skippedEl) skippedEl.textContent = '• ' + skipped + ' protected/whitelisted';
     if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((actionable.length * currentDelay()) / 1000)) + 's';
+    if (title === 'Delete All My Messages (Search)') {
+      if (countEl) countEl.textContent = 'scan';
+      if (skippedEl) skippedEl.textContent = '• searches every DM';
+      if (estimateEl) estimateEl.textContent = 'Search runs first, then every message found is deleted.';
+    }
     pendingOperation = { title: title, buildFn: buildFn, triggerBtn: triggerBtn, allInOne: title === 'All-in-One Cleanup' };
     if (confirmBtn) confirmBtn.disabled = actionable.length === 0;
     if (modal) modal.classList.add('active');
@@ -4646,6 +4820,19 @@ window.manager = {
         openOperationConfirmModal('Delete All DM Messages', function () {
           return buildDeleteAllDMsMessagesItems(fullHistory);
         }, btn, 'Delete your messages from all non-whitelisted DM conversations' + (fullHistory ? ' (entire history).' : '.'));
+      });
+    }
+
+    const searchAllBtn = byId('deleteDmSearchAllBtn');
+    if (searchAllBtn) {
+      searchAllBtn.addEventListener('click', function () {
+        closeDeleteDmModal();
+        showView('operation', { persist: true });
+        resetTerminal('Delete All My Messages (Search)');
+        if (opPill) opPill.textContent = 'preparing';
+        emitLine('Preparing search-based DM message deletion...');
+        const btn = byId('deleteUserDMsBtn');
+        openOperationConfirmModal('Delete All My Messages (Search)', buildSearchDeleteItems, btn, 'Search your entire DM history for messages you sent, then delete every one found. Falls back to per-channel fetch if the search API is unavailable.');
       });
     }
 
