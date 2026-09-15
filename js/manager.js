@@ -5396,32 +5396,30 @@ window.manager = {
 
   let profileAvatarData = null;
 
-  function selectHistoryAvatar(activeHash) {
-    const host = byId('editProfileAvatarHistory');
-    if (!host) {
-      return;
-    }
-    const items = host.querySelectorAll('.edit-profile-history-item');
-    items.forEach(function (item) {
-      item.classList.toggle('selected', !!activeHash && item.getAttribute('data-avatar') === activeHash);
-    });
-  }
-
-  function renderAvatarHistory() {
+  function renderAvatarStrip(hashes) {
     const host = byId('editProfileAvatarHistory');
     if (!host || !state.user || !state.user.id) {
       return;
     }
-    const history = loadAvatarHistory();
-    if (!history.length) {
+    const seen = [];
+    const currentHash = state.user.avatar || '';
+    if (currentHash) {
+      seen.push(currentHash);
+    }
+    (hashes || []).forEach(function (h) {
+      if (h && seen.indexOf(h) === -1) {
+        seen.push(h);
+      }
+    });
+    const list = seen.slice(0, 6);
+    if (!list.length) {
       host.hidden = true;
       host.innerHTML = '';
       return;
     }
     host.hidden = false;
     host.innerHTML = '';
-    const currentHash = state.user.avatar || '';
-    history.forEach(function (hash) {
+    list.forEach(function (hash) {
       const cell = document.createElement('button');
       cell.type = 'button';
       cell.className = 'edit-profile-history-item' + (hash === currentHash ? ' selected' : '');
@@ -5433,6 +5431,47 @@ window.manager = {
         useHistoryAvatar(hash);
       });
       host.appendChild(cell);
+    });
+  }
+
+  function loadRecentAvatars() {
+    const host = byId('editProfileAvatarHistory');
+    if (!host || !state.user || !state.user.id) {
+      return;
+    }
+    host.hidden = true;
+    host.innerHTML = '';
+    apiCall('GET', '/users/@me/avatars')
+      .then(function (res) {
+        const data = res && res.data;
+        let list = [];
+        if (data && Array.isArray(data.avatars)) {
+          list = data.avatars;
+        } else if (Array.isArray(data)) {
+          list = data;
+        }
+        const hashes = list.map(function (a) {
+          return a && a.storage_hash;
+        }).filter(Boolean);
+        if (hashes.length) {
+          renderAvatarStrip(hashes);
+        } else {
+          renderAvatarStrip(loadAvatarHistory());
+        }
+      })
+      .catch(function () {
+        renderAvatarStrip(loadAvatarHistory());
+      });
+  }
+
+  function selectHistoryAvatar(activeHash) {
+    const host = byId('editProfileAvatarHistory');
+    if (!host) {
+      return;
+    }
+    const items = host.querySelectorAll('.edit-profile-history-item');
+    items.forEach(function (item) {
+      item.classList.toggle('selected', !!activeHash && item.getAttribute('data-avatar') === activeHash);
     });
   }
 
@@ -5484,7 +5523,7 @@ window.manager = {
       return;
     }
     syncProfileEditor();
-    renderAvatarHistory();
+    loadRecentAvatars();
     const modal = byId('editProfileModal');
     if (modal) {
       modal.classList.add('active');
