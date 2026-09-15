@@ -5311,15 +5311,91 @@ window.manager = {
         window.location.reload();
       });
     }
+  }
 
+  function openEditProfileModal() {
+    if (!hasAccount()) {
+      toast('Please log in to your Discord account first.', 'error');
+      return;
+    }
+    syncProfileEditor();
+    const modal = byId('editProfileModal');
+    if (modal) {
+      modal.classList.add('active');
+    }
+    const nameInput = byId('editProfileName');
+    if (nameInput) {
+      setTimeout(function () {
+        try {
+          nameInput.focus();
+        } catch (e) { }
+      }, 0);
+    }
+  }
+
+  function closeEditProfileModal() {
+    const modal = byId('editProfileModal');
+    if (modal) {
+      modal.classList.remove('active');
+    }
+    const file = byId('editProfileAvatarFile');
+    if (file) {
+      file.value = '';
+    }
+    setProfileStatus('');
+  }
+
+  function initProfileEditor() {
+    const card = byId('dashboardProfileCard');
+    const openBtn = byId('editProfileOpenBtn');
+    const modal = byId('editProfileModal');
     const editName = byId('editProfileName');
     const editAvatarFile = byId('editProfileAvatarFile');
     const editAvatarPreview = byId('editProfileAvatarPreview');
     const editAvatarName = byId('editProfileAvatarName');
     const editSave = byId('editProfileSaveBtn');
+    const editCancel = byId('editProfileCancelBtn');
 
     let profileAvatarData = null;
     let profileEditing = false;
+
+    if (card) {
+      card.addEventListener('click', function (e) {
+        if (e.target && e.target.closest && e.target.closest('#logoutBtn, #confirmIconBtn, #editProfileOpenBtn')) {
+          return;
+        }
+        openEditProfileModal();
+      });
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openEditProfileModal();
+        }
+      });
+    }
+    if (openBtn) {
+      openBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openEditProfileModal();
+      });
+    }
+    if (editCancel) {
+      editCancel.addEventListener('click', function () {
+        closeEditProfileModal();
+      });
+    }
+    if (modal) {
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+          closeEditProfileModal();
+        }
+      });
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal && modal.classList.contains('active')) {
+        closeEditProfileModal();
+      }
+    });
 
     if (editAvatarFile) {
       editAvatarFile.addEventListener('change', function () {
@@ -5385,6 +5461,7 @@ window.manager = {
             syncProfileEditor();
             setProfileStatus('Profile updated successfully.', 'ok');
             toast('Profile updated.', 'success');
+            closeEditProfileModal();
           })
           .catch(function (err) {
             setProfileStatus((err && err.message) || 'Profile update failed.', 'err');
@@ -6346,6 +6423,7 @@ window.manager = {
     initInspector();
     initEvolutionDashboard();
     initSettings();
+    initProfileEditor();
 
     refreshActiveAccountFromToken().finally(function () {
       if (state.user && isSyntheticUser(state.user)) {
