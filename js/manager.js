@@ -1248,6 +1248,7 @@ window.manager = {
   }
 
   function pruneInvalidSavedAccounts() {
+    const storedSnapshot = jsonGet(localStorage, CONFIG.dsc.accounts);
     const accounts = loadAccounts();
     if (!accounts.length) {
       return Promise.resolve(0);
@@ -1278,8 +1279,8 @@ window.manager = {
       let changed = removed > 0;
       for (let i = 0; i < kept.length && !changed; i++) {
         const acc = kept[i];
-        const prev = accounts.find(function (a) {
-          return a.token === acc.token;
+        const prev = (storedSnapshot || []).find(function (a) {
+          return a && a.token === acc.token;
         });
         if (prev && (JSON.stringify(prev.user || null) !== JSON.stringify(acc.user || null) ||
           (prev.username || '') !== (acc.username || ''))) {
