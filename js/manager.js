@@ -3008,7 +3008,7 @@ window.manager = {
           pages += 1;
           total += page.length;
           page.forEach(function (m) {
-            if (m && m.author && state.user && state.user.id && m.author.id === state.user.id) {
+            if (isOwnMessage(m)) {
               own.push(m);
             }
           });
@@ -3127,9 +3127,7 @@ window.manager = {
                     if (res.status !== 200 || !Array.isArray(res.data) || !state.user || !state.user.id) {
                       throw new Error('Could not read messages in ' + recipientName + '.');
                     }
-                    return res.data.filter(function (m) {
-                      return m && m.author && m.author.id === state.user.id;
-                    });
+                    return res.data.filter(isOwnMessage);
                   });
             return fetchMessages.then(function (myMessages) {
               return deleteOwnMessagesInChannel(c.id, recipientName, myMessages);
@@ -3169,9 +3167,7 @@ window.manager = {
                 if (res.status !== 200 || !Array.isArray(res.data) || !state.user || !state.user.id) {
                   throw new Error('Could not read messages in ' + recipientName + '.');
                 }
-                return res.data.filter(function (m) {
-                  return m && m.author && m.author.id === state.user.id;
-                });
+                return res.data.filter(isOwnMessage);
               });
         return fetchMessages.then(function (myMessages) {
           return deleteOwnMessagesInChannel(channelId, recipientName, myMessages);
@@ -3315,45 +3311,201 @@ window.manager = {
     return seq;
   }
 
+  function isOwnMessage(m) {
+    return !!(m && m.author && state.user && state.user.id &&
+      String(m.author.id) === String(state.user.id));
+  }
+
+  function searchOwnGuildMessages() {
+    const myId = state.user && state.user.id ? String(state.user.id) : '';
+    if (!myId) {
+      return Promise.reject(new Error('No account loaded.'));
+    }
+    const guilds = (state.guilds || []).filter(function (g) {
+      return !inWl('servers', g && g.id);
+    });
+    if (guilds.length === 0) {
+      emitLine('No servers to search.');
+      return Promise.resolve([]);
+    }
+    emitLine('Searching your messages in ' + guilds.length + ' server(s)...');
+    const collected = [];
+    const seen = {};
+    const RETRIES = 3;
+    function searchGuild(g) {
+      const gid = g.id;
+      const gname = g.name || gid;
+      let offset = 0;
+      let total = null;
+      function page(attempt) {
+        return apiCall('GET', '/guilds/' + gid + '/messages/search?author_id=' + myId + '&limit=25&offset=' + offset)
+          .then(function (res) {
+            if (state.stopped) {
+              return null;
+            }
+            if (res && res.status === 202) {
+              const secs = (res.data && Number(res.data.retry_after)) || 2;
+              if (attempt < RETRIES) {
+                emitLine('[' + gname + '] Search index not ready, retrying in ' + secs + 's...');
+                return delay(Math.max(1000, secs * 1000)).then(function () {
+                  return page(attempt + 1);
+                });
+              }
+              emitLine('[' + gname + '] Search index never became ready, skipping this server.');
+              return null;
+            }
+            if (!res || res.status !== 200) {
+              throw new Error((res && res.data && res.data.message) || ('HTTP ' + (res && res.status)));
+            }
+            const data = res.data || {};
+            total = typeof data.total_results === 'number' ? data.total_results : 0;
+            const groups = data.messages;
+            if (!Array.isArray(groups)) {
+              return null;
+            }
+            let mine = 0;
+            groups.forEach(function (entry) {
+              const msgs = Array.isArray(entry) ? entry : [entry];
+              msgs.forEach(function (m) {
+                if (isOwnMessage(m) && !seen[m.id]) {
+                  seen[m.id] = true;
+                  mine += 1;
+                  collected.push(m);
+                }
+              });
+            });
+            const pageNum = Math.floor(offset / 25) + 1;
+            emitLine('[' + gname + '] Page ' + pageNum + ': ' + mine + ' new of ' + total + ' total result(s).');
+            if (offset >= 9975) {
+              emitLine('[' + gname + '] Reached the search result depth limit, moving on.');
+              return null;
+            }
+            offset += 25;
+            if (offset >= total) {
+              return null;
+            }
+            return delay(Math.max(150, currentDelay())).then(function () {
+              return true;
+            });
+          })
+          .catch(function (err) {
+            emitLine('[' + gname + '] Skipped: ' + ((err && err.message) || 'search failed'));
+            return null;
+          });
+      }
+      function loop() {
+        return page(0).then(function (again) {
+          if (!again) {
+            return null;
+          }
+          return loop();
+        });
+      }
+      return loop();
+    }
+    let seq = Promise.resolve();
+    guilds.forEach(function (g) {
+      seq = seq.then(function () {
+        if (state.stopped) {
+          return null;
+        }
+        return delay(Math.max(150, currentDelay())).then(function () {
+          return searchGuild(g);
+        });
+      });
+    });
+    return seq.then(function () {
+      emitLine('Server search complete: ' + collected.length + ' of your message(s) found in servers.');
+      return collected;
+    });
+  }
+
+  function groupGuildMessages(messages) {
+    const groups = [];
+    const map = {};
+    const guildNames = {};
+    (state.guilds || []).forEach(function (g) {
+      guildNames[String(g.id)] = g.name || g.id;
+    });
+    messages.forEach(function (m) {
+      const channelId = m && (m.channel_id || m.channelId) ? String(m.channel_id || m.channelId) : '';
+      if (!channelId) {
+        return;
+      }
+      if (!map[channelId]) {
+        const guildId = m && m.guild_id ? String(m.guild_id) : '';
+        const guildName = guildNames[guildId] || 'Server';
+        map[channelId] = {
+          channel: null,
+          channelId: channelId,
+          channelName: guildName + ' #' + channelId,
+          messages: []
+        };
+        groups.push(map[channelId]);
+      }
+      map[channelId].messages.push(m);
+    });
+    return groups;
+  }
+
+  function deleteOwnMessageGroups(groups) {
+    const safe = Array.isArray(groups) ? groups : [];
+    const total = safe.reduce(function (sum, group) {
+      return sum + (group.messages ? group.messages.length : 0);
+    }, 0);
+    emitLine('Deleting ' + total + ' message(s) across ' + safe.length + ' conversation(s).');
+    let seq = Promise.resolve();
+    safe.forEach(function (group) {
+      seq = seq.then(function () {
+        if (state.stopped) {
+          return null;
+        }
+        return deleteOwnMessagesInChannel(group.channelId, group.channelName, group.messages);
+      });
+    });
+    return seq;
+  }
+
   function buildSearchDeleteItems() {
     return [{
-      label: 'Search your message history across every DM, then delete each message you sent.',
+      label: 'Search your message history across every DM and server, then delete each message you sent.',
       action: function () {
+        let dmCollected = [];
+        function fetchDMsAndFallback() {
+          return searchOwnDMMessages().then(function (list) {
+            dmCollected = Array.isArray(list) ? list : [];
+            const hasDms = (state.channels || []).some(function (c) {
+              return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
+            });
+            if (dmCollected.length === 0 && hasDms) {
+              emitLine('DM search returned nothing - that looks wrong, so checking every DM conversation instead.');
+              return deleteAllViaChannelWalk();
+            }
+            return Promise.resolve();
+          }).catch(function (err) {
+            emitLine('DM search unavailable (' + ((err && err.message) || 'error') + ').');
+            emitLine('Checking every DM conversation instead.');
+            return deleteAllViaChannelWalk();
+          });
+        }
         emitLine('Searching all DM history for your messages...');
-        return searchOwnDMMessages().then(function (collected) {
+        return fetchDMsAndFallback().then(function () {
           if (state.stopped) {
             return null;
           }
-          if (collected.length === 0 && (state.channels || []).some(function (c) {
-            return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
-          })) {
-            emitLine('Search returned no messages - that looks wrong, so checking every DM conversation instead.');
-            return deleteAllViaChannelWalk();
+          return searchOwnGuildMessages();
+        }).then(function (guildList) {
+          if (state.stopped) {
+            return null;
           }
-          const groups = groupOwnMessagesByChannel(collected).filter(function (group) {
+          const dmGroups = groupOwnMessagesByChannel(dmCollected).filter(function (group) {
             if (!group.channel) {
               return true;
             }
             return !dmWhitelisted(group.channel);
           });
-          const totalMessages = groups.reduce(function (sum, group) {
-            return sum + group.messages.length;
-          }, 0);
-          emitLine('Deleting ' + totalMessages + ' message(s) across ' + groups.length + ' conversation(s).');
-          let seq = Promise.resolve();
-          groups.forEach(function (group) {
-            seq = seq.then(function () {
-              if (state.stopped) {
-                return null;
-              }
-              return deleteOwnMessagesInChannel(group.channelId, group.channelName, group.messages);
-            });
-          });
-          return seq;
-        }).catch(function (err) {
-          emitLine('Search-based deletion unavailable (' + ((err && err.message) || 'error') + ').');
-          emitLine('Falling back to per-channel history fetch for all DMs.');
-          return deleteAllViaChannelWalk();
+          const guildGroups = guildList && guildList.length ? groupGuildMessages(guildList) : [];
+          return deleteOwnMessageGroups(dmGroups.concat(guildGroups));
         });
       }
     }];
@@ -4870,7 +5022,7 @@ window.manager = {
         if (opPill) opPill.textContent = 'preparing';
         emitLine('Preparing search-based DM message deletion...');
         const btn = byId('deleteUserDMsBtn');
-        openOperationConfirmModal('Delete All My Messages (Search)', buildSearchDeleteItems, btn, 'Search your entire DM history for messages you sent, then delete every one found. Falls back to per-channel fetch if the search API is unavailable.');
+        openOperationConfirmModal('Delete All My Messages (Search)', buildSearchDeleteItems, btn, 'Search your entire message history - every DM and every server you are in - then delete each message you sent. Whitelisted DMs and servers are skipped. This can take a very long time on big accounts. If search fails, it falls back to per-conversation fetch.');
       });
     }
 
