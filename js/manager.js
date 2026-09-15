@@ -670,6 +670,7 @@ window.manager = {
   function setActiveAccount(token, user) {
     state.token = normalizeToken(token);
     state.user = user;
+    rememberAvatar(user);
     if (user && user.id) {
       localStorage.removeItem('dmt.dsc.profile_' + user.id);
     }
@@ -718,6 +719,80 @@ window.manager = {
     }
     const ext = user.avatar.indexOf('a_') === 0 ? 'gif' : 'png';
     return 'https://cdn.discordapp.com/avatars/' + user.id + '/' + user.avatar + '.' + ext + '?size=' + (size || 128);
+  }
+
+  const DISPLAY_NAME_FONTS = {
+    1: 'Default',
+    2: 'Bangers',
+    3: 'Frostbite',
+    4: 'Chicle',
+    5: 'Compagnon',
+    6: 'MuseoModerno',
+    7: 'Néo-Castelin',
+    8: 'Pixellet',
+    9: 'Cyberpunk',
+    10: 'Rococo',
+    11: 'Sinistre',
+    12: 'Zilla Slab'
+  };
+
+  const DISPLAY_NAME_EFFECTS = {
+    1: 'Solid',
+    2: 'Gradient',
+    3: 'Neon',
+    4: 'Toon',
+    5: 'Pop',
+    6: 'Glow',
+    7: 'Gummy',
+    8: 'Prism'
+  };
+
+  function loadAvatarHistory() {
+    const key = 'dmt.dsc.avatars_' + (state.user && state.user.id ? state.user.id : '');
+    const arr = jsonGet(localStorage, key);
+    return Array.isArray(arr) ? arr.filter(function (h) {
+      return typeof h === 'string' && h.length > 0;
+    }) : [];
+  }
+
+  function rememberAvatar(user) {
+    if (!user || !user.id || !user.avatar) {
+      return;
+    }
+    const key = 'dmt.dsc.avatars_' + user.id;
+    const history = jsonGet(localStorage, key);
+    const list = Array.isArray(history) ? history.filter(function (h) {
+      return typeof h === 'string' && h.length > 0;
+    }) : [];
+    if (list[0] === user.avatar) {
+      return;
+    }
+    if (list.indexOf(user.avatar) !== -1) {
+      list.splice(list.indexOf(user.avatar), 1);
+    }
+    list.unshift(user.avatar);
+    jsonSet(localStorage, key, list.slice(0, 6));
+  }
+
+  function describeDisplayNameStyle(user) {
+    const u = user || {};
+    const styles = u.display_name_styles || {};
+    const fontId = styles.font_id != null ? styles.font_id : u.display_name_font_id;
+    const effectId = styles.effect_id != null ? styles.effect_id : u.display_name_effect_id;
+    const colors = (Array.isArray(styles.colors) ? styles.colors : u.display_name_colors) || [];
+    const parts = [];
+    if (fontId && Number(fontId) !== 1) {
+      parts.push(DISPLAY_NAME_FONTS[Number(fontId)] ? (DISPLAY_NAME_FONTS[Number(fontId)] + ' font') : ('font #' + fontId));
+    }
+    if (effectId && Number(effectId) !== 1) {
+      parts.push(DISPLAY_NAME_EFFECTS[Number(effectId)] || ('effect #' + effectId));
+    } else if (effectId && Number(effectId) === 1 && colors.length) {
+      parts.push('Solid');
+    }
+    if (colors && colors.length) {
+      parts.push(colors.length + ' custom color(s)');
+    }
+    return parts.join(' · ');
   }
 
   function guildIconUrl(guild, size) {
@@ -4095,6 +4170,11 @@ window.manager = {
       editStatus.textContent = enabled ? '' : 'Log in to edit this account.';
       editStatus.classList.remove('ok', 'err');
     }
+    const styleNote = byId('editProfileStyleNote');
+    if (styleNote) {
+      const styled = enabled && state.user ? describeDisplayNameStyle(state.user) : '';
+      styleNote.textContent = styled ? 'Current style: ' + styled + ' - saving clears it.' : '';
+    }
   }
 
   function setProfileStatus(text, kind) {
@@ -4113,6 +4193,7 @@ window.manager = {
         throw new Error('Could not refresh the updated profile.');
       }
       state.user = res.data;
+      rememberAvatar(res.data);
       jsonSet(localStorage, CONFIG.dsc.user, {
         username: res.data.global_name || res.data.username || 'Unknown',
         token: state.token
@@ -5313,12 +5394,97 @@ window.manager = {
     }
   }
 
+  let profileAvatarData = null;
+
+  function selectHistoryAvatar(activeHash) {
+    const host = byId('editProfileAvatarHistory');
+    if (!host) {
+      return;
+    }
+    const items = host.querySelectorAll('.edit-profile-history-item');
+    items.forEach(function (item) {
+      item.classList.toggle('selected', !!activeHash && item.getAttribute('data-avatar') === activeHash);
+    });
+  }
+
+  function renderAvatarHistory() {
+    const host = byId('editProfileAvatarHistory');
+    if (!host || !state.user || !state.user.id) {
+      return;
+    }
+    const history = loadAvatarHistory();
+    if (!history.length) {
+      host.hidden = true;
+      host.innerHTML = '';
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML = '';
+    const currentHash = state.user.avatar || '';
+    history.forEach(function (hash) {
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'edit-profile-history-item' + (hash === currentHash ? ' selected' : '');
+      cell.setAttribute('data-avatar', hash);
+      cell.title = hash === currentHash ? 'Current avatar' : 'Swap to this previous avatar';
+      cell.setAttribute('aria-label', cell.title);
+      cell.style.backgroundImage = 'url("' + avatarUrl({ id: state.user.id, avatar: hash }, 128) + '")';
+      cell.addEventListener('click', function () {
+        useHistoryAvatar(hash);
+      });
+      host.appendChild(cell);
+    });
+  }
+
+  function useHistoryAvatar(hash) {
+    if (!state.user || !state.user.id || !hash) {
+      return;
+    }
+    const editAvatarPreview = byId('editProfileAvatarPreview');
+    const editAvatarName = byId('editProfileAvatarName');
+    setProfileStatus('Loading avatar image...');
+    fetch(avatarUrl({ id: state.user.id, avatar: hash }, 256))
+      .then(function (res) {
+        if (!res.ok) {
+          throw new Error('Could not download that avatar.');
+        }
+        return res.blob();
+      })
+      .then(function (blob) {
+        return new Promise(function (resolve, reject) {
+          const reader = new FileReader();
+          reader.onload = function () {
+            resolve(String(reader.result || ''));
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      })
+      .then(function (dataUrl) {
+        profileAvatarData = dataUrl;
+        if (editAvatarPreview) {
+          editAvatarPreview.style.backgroundImage = 'url("' + dataUrl + '")';
+        }
+        if (editAvatarName) {
+          editAvatarName.textContent = 'Previous avatar selected';
+        }
+        setProfileStatus('');
+        selectHistoryAvatar(hash);
+        return dataUrl;
+      })
+      .catch(function () {
+        setProfileStatus('Could not load that avatar - try uploading it instead.', 'err');
+        throw new Error('avatar download failed');
+      });
+  }
+
   function openEditProfileModal() {
     if (!hasAccount()) {
       toast('Please log in to your Discord account first.', 'error');
       return;
     }
     syncProfileEditor();
+    renderAvatarHistory();
     const modal = byId('editProfileModal');
     if (modal) {
       modal.classList.add('active');
@@ -5342,6 +5508,7 @@ window.manager = {
     if (file) {
       file.value = '';
     }
+    profileAvatarData = null;
     setProfileStatus('');
   }
 
@@ -5356,7 +5523,6 @@ window.manager = {
     const editSave = byId('editProfileSaveBtn');
     const editCancel = byId('editProfileCancelBtn');
 
-    let profileAvatarData = null;
     let profileEditing = false;
 
     if (card) {
@@ -5417,6 +5583,7 @@ window.manager = {
           if (editAvatarName) {
             editAvatarName.textContent = file.name;
           }
+          selectHistoryAvatar('');
           setProfileStatus('');
         };
         reader.onerror = function () {
@@ -5433,9 +5600,15 @@ window.manager = {
         }
         const name = editName ? String(editName.value || '').trim() : '';
         const currentName = (state.user && (state.user.global_name || state.user.username)) || '';
+        const plainStyle = !!byId('editProfilePlainStyle') && byId('editProfilePlainStyle').checked;
         const body = { global_name: name || null };
         if (profileAvatarData) {
           body.avatar = profileAvatarData;
+        }
+        if (plainStyle && state.user && state.user.premium_type > 0) {
+          body.display_name_font_id = 1;
+          body.display_name_effect_id = null;
+          body.display_name_colors = [];
         }
         if (!profileAvatarData && name === currentName) {
           toast('Nothing to update - the display name is unchanged.', 'info');

@@ -2655,6 +2655,61 @@ html[data-theme="light"] .toast {
   cursor: pointer;
 }
 
+.edit-profile-history {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.edit-profile-history-item {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.08) center/cover no-repeat;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.edit-profile-history-item:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.edit-profile-history-item.selected {
+  border-color: var(--accent, #5865f2);
+  box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.22);
+}
+
+.edit-profile-style-note {
+  font-size: 0.75em;
+  color: var(--warn);
+  text-align: left;
+  padding: 6px 2px 0;
+  line-height: 1.3;
+}
+
+.edit-profile-plain-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.78em;
+  color: var(--muted);
+  text-align: left;
+  padding: 8px 2px 0;
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+.edit-profile-plain-toggle input {
+  flex-shrink: 0;
+  margin-top: 1px;
+  accent-color: var(--accent, #5865f2);
+}
+
 .density-options {
   display: flex;
   gap: 8px;

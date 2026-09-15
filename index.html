@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=4">
+  <link rel="stylesheet" href="css/styles.css?v=5">
 </head>
 <body>
   <div id="licenseGate" class="lic-gate" role="dialog" aria-modal="true" aria-labelledby="licTitle" hidden>
@@ -704,6 +704,7 @@
 
           <div class="edit-profile-avatar-block">
             <span id="editProfileAvatarPreview" class="edit-profile-avatar-preview" aria-hidden="true"></span>
+            <div id="editProfileAvatarHistory" class="edit-profile-history" hidden></div>
             <label for="editProfileAvatarFile" class="btn btn-ghost btn-small avatar-choose-btn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>
               <span>Change Avatar</span>
@@ -717,6 +718,11 @@
             <svg class="edit-profile-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             <input id="editProfileName" class="edit-profile-input" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Enter a display name">
           </div>
+          <div id="editProfileStyleNote" class="edit-profile-style-note"></div>
+          <label class="edit-profile-plain-toggle">
+            <input type="checkbox" id="editProfilePlainStyle" checked>
+            <span>Save display name in default style (clear font/effect/color)</span>
+          </label>
           <div id="editProfileStatus" class="edit-profile-status" role="status" aria-live="polite"></div>
 
           <div class="edit-profile-actions">
@@ -929,7 +935,7 @@
     </div>
   </footer>
 
-  <script src="js/manager.js?v=5.6"></script>
+  <script src="js/manager.js?v=5.7"></script>
   <script src="js/license.js?v=1"></script>
   <script src="js/cursor.js?v=2"></script>
   <script src="js/guard.js?v=1"></script>
