@@ -2914,6 +2914,55 @@ window.manager = {
     return items;
   }
 
+  function fetchAllMyDMMessages(channelId, channelName) {
+    let before = null;
+    let own = [];
+    let total = 0;
+    let pages = 0;
+    const MAX_PAGES = 5000;
+    function fetchPage() {
+      const suffix = before ? '&before=' + before : '';
+      return apiCall('GET', '/channels/' + channelId + '/messages?limit=100' + suffix)
+        .then(function (res) {
+          if (!res || res.status !== 200 || !Array.isArray(res.data)) {
+            throw new Error('Could not read messages in ' + channelName + '.');
+          }
+          const page = res.data;
+          pages += 1;
+          total += page.length;
+          page.forEach(function (m) {
+            if (m && m.author && state.user && state.user.id && m.author.id === state.user.id) {
+              own.push(m);
+            }
+          });
+          if (page.length > 0) {
+            emitLine('[' + channelName + '] Fetched page ' + pages + ' (' + own.length + ' of your messages so far).');
+          }
+          if (page.length < 100) {
+            return null;
+          }
+          const oldestId = String(page[page.length - 1].id);
+          if (before === oldestId) {
+            return null;
+          }
+          before = oldestId;
+          return pages < MAX_PAGES;
+        });
+    }
+    function step() {
+      return fetchPage().then(function (again) {
+        if (again) {
+          return delay(currentDelay()).then(step);
+        }
+        return null;
+      });
+    }
+    return step().then(function () {
+      emitLine('[' + channelName + '] Full history fetched: ' + total + ' message(s), ' + own.length + ' from you.');
+      return own;
+    });
+  }
+
   function deleteOwnMessagesInChannel(channelId, channelName, messages) {
     const queue = Array.isArray(messages) ? messages : [];
     let deleted = 0;
@@ -2956,7 +3005,7 @@ window.manager = {
     });
   }
 
-  function buildDeleteAllDMsMessagesItems() {
+  function buildDeleteAllDMsMessagesItems(fullHistory) {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
       return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
@@ -2970,16 +3019,20 @@ window.manager = {
         items.push({
           label: 'Delete own messages in: ' + recipientName + ' (' + c.id + ')',
           action: function () {
-            return apiCall('GET', '/channels/' + c.id + '/messages?limit=100')
-              .then(function (res) {
-                if (res.status !== 200 || !Array.isArray(res.data) || !state.user || !state.user.id) {
-                  throw new Error('Could not read messages in ' + recipientName + '.');
-                }
-                const myMessages = res.data.filter(function (m) {
-                  return m && m.author && m.author.id === state.user.id;
-                });
-                return deleteOwnMessagesInChannel(c.id, recipientName, myMessages);
-              });
+            const fetchMessages = fullHistory
+              ? fetchAllMyDMMessages(c.id, recipientName)
+              : apiCall('GET', '/channels/' + c.id + '/messages?limit=100')
+                  .then(function (res) {
+                    if (res.status !== 200 || !Array.isArray(res.data) || !state.user || !state.user.id) {
+                      throw new Error('Could not read messages in ' + recipientName + '.');
+                    }
+                    return res.data.filter(function (m) {
+                      return m && m.author && m.author.id === state.user.id;
+                    });
+                  });
+            return fetchMessages.then(function (myMessages) {
+              return deleteOwnMessagesInChannel(c.id, recipientName, myMessages);
+            });
           }
         });
       });
@@ -2987,7 +3040,7 @@ window.manager = {
     return items;
   }
 
-  function buildDeleteTargetDMsItems(targetId) {
+  function buildDeleteTargetDMsItems(targetId, fullHistory) {
     if (!targetId) {
       return [];
     }
@@ -3008,16 +3061,20 @@ window.manager = {
     return [{
       label: 'Delete own messages with ' + recipientName + ' (' + channelId + ')',
       action: function () {
-        return apiCall('GET', '/channels/' + channelId + '/messages?limit=100')
-          .then(function (res) {
-            if (res.status !== 200 || !Array.isArray(res.data) || !state.user || !state.user.id) {
-              throw new Error('Could not read messages in ' + recipientName + '.');
-            }
-            const myMessages = res.data.filter(function (m) {
-              return m && m.author && m.author.id === state.user.id;
-            });
-            return deleteOwnMessagesInChannel(channelId, recipientName, myMessages);
-          });
+        const fetchMessages = fullHistory
+          ? fetchAllMyDMMessages(channelId, recipientName)
+          : apiCall('GET', '/channels/' + channelId + '/messages?limit=100')
+              .then(function (res) {
+                if (res.status !== 200 || !Array.isArray(res.data) || !state.user || !state.user.id) {
+                  throw new Error('Could not read messages in ' + recipientName + '.');
+                }
+                return res.data.filter(function (m) {
+                  return m && m.author && m.author.id === state.user.id;
+                });
+              });
+        return fetchMessages.then(function (myMessages) {
+          return deleteOwnMessagesInChannel(channelId, recipientName, myMessages);
+        });
       }
     }];
   }
@@ -4367,6 +4424,7 @@ window.manager = {
     const targetError = byId('deleteDmTargetError');
     if (specificBtn) {
       specificBtn.addEventListener('click', function () {
+        const fullHistory = !!byId('deleteDmFullHistory') && byId('deleteDmFullHistory').checked;
         const target = targetInput ? targetInput.value.trim() : '';
         if (!target) {
           if (targetError) targetError.textContent = 'Enter a user ID or username first.';
@@ -4381,8 +4439,8 @@ window.manager = {
         emitLine('Preparing targeted DM message deletion...');
         const btn = byId('deleteUserDMsBtn');
         openOperationConfirmModal('Delete DM Messages (' + target + ')', function () {
-          return buildDeleteTargetDMsItems(target);
-        }, btn, 'Delete your messages from the selected DM conversation.');
+          return buildDeleteTargetDMsItems(target, fullHistory);
+        }, btn, 'Delete your messages from the selected DM conversation' + (fullHistory ? ' (entire history).' : '.'));
       });
     }
 
@@ -4401,13 +4459,16 @@ window.manager = {
     const allBtn = byId('deleteDmAllBtn');
     if (allBtn) {
       allBtn.addEventListener('click', function () {
+        const fullHistory = !!byId('deleteDmFullHistory') && byId('deleteDmFullHistory').checked;
         closeDeleteDmModal();
         showView('operation', { persist: true });
         resetTerminal('Delete All DM Messages');
         if (opPill) opPill.textContent = 'preparing';
         emitLine('Preparing all DM message deletion...');
         const btn = byId('deleteUserDMsBtn');
-        openOperationConfirmModal('Delete All DM Messages', buildDeleteAllDMsMessagesItems, btn, 'Delete your messages from all non-whitelisted DM conversations.');
+        openOperationConfirmModal('Delete All DM Messages', function () {
+          return buildDeleteAllDMsMessagesItems(fullHistory);
+        }, btn, 'Delete your messages from all non-whitelisted DM conversations' + (fullHistory ? ' (entire history).' : '.'));
       });
     }
 
