@@ -2710,6 +2710,21 @@ html[data-theme="light"] .toast {
   accent-color: var(--accent, #5865f2);
 }
 
+.edit-profile-hint {
+  font-size: 0.72em;
+  color: var(--muted);
+  text-align: left;
+  padding: 4px 2px 12px;
+  opacity: 0.75;
+}
+
+.edit-profile-textarea {
+  padding-top: 12px;
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
 .density-options {
   display: flex;
   gap: 8px;

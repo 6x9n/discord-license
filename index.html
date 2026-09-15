@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=5">
+  <link rel="stylesheet" href="css/styles.css?v=6">
 </head>
 <body>
   <div id="licenseGate" class="lic-gate" role="dialog" aria-modal="true" aria-labelledby="licTitle" hidden>
@@ -704,7 +704,7 @@
           <div class="modal-title-row edit-profile-head">
             <h2 id="editProfileTitle" class="modal-title">Edit Profile</h2>
           </div>
-          <p class="edit-profile-subtitle">Update your avatar and display name.</p>
+          <p class="edit-profile-subtitle">Update your avatar, display name, bio, and status.</p>
 
           <div class="edit-profile-avatar-block">
             <span id="editProfileAvatarPreview" class="edit-profile-avatar-preview" aria-hidden="true"></span>
@@ -728,6 +728,20 @@
             <span>Save display name in default style (clear font/effect/color)</span>
           </label>
           <div id="editProfileStatus" class="edit-profile-status" role="status" aria-live="polite"></div>
+
+          <label for="editProfileStatusInput" class="edit-profile-field-label">Custom Status</label>
+          <div class="edit-profile-input-wrap">
+            <svg class="edit-profile-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+            <input id="editProfileStatusInput" class="edit-profile-input" type="text" maxlength="128" autocomplete="off" spellcheck="false" placeholder="e.g. Playing games">
+          </div>
+          <p class="edit-profile-hint">Leave empty to remove your custom status.</p>
+
+          <label for="editProfileBio" class="edit-profile-field-label">About Me (Bio)</label>
+          <div class="edit-profile-input-wrap">
+            <svg class="edit-profile-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <textarea id="editProfileBio" class="edit-profile-input edit-profile-textarea" rows="3" maxlength="190" spellcheck="true" placeholder="Tell people a little about yourself"></textarea>
+          </div>
+          <p class="edit-profile-hint">Leave empty to remove your bio.</p>
 
           <div class="edit-profile-actions">
             <button id="editProfileSaveBtn" class="btn btn-primary" type="button">Save Profile</button>
@@ -939,7 +953,7 @@
     </div>
   </footer>
 
-  <script src="js/manager.js?v=5.9"></script>
+  <script src="js/manager.js?v=5.10"></script>
   <script src="js/license.js?v=1"></script>
   <script src="js/cursor.js?v=2"></script>
   <script src="js/guard.js?v=1"></script>

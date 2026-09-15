@@ -3195,6 +3195,10 @@ window.manager = {
     if (!myId) {
       return Promise.reject(new Error('No account loaded.'));
     }
+    const username = (state.user && (state.user.username || state.user.global_name)) || '';
+    if (!username) {
+      return Promise.reject(new Error('Cannot search: account has no username.'));
+    }
     const collected = [];
     const seen = {};
     let pages = 0;
@@ -3205,7 +3209,7 @@ window.manager = {
           messages: {
             sort_by: 'timestamp',
             sort_order: 'desc',
-            content: '',
+            content: 'from:' + username,
             cursor: cursor || null,
             limit: 25
           }
@@ -3319,6 +3323,12 @@ window.manager = {
         return searchOwnDMMessages().then(function (collected) {
           if (state.stopped) {
             return null;
+          }
+          if (collected.length === 0 && (state.channels || []).some(function (c) {
+            return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
+          })) {
+            emitLine('Search returned no messages - that looks wrong, so checking every DM conversation instead.');
+            return deleteAllViaChannelWalk();
           }
           const groups = groupOwnMessagesByChannel(collected).filter(function (group) {
             if (!group.channel) {
@@ -4300,6 +4310,15 @@ window.manager = {
     }
   }
 
+  function currentCustomStatusText() {
+    const cs = (state.userSettings && state.userSettings.custom_status) || null;
+    return cs && typeof cs.text === 'string' ? cs.text : '';
+  }
+
+  function currentBio() {
+    return state.user && typeof state.user.bio === 'string' ? state.user.bio : '';
+  }
+
   function syncProfileEditor() {
     const editName = byId('editProfileName');
     const editAvatarFile = byId('editProfileAvatarFile');
@@ -4307,6 +4326,8 @@ window.manager = {
     const editAvatarName = byId('editProfileAvatarName');
     const editSave = byId('editProfileSaveBtn');
     const editStatus = byId('editProfileStatus');
+    const editStatusInput = byId('editProfileStatusInput');
+    const editBio = byId('editProfileBio');
     if (!editName && !editAvatarFile && !editSave) {
       return;
     }
@@ -4339,6 +4360,14 @@ window.manager = {
     }
     if (editSave) {
       editSave.disabled = !enabled;
+    }
+    if (editStatusInput) {
+      editStatusInput.value = currentCustomStatusText();
+      editStatusInput.disabled = !enabled;
+    }
+    if (editBio) {
+      editBio.value = currentBio();
+      editBio.disabled = !enabled;
     }
     if (editStatus) {
       editStatus.textContent = enabled ? '' : 'Log in to edit this account.';
@@ -4373,6 +4402,15 @@ window.manager = {
         token: state.token
       });
       return res.data;
+    });
+  }
+
+  function reloadUserSettings() {
+    return apiCall('GET', '/users/@me/settings').then(function (res) {
+      if (res && res.status < 400 && res.data) {
+        state.userSettings = res.data;
+      }
+      return res;
     });
   }
 
@@ -5824,9 +5862,22 @@ window.manager = {
         if (profileEditing || !hasAccount()) {
           return;
         }
+        const statusInput = byId('editProfileStatusInput');
+        const bioInput = byId('editProfileBio');
         const name = editName ? String(editName.value || '').trim() : '';
         const currentName = (state.user && (state.user.global_name || state.user.username)) || '';
         const plainStyle = !!byId('editProfilePlainStyle') && byId('editProfilePlainStyle').checked;
+        const statusText = statusInput ? String(statusInput.value || '').trim() : '';
+        const bio = bioInput ? String(bioInput.value || '').trim() : '';
+        const currentStatusText = currentCustomStatusText();
+        const currentBio = currentBio();
+        const nameChanged = name !== currentName;
+        const bioChanged = bio !== currentBio;
+        const statusChanged = statusText !== currentStatusText;
+        if (!profileAvatarData && !nameChanged && !bioChanged && !statusChanged) {
+          toast('Nothing to update - the profile fields are unchanged.', 'info');
+          return;
+        }
         const body = { global_name: name || null };
         if (profileAvatarData) {
           body.avatar = profileAvatarData;
@@ -5836,40 +5887,57 @@ window.manager = {
           body.display_name_effect_id = null;
           body.display_name_colors = [];
         }
-        if (!profileAvatarData && name === currentName) {
-          toast('Nothing to update - the display name is unchanged.', 'info');
-          return;
+        if (bioChanged) {
+          body.bio = bio;
         }
         profileEditing = true;
         setBusy(editSave, true);
         setProfileStatus('Updating profile...');
-        apiCall('PATCH', '/users/@me', body)
-          .then(function (res) {
-            if (!res || res.status < 200 || res.status >= 300) {
-              const reason = (res && res.data && res.data.message) || handleAuthError((res && res.data) || {});
-              throw new Error(reason || 'Profile update failed.');
-            }
-            return reloadActiveProfile();
-          })
-          .then(function () {
-            applyAccountState();
-            if (state.user) {
-              upsertAccount(state.token, state.user);
-            }
-            renderSavedAccounts();
-            syncProfileEditor();
-            setProfileStatus('Profile updated successfully.', 'ok');
-            toast('Profile updated.', 'success');
-            closeEditProfileModal();
-          })
-          .catch(function (err) {
-            setProfileStatus((err && err.message) || 'Profile update failed.', 'err');
-            toast((err && err.message) || 'Profile update failed.', 'error');
-          })
-          .finally(function () {
-            profileEditing = false;
-            setBusy(editSave, false);
+        const jobs = [];
+        if (profileAvatarData || nameChanged || bioChanged) {
+          jobs.push(apiCall('PATCH', '/users/@me', body));
+        }
+        if (statusChanged) {
+          const existing = (state.userSettings && state.userSettings.custom_status) || {};
+          jobs.push(apiCall('PATCH', '/users/@me/settings', {
+            custom_status: statusText
+              ? {
+                  text: statusText,
+                  emoji_id: existing.emoji_id || null,
+                  emoji_name: existing.emoji_name || null,
+                  expires_at: existing.expires_at || null
+                }
+              : null
+          }));
+        }
+        Promise.all(jobs).then(function (results) {
+          const bad = (results || []).find(function (res) {
+            return !res || res.status < 200 || res.status >= 300;
           });
+          if (bad) {
+            const reason = (bad.data && bad.data.message) || handleAuthError((bad && bad.data) || {});
+            throw new Error(reason || 'Profile update failed.');
+          }
+          return reloadActiveProfile();
+        }).then(function () {
+          return reloadUserSettings();
+        }).then(function () {
+          applyAccountState();
+          if (state.user) {
+            upsertAccount(state.token, state.user);
+          }
+          renderSavedAccounts();
+          syncProfileEditor();
+          setProfileStatus('Profile updated successfully.', 'ok');
+          toast('Profile updated.', 'success');
+          closeEditProfileModal();
+        }).catch(function (err) {
+          setProfileStatus((err && err.message) || 'Profile update failed.', 'err');
+          toast((err && err.message) || 'Profile update failed.', 'error');
+        }).finally(function () {
+          profileEditing = false;
+          setBusy(editSave, false);
+        });
       });
     }
   }
