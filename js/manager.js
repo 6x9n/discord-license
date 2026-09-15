@@ -2899,25 +2899,42 @@ window.manager = {
   function deleteOwnMessagesInChannel(channelId, channelName, messages) {
     const queue = Array.isArray(messages) ? messages : [];
     let deleted = 0;
+    let failed = 0;
     emitLine('[' + channelName + '] ' + queue.length + ' message(s) will be deleted.');
     emitLine('[' + channelName + '] ' + queue.length + ' message(s) remaining.');
+    const waitMs = Math.max(150, currentDelay());
     let sequence = Promise.resolve();
     queue.forEach(function (message) {
       sequence = sequence.then(function () {
-        return delay(150).then(function () {
+        return delay(waitMs).then(function () {
           return apiCall('DELETE', '/channels/' + channelId + '/messages/' + message.id);
         }).then(function (res) {
+          if (res && res.status === 404) {
+            deleted += 1;
+            emitLine('[' + channelName + '] Message ' + message.id + ' already gone.');
+            emitLine('[' + channelName + '] ' + Math.max(0, queue.length - deleted - failed) + ' message(s) remaining.');
+            return;
+          }
           if (!res || res.status < 200 || res.status >= 300) {
-            throw new Error('Could not delete message ' + message.id + '.');
+            failed += 1;
+            const reason = res && res.status === 429
+              ? 'Discord rate limit persisted'
+              : (res && res.data && res.data.message) || handleAuthError((res && res.data) || {});
+            emitLine('[' + channelName + '] Could not delete message ' + message.id + '. (' + (reason || 'error') + ')');
+            emitLine('[' + channelName + '] ' + Math.max(0, queue.length - deleted - failed) + ' message(s) remaining.');
+            return;
           }
           deleted += 1;
           emitLine('[' + channelName + '] Deleted message ' + message.id + '.');
-          emitLine('[' + channelName + '] ' + (queue.length - deleted) + ' message(s) remaining.');
+          emitLine('[' + channelName + '] ' + Math.max(0, queue.length - deleted - failed) + ' message(s) remaining.');
         });
       });
     });
     return sequence.then(function () {
       emitLine('[' + channelName + '] Deleted ' + deleted + ' of ' + queue.length + ' message(s).');
+      if (failed > 0) {
+        emitLine('[' + channelName + '] ' + failed + ' message(s) could not be deleted.');
+      }
     });
   }
 
