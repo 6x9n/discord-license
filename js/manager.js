@@ -1254,7 +1254,12 @@ window.manager = {
     }
     const checks = accounts.map(function (acc) {
       return validateToken(acc.token)
-        .then(function () {
+        .then(function (res) {
+          const profile = res && res.data && res.data.id ? res.data : null;
+          if (profile) {
+            acc.user = profile;
+            acc.username = profile.global_name || profile.username || acc.username;
+          }
           return { valid: true, account: acc };
         })
         .catch(function () {
@@ -1270,9 +1275,22 @@ window.manager = {
       const removed = results.filter(function (r) {
         return !r.valid;
       }).length;
-      if (removed > 0) {
+      let changed = removed > 0;
+      for (let i = 0; i < kept.length && !changed; i++) {
+        const acc = kept[i];
+        const prev = accounts.find(function (a) {
+          return a.token === acc.token;
+        });
+        if (prev && (JSON.stringify(prev.user || null) !== JSON.stringify(acc.user || null) ||
+          (prev.username || '') !== (acc.username || ''))) {
+          changed = true;
+        }
+      }
+      if (changed) {
         jsonSet(localStorage, CONFIG.dsc.accounts, kept);
         renderSavedAccounts();
+      }
+      if (removed > 0) {
         toast(removed + ' saved account' + (removed === 1 ? '' : 's') + ' removed (token no longer valid).', 'error');
       }
       return removed;
@@ -6056,12 +6074,6 @@ window.manager = {
         const profile = res && res.data && res.data.id ? res.data : null;
         if (!profile) {
           return false;
-        }
-        const stale = !state.user || !state.user.id || isSyntheticUser(state.user);
-        const fromTokenMissing = state.user && state.user.id && profile.id && state.user.id !== profile.id;
-        const needsRefresh = stale || fromTokenMissing || state.user.username !== profile.username || state.user.global_name !== profile.global_name || state.user.avatar !== profile.avatar;
-        if (!needsRefresh) {
-          return true;
         }
         setActiveAccount(token, profile);
         jsonSet(localStorage, CONFIG.dsc.user, {
