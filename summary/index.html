@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Summary - Account Inventory</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- ======================= LOGIN SCREEN ======================= -->
+  <div id="summaryLogin" class="login-wrap hidden">
+    <form id="loginForm" class="login-card" autocomplete="off">
+      <div class="login-icon" aria-hidden="true">&#128200;</div>
+      <h1 class="login-title">Account Summary</h1>
+      <p class="login-sub">Restricted area. Enter the administrator password to continue.</p>
+      <input id="loginPassword" type="password" class="field" placeholder="Password" autocomplete="current-password" required>
+      <p id="loginError" class="login-error hidden" role="alert"></p>
+      <button id="loginBtn" type="submit" class="btn btn-primary btn-block">Login</button>
+    </form>
+  </div>
+
+  <!-- ======================= DASHBOARD ======================= -->
+  <div id="summaryDash" class="dash-wrap hidden">
+    <header class="topbar">
+      <div class="topbar-title">
+        <span class="topbar-dot" aria-hidden="true"></span>
+        Financial &amp; Inventory Summary
+      </div>
+      <div class="topbar-actions">
+        <button id="addAccountBtn" class="btn btn-primary">Add Account</button>
+        <button id="logoutBtn" class="btn btn-ghost">Log out</button>
+      </div>
+    </header>
+
+    <section class="kpis" aria-label="Key metrics">
+      <div class="kpi-card">
+        <span class="kpi-label">Total Spent</span>
+        <span id="kpiSpent" class="kpi-value">$0.00</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Total Revenue</span>
+        <span id="kpiRevenue" class="kpi-value">$0.00</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Net Profit</span>
+        <span id="kpiNet" class="kpi-value">$0.00</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">This Month Profit</span>
+        <span id="kpiMonthly" class="kpi-value">$0.00</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div class="filters" role="tablist" aria-label="Filter accounts">
+          <button id="filterAll" class="chip chip-active" data-filter="all" role="tab">All</button>
+          <button id="filterAvailable" class="chip" data-filter="AVAILABLE" role="tab">Available</button>
+          <button id="filterSold" class="chip" data-filter="SOLD" role="tab">Sold</button>
+        </div>
+        <span id="accountCount" class="panel-count">0 accounts</span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="accounts-table">
+          <thead>
+            <tr>
+              <th>Account / User</th>
+              <th>Badges &amp; Nitro</th>
+              <th>Contact</th>
+              <th>Created</th>
+              <th class="num">Buy</th>
+              <th>Status</th>
+              <th class="num">Sell</th>
+              <th class="num">Net</th>
+              <th class="actions-th">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="accountsBody"></tbody>
+        </table>
+        <p id="emptyState" class="empty hidden">No accounts yet. Add your first account to start tracking finances.</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- ======================= ADD ACCOUNT MODAL ======================= -->
+  <div id="addModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 class="modal-title">Add Account</h2>
+        <button id="modalClose" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="token-panel">
+        <label class="field-label" for="tokenInput">Discord Token (optional autofill)</label>
+        <div class="token-row">
+          <input id="tokenInput" type="password" class="field" placeholder="Paste a Discord token here...">
+          <button id="fetchBtn" class="btn btn-secondary" type="button">Fetch Details</button>
+        </div>
+        <p id="fetchStatus" class="fetch-status" role="status"></p>
+        <p class="tip">Your token is sent to the server once to query Discord, then discarded. It is never stored.</p>
+      </div>
+
+      <form id="accountForm">
+        <div class="form-grid">
+          <div class="form-col">
+            <label class="field-label" for="fDiscordId">Discord ID</label>
+            <input id="fDiscordId" type="text" class="field" placeholder="000000000000000000">
+
+            <label class="field-label" for="fUsername">Username</label>
+            <input id="fUsername" type="text" class="field" placeholder="username#0000">
+
+            <label class="field-label" for="fEmail">Email</label>
+            <input id="fEmail" type="email" class="field" placeholder="user@example.com">
+
+            <label class="field-label" for="fPhone">Phone</label>
+            <input id="fPhone" type="text" class="field" placeholder="(optional)">
+
+            <label class="field-label" for="fCreationDate">Creation Date</label>
+            <input id="fCreationDate" type="date" class="field">
+          </div>
+
+          <div class="form-col">
+            <span class="field-label">Status Flags</span>
+            <div class="check-row">
+              <label class="check"><input id="f2fa" type="checkbox"> 2FA enabled</label>
+              <label class="check"><input id="fVerified" type="checkbox"> Email verified</label>
+            </div>
+
+            <label class="field-label" for="fNitro">Nitro Tier</label>
+            <select id="fNitro" class="field">
+              <option value="None">None</option>
+              <option value="Nitro Classic">Nitro Classic</option>
+              <option value="Nitro">Nitro</option>
+              <option value="Nitro Basic">Nitro Basic</option>
+            </select>
+
+            <label class="field-label" for="fBadges">Badges (comma separated)</label>
+            <input id="fBadges" type="text" class="field" placeholder="Early Supporter, Active Developer">
+
+            <label class="field-label" for="fDecorations">Decorations (comma separated)</label>
+            <input id="fDecorations" type="text" class="field" placeholder="Avatar decoration name">
+
+            <label class="field-label" for="fNotes">Notes</label>
+            <input id="fNotes" type="text" class="field" placeholder="(optional)">
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <input id="fBuyPrice" type="number" step="0.01" min="0" class="field buy-price" placeholder="Buy price (required)" required>
+          <div class="modal-actions">
+            <button type="button" id="saveCancel" class="btn btn-ghost">Cancel</button>
+            <button type="submit" id="saveBtn" class="btn btn-primary">Save Account</button>
+          </div>
+        </div>
+        <p id="saveStatus" class="fetch-status" role="status"></p>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <script src="app.js?v=1"></script>
+</body>
+</html>
