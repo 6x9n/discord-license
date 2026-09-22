@@ -72,6 +72,51 @@ function parseMoney(value) {
   return isFinite(n) ? n : null;
 }
 
+function reject400(message) {
+  const err = new Error(message);
+  err.status = 400;
+  throw err;
+}
+
+// Shared field validation for both create and update payloads.
+function assertProfile(body) {
+  const did = String(body.discordId || '').trim();
+  if (did && !/^[0-9]{15,21}$/.test(did)) {
+    reject400('Discord ID must be 15 to 21 digits when provided.');
+  }
+  const username = String(body.username || '').trim();
+  if (username.length > 40) {
+    reject400('Username is too long (max 40 characters).');
+  }
+  const email = String(body.email || '').trim();
+  if (email && email.indexOf('@') !== -1 && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    reject400('Email address format looks invalid.');
+  }
+  const phone = String(body.phone || '').trim();
+  if (phone && !/^[0-9()+\-.\s]{6,30}$/.test(phone)) {
+    reject400('Phone number looks invalid.');
+  }
+  const notes = String(body.notes || '').trim();
+  if (notes.length > 2000) {
+    reject400('Notes are too long (max 2000 characters).');
+  }
+  if (body.badges !== undefined) {
+    if (!Array.isArray(body.badges)) reject400('Badges must be a list.');
+    if (body.badges.length > 40) reject400('Too many badges (max 40).');
+    body.badges.forEach(function (b) {
+      if (String(b).trim().length > 60) reject400('A badge label is too long (max 60 characters).');
+    });
+  }
+  if (body.decorations !== undefined) {
+    if (!Array.isArray(body.decorations)) reject400('Decorations must be a list.');
+    if (body.decorations.length > 40) reject400('Too many decorations (max 40).');
+    body.decorations.forEach(function (d) {
+      if (String(d).trim().length > 60) reject400('A decoration label is too long (max 60 characters).');
+    });
+  }
+  return true;
+}
+
 function decodeFlags(flags) {
   const n = Number(flags) || 0;
   const out = [];
@@ -102,6 +147,7 @@ function sanitizeCreate(body) {
     err.status = 400;
     throw err;
   }
+  assertProfile(body);
   const row = {
     discord_id: String(body.discordId || '').trim(),
     username: String(body.username || '').trim(),
@@ -126,6 +172,7 @@ function sanitizeCreate(body) {
 }
 
 function sanitizeUpdate(body) {
+  assertProfile(body);
   const patch = {};
   const stringFields = ['username', 'email', 'phone', 'notes', 'nitro_tier', 'nitro_ends'];
   stringFields.forEach(function (key) {

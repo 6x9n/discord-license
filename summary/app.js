@@ -1,10 +1,9 @@
 'use strict';
 
-/* global state */
 var state = {
   accounts: [],
   filter: 'all',
-  busy: false,
+  mode: 'autofill',
   toastTimer: null
 };
 
@@ -53,11 +52,17 @@ function showLogin() {
   $('summaryDash').classList.add('hidden');
   $('loginError').classList.add('hidden');
   $('loginPassword').value = '';
+  setTimeout(function () { $('loginPassword').focus(); }, 30);
 }
 
 function showDash() {
   $('summaryLogin').classList.add('hidden');
   $('summaryDash').classList.remove('hidden');
+}
+
+function setBtnLoading(btn, loading) {
+  btn.classList.toggle('is-loading', !!loading);
+  btn.disabled = !!loading;
 }
 
 function api(path, method, body) {
@@ -75,29 +80,47 @@ function api(path, method, body) {
   });
 }
 
-/* ---------------- Auth ---------------- */
+/* ================= Login ================= */
+function setLoginError(msg) {
+  var errEl = $('loginError');
+  if (!msg) {
+    errEl.classList.add('hidden');
+    errEl.textContent = '';
+    return;
+  }
+  errEl.textContent = msg;
+  errEl.classList.remove('hidden');
+  var card = $('loginCard');
+  card.classList.remove('shake');
+  void card.offsetWidth; // restart animation
+  card.classList.add('shake');
+}
+
 function handleLogin(e) {
   e.preventDefault();
   var pw = $('loginPassword').value;
   var btn = $('loginBtn');
-  var errEl = $('loginError');
-  btn.disabled = true;
-  btn.textContent = 'Signing in...';
+
+  if (!pw) {
+    setLoginError('Please enter the password.');
+    $('loginPassword').focus();
+    return;
+  }
+
+  setLoginError(null);
+  setBtnLoading(btn, true);
   api('summary?op=login', 'POST', { password: pw }).then(function (r) {
     if (r.ok) {
-      errEl.classList.add('hidden');
       showDash();
       loadAccounts();
     } else {
-      errEl.textContent = (r.data && r.data.error) || 'Login failed.';
-      errEl.classList.remove('hidden');
+      setLoginError((r.data && r.data.error) || 'Login failed.');
+      $('loginPassword').select();
     }
   }).catch(function () {
-    errEl.textContent = 'Could not reach the server.';
-    errEl.classList.remove('hidden');
+    setLoginError('Could not reach the server. Check your connection and try again.');
   }).then(function () {
-    btn.disabled = false;
-    btn.textContent = 'Login';
+    setBtnLoading(btn, false);
   });
 }
 
@@ -105,14 +128,10 @@ function handleLogout() {
   api('summary?op=logout', 'POST').then(showLogin).catch(showLogin);
 }
 
-/* ---------------- Dashboard ---------------- */
+/* ================= Dashboard ================= */
 function loadAccounts() {
-  state.busy = true;
   api('summary').then(function (r) {
-    if (r.status === 401) {
-      showLogin();
-      return;
-    }
+    if (r.status === 401) { showLogin(); return; }
     if (!r.ok) {
       showToast(((r.data && r.data.error) || 'Failed to load accounts.'), 'err');
       state.accounts = [];
@@ -122,8 +141,6 @@ function loadAccounts() {
     renderAll();
   }).catch(function () {
     showToast('Network error while loading accounts.', 'err');
-  }).then(function () {
-    state.busy = false;
   });
 }
 
@@ -207,7 +224,7 @@ function rowHtml(row) {
     + (row.notes ? '<div class="cell-micro">' + esc(row.notes) + '</div>' : '')
     + '</td>'
     + '<td>' + badgesHtml(row) + '</td>'
-    + '<td><div class="cell-sub">' + esc(row.email || '—') + '</div>'
+    + '<td><div class="cell-sub" title="' + esc(row.email || '') + '">' + esc(row.email || '—') + '</div>'
     + '<div class="cell-micro">' + (row.phone ? esc(row.phone) : (row.email ? 'phone: —' : '')) + '</div></td>'
     + '<td class="cell-sub">' + fmtDate(row.creation_date)
     + '<div class="cell-micro">added ' + shortDate(row.created_at) + '</div></td>'
@@ -221,45 +238,95 @@ function rowHtml(row) {
     + '</tr>';
 }
 
-/* ---------------- Modal ---------------- */
+/* ================= Modal ================= */
+var FORM_INPUTS = ['fDiscordId', 'fUsername', 'fEmail', 'fPhone', 'fCreationDate', 'fBadges', 'fDecorations', 'fNotes', 'fBuyPrice'];
+
+function markField(id, invalid) {
+  var el = $(id);
+  if (!el) return;
+  el.classList.toggle('field-invalid', !!invalid);
+  el.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+}
+
+function setSaveStatus(msg, type) {
+  var el = $('saveStatus');
+  el.textContent = msg || '';
+  el.className = 'fetch-status' + (type ? ' ' + type : '');
+}
+
+function clearStatuses() {
+  setSaveStatus('');
+  $('fetchStatus').className = 'fetch-status';
+  $('fetchStatus').textContent = '';
+}
+
 function resetModal() {
-  ['fDiscordId', 'fUsername', 'fEmail', 'fPhone', 'fBadges', 'fDecorations', 'fNotes', 'fBuyPrice', 'tokenInput'].forEach(function (id) {
-    $(id).value = '';
-  });
-  $('fCreationDate').value = '';
+  FORM_INPUTS.forEach(function (id) { $(id).value = ''; });
+  $('tokenInput').value = '';
   $('fNitro').value = 'None';
   $('f2fa').checked = false;
   $('fVerified').checked = false;
-  $('fetchStatus').className = 'fetch-status';
-  $('fetchStatus').textContent = '';
-  $('saveStatus').className = 'fetch-status';
-  $('saveStatus').textContent = '';
+  FORM_INPUTS.forEach(function (id) { markField(id, false); });
+  clearStatuses();
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  var autofill = $('modeAutofill');
+  var manual = $('modeManual');
+  var autofillActive = mode === 'autofill';
+  autofill.classList.toggle('mode-active', autofillActive);
+  manual.classList.toggle('mode-active', !autofillActive);
+  autofill.setAttribute('aria-selected', autofillActive ? 'true' : 'false');
+  manual.setAttribute('aria-selected', autofillActive ? 'false' : 'true');
+  $('tokenPanel').classList.toggle('hidden', !autofillActive);
 }
 
 function openModal() {
   resetModal();
+  setMode(state.mode);
   $('addModal').classList.remove('hidden');
-  setTimeout(function () { $('tokenInput').focus(); }, 30);
+  setTimeout(function () {
+    if (state.mode === 'autofill') $('tokenInput').focus();
+    else $('fDiscordId').focus();
+  }, 30);
 }
 
 function closeModal() {
   $('addModal').classList.add('hidden');
 }
 
+function openAutofill() { setMode('autofill'); openModal(); }
+function openManual() { setMode('manual'); openModal(); }
+
+/* -------- Token fetch -------- */
 function fetchDetail() {
-  var token = $('tokenInput').value.trim();
+  var token = $('tokenInput').value;
   var statusEl = $('fetchStatus');
-  if (!token) {
+
+  if (!token.trim()) {
     statusEl.textContent = 'Paste a Discord token first.';
+    statusEl.className = 'fetch-status err';
+    $('tokenInput').focus();
+    return;
+  }
+  if (/\s/.test(token)) {
+    statusEl.textContent = 'The token contains spaces. Make sure you copied the whole token.';
     statusEl.className = 'fetch-status err';
     return;
   }
+  if (token.length < 20) {
+    statusEl.textContent = 'This token looks too short to be valid. Check it and try again.';
+    statusEl.className = 'fetch-status err';
+    return;
+  }
+
   var btn = $('fetchBtn');
-  btn.disabled = true;
-  btn.textContent = 'Fetching...';
+  setBtnLoading(btn, true);
   statusEl.textContent = 'Querying Discord...';
   statusEl.className = 'fetch-status';
-  api('summary?op=fetch', 'POST', { token: token }).then(function (r) {
+
+  api('summary?op=fetch', 'POST', { token: token.trim() }).then(function (r) {
     if (!r.ok) {
       statusEl.textContent = (r.data && r.data.error) || 'Fetch failed.';
       statusEl.className = 'fetch-status err';
@@ -278,26 +345,97 @@ function fetchDetail() {
     }
     $('fBadges').value = (d.badges || []).join(', ');
     $('fDecorations').value = (d.decorations || []).join(', ');
+    ['fDiscordId', 'fUsername', 'fEmail', 'fPhone', 'fCreationDate'].forEach(function (id) { markField(id, false); });
     statusEl.textContent = 'Details fetched for ' + (d.discordId ? '#' + d.discordId : 'account') + '. Review and set a buy price.';
     statusEl.className = 'fetch-status ok';
   }).catch(function () {
     statusEl.textContent = 'Could not reach the server.';
     statusEl.className = 'fetch-status err';
   }).then(function () {
-    btn.disabled = false;
-    btn.textContent = 'Fetch Details';
+    setBtnLoading(btn, false);
   });
+}
+
+/* -------- Submit -------- */
+function validateForm() {
+  var errors = [];
+
+  var buyRaw = $('fBuyPrice').value;
+  var buyPrice = Number(buyRaw);
+  if (buyRaw === '' || !isFinite(buyPrice) || buyPrice < 0) {
+    errors.push({ id: 'fBuyPrice', msg: 'Buy price is required and must be a valid non-negative number.' });
+  }
+
+  var discordId = $('fDiscordId').value.trim();
+  if (discordId) {
+    if (!/^[0-9]{15,21}$/.test(discordId)) {
+      errors.push({ id: 'fDiscordId', msg: 'Discord ID must be 15 to 21 digits (no letters).' });
+    } else if (state.accounts.some(function (a) { return a.discord_id && a.discord_id === discordId; })) {
+      errors.push({ id: 'fDiscordId', msg: 'An account with this Discord ID is already tracked.' });
+    }
+  }
+
+  var username = $('fUsername').value.trim();
+  if (username.length > 40) {
+    errors.push({ id: 'fUsername', msg: 'Username is too long (max 40 characters).' });
+  }
+
+  var email = $('fEmail').value.trim();
+  if (email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      errors.push({ id: 'fEmail', msg: 'Email address format looks invalid.' });
+    }
+  }
+
+  var phone = $('fPhone').value.trim();
+  if (phone && !/^[0-9()+\-.\s]{6,30}$/.test(phone)) {
+    errors.push({ id: 'fPhone', msg: 'Phone number looks invalid (digits, +, -, parentheses only).' });
+  }
+
+  var creationDate = $('fCreationDate').value;
+  if (creationDate) {
+    var cd = new Date(creationDate + 'T00:00:00');
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (cd > today) {
+      errors.push({ id: 'fCreationDate', msg: 'Creation date cannot be in the future.' });
+    }
+  }
+
+  if (!discordId && !username && !email) {
+    errors.push({ id: 'fDiscordId', msg: 'Enter at least a Discord ID, a username, or an email so the account can be identified.' });
+  }
+
+  [$('fBadges').value, $('fDecorations').value].forEach(function (rawVal) {
+    splitList(rawVal).forEach(function (item) {
+      if (item.length > 60) {
+        errors.push({ id: 'fBadges', msg: 'A badge / decoration label is too long (max 60 characters).' });
+      }
+    });
+  });
+
+  return errors;
 }
 
 function saveAccount(e) {
   e.preventDefault();
-  var statusEl = $('saveStatus');
-  var buyPrice = Number($('fBuyPrice').value);
-  if ($('fBuyPrice').value === '' || isNaN(buyPrice) || buyPrice < 0) {
-    statusEl.textContent = 'Buy price is required and must be a valid non-negative number.';
-    statusEl.className = 'fetch-status err';
+  FORM_INPUTS.forEach(function (id) { markField(id, false); });
+  setSaveStatus('');
+
+  var errors = validateForm();
+  if (errors.length) {
+    errors.forEach(function (er) { markField(er.id, true); });
+    var msgs = errors.map(function (er) { return er.msg; });
+    setSaveStatus(msgs.length === 1 ? msgs[0] : 'Please fix the highlighted fields: ' + msgs.join(' '), 'err');
+    var first = errors[0];
+    var el = $(first.id);
+    if (el) {
+      if (el.focus) el.focus();
+      if (el.select) el.select();
+    }
     return;
   }
+
   var payload = {
     discordId: $('fDiscordId').value.trim(),
     username: $('fUsername').value.trim(),
@@ -309,39 +447,36 @@ function saveAccount(e) {
     nitroTier: $('fNitro').value,
     badges: splitList($('fBadges').value),
     decorations: splitList($('fDecorations').value),
-    buyPrice: buyPrice,
+    buyPrice: Number($('fBuyPrice').value),
     notes: $('fNotes').value.trim()
   };
+
   var btn = $('saveBtn');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
+  setBtnLoading(btn, true);
   api('summary', 'POST', payload).then(function (r) {
     if (r.status === 401) { showLogin(); return; }
     if (!r.ok) {
-      statusEl.textContent = (r.data && r.data.error) || 'Failed to save account.';
-      statusEl.className = 'fetch-status err';
+      setSaveStatus((r.data && r.data.error) || 'Failed to save account.', 'err');
       return;
     }
-    statusEl.textContent = '';
+    setSaveStatus('');
     showToast('Account added.', 'ok');
     closeModal();
     loadAccounts();
   }).catch(function () {
-    statusEl.textContent = 'Could not reach the server.';
-    statusEl.className = 'fetch-status err';
+    setSaveStatus('Could not reach the server.', 'err');
   }).then(function () {
-    btn.disabled = false;
-    btn.textContent = 'Save Account';
+    setBtnLoading(btn, false);
   });
 }
 
-/* ---------------- Row actions ---------------- */
+/* ================= Row actions ================= */
 function markSold(id, name) {
   var label = name ? ' "' + name + '"' : '';
   var raw = prompt('Enter the sale price for account' + label + ':', '0');
   if (raw === null) return;
   var sellPrice = Number(raw);
-  if (isNaN(sellPrice) || sellPrice < 0) {
+  if (raw.trim() === '' || isNaN(sellPrice) || sellPrice < 0) {
     showToast('Sale price must be a valid non-negative number.', 'err');
     return;
   }
@@ -377,7 +512,7 @@ function deleteAccount(id) {
   });
 }
 
-/* ---------------- Wiring ---------------- */
+/* ================= Wiring ================= */
 function setFilter(filter, btn) {
   state.filter = filter;
   var chips = document.querySelectorAll('.chip[data-filter]');
@@ -389,10 +524,25 @@ function setFilter(filter, btn) {
 
 function bindUI() {
   $('loginForm').addEventListener('submit', handleLogin);
+  $('loginPassword').addEventListener('input', function () { setLoginError(null); });
+  $('pwToggle').addEventListener('click', function () {
+    var pw = $('loginPassword');
+    var show = pw.type === 'password';
+    pw.type = show ? 'text' : 'password';
+    $('pwEyeOpen').classList.toggle('hidden', !show);
+    $('pwEyeClosed').classList.toggle('hidden', show);
+    this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    pw.focus();
+  });
+
   $('logoutBtn').addEventListener('click', handleLogout);
-  $('addAccountBtn').addEventListener('click', openModal);
+  $('addAccountBtn').addEventListener('click', openAutofill);
+  $('addManualBtn').addEventListener('click', openManual);
+
   $('modalClose').addEventListener('click', closeModal);
   $('saveCancel').addEventListener('click', closeModal);
+  $('modeAutofill').addEventListener('click', function () { setMode('autofill'); $('tokenInput').focus(); });
+  $('modeManual').addEventListener('click', function () { setMode('manual'); $('fDiscordId').focus(); });
   $('fetchBtn').addEventListener('click', fetchDetail);
   $('tokenInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
@@ -401,6 +551,13 @@ function bindUI() {
     }
   });
   $('accountForm').addEventListener('submit', saveAccount);
+
+  FORM_INPUTS.forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      markField(id, false);
+      if ($('saveStatus').classList.contains('err')) setSaveStatus('');
+    });
+  });
 
   var chips = document.querySelectorAll('.chip[data-filter]');
   for (var i = 0; i < chips.length; i++) {
@@ -423,7 +580,10 @@ function bindUI() {
   $('addModal').addEventListener('click', function (e) {
     if (e.target === this) closeModal();
   });
-  $('loginForm').addEventListener('keydown', function () { /* noop, form handles Enter */ });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !$('addModal').classList.contains('hidden')) closeModal();
+  });
 }
 
 function init() {

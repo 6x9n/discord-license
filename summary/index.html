@@ -10,14 +10,45 @@
 <body>
   <!-- ======================= LOGIN SCREEN ======================= -->
   <div id="summaryLogin" class="login-wrap hidden">
-    <form id="loginForm" class="login-card" autocomplete="off">
-      <div class="login-icon" aria-hidden="true">&#128200;</div>
+    <div class="login-card" id="loginCard">
+      <div class="login-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
       <h1 class="login-title">Account Summary</h1>
       <p class="login-sub">Restricted area. Enter the administrator password to continue.</p>
-      <input id="loginPassword" type="password" class="field" placeholder="Password" autocomplete="current-password" required>
-      <p id="loginError" class="login-error hidden" role="alert"></p>
-      <button id="loginBtn" type="submit" class="btn btn-primary btn-block">Login</button>
-    </form>
+
+      <form id="loginForm" autocomplete="off" novalidate>
+        <div class="password-wrap">
+          <input id="loginPassword" type="password" name="password" class="field" placeholder="Password"
+            autocomplete="current-password" aria-label="Password">
+          <button type="button" id="pwToggle" class="pw-toggle" aria-label="Show password">
+            <svg id="pwEyeOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg id="pwEyeClosed" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3l18 18"></path>
+              <path d="M10.6 5.1A11.8 11.8 0 0 1 12 5c7 0 11 7 11 7a15.9 15.9 0 0 1-2.9 3.7"></path>
+              <path d="M6.6 6.6A15.4 15.4 0 0 0 1 12s4 7 11 7a11.5 11.5 0 0 0 4.1-.8"></path>
+              <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"></path>
+            </svg>
+          </button>
+        </div>
+        <p id="loginError" class="login-error hidden" role="alert"></p>
+        <button id="loginBtn" type="submit" class="btn btn-primary btn-block">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn-label">Login</span>
+        </button>
+      </form>
+
+      <p class="login-foot">Financial &amp; inventory dashboard</p>
+    </div>
   </div>
 
   <!-- ======================= DASHBOARD ======================= -->
@@ -29,6 +60,7 @@
       </div>
       <div class="topbar-actions">
         <button id="addAccountBtn" class="btn btn-primary">Add Account</button>
+        <button id="addManualBtn" class="btn btn-secondary">Add Manually</button>
         <button id="logoutBtn" class="btn btn-ghost">Log out</button>
       </div>
     </header>
@@ -92,37 +124,45 @@
         <button id="modalClose" class="modal-close" aria-label="Close">&times;</button>
       </div>
 
-      <div class="token-panel">
+      <div class="mode-switch" role="tablist" aria-label="Entry mode">
+        <button type="button" id="modeAutofill" class="mode-tab mode-active" data-mode="autofill" role="tab" aria-selected="true">Use Token</button>
+        <button type="button" id="modeManual" class="mode-tab" data-mode="manual" role="tab" aria-selected="false">Enter Manually</button>
+      </div>
+
+      <div id="tokenPanel" class="token-panel">
         <label class="field-label" for="tokenInput">Discord Token (optional autofill)</label>
         <div class="token-row">
           <input id="tokenInput" type="password" class="field" placeholder="Paste a Discord token here...">
-          <button id="fetchBtn" class="btn btn-secondary" type="button">Fetch Details</button>
+          <button id="fetchBtn" class="btn btn-secondary" type="button">
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="btn-label">Fetch Details</span>
+          </button>
         </div>
         <p id="fetchStatus" class="fetch-status" role="status"></p>
-        <p class="tip">Your token is sent to the server once to query Discord, then discarded. It is never stored.</p>
+        <p class="tip">Your token is sent to the server once to query Discord, then discarded. It is never stored. No token? Switch to "Enter Manually" above.</p>
       </div>
 
-      <form id="accountForm">
+      <form id="accountForm" novalidate>
         <div class="form-grid">
           <div class="form-col">
             <label class="field-label" for="fDiscordId">Discord ID</label>
-            <input id="fDiscordId" type="text" class="field" placeholder="000000000000000000">
+            <input id="fDiscordId" type="text" class="field" placeholder="000000000000000000" autocomplete="off">
 
             <label class="field-label" for="fUsername">Username</label>
-            <input id="fUsername" type="text" class="field" placeholder="username#0000">
+            <input id="fUsername" type="text" class="field" placeholder="username#0000" autocomplete="off">
 
             <label class="field-label" for="fEmail">Email</label>
-            <input id="fEmail" type="email" class="field" placeholder="user@example.com">
+            <input id="fEmail" type="email" class="field" placeholder="user@example.com" autocomplete="off">
 
             <label class="field-label" for="fPhone">Phone</label>
-            <input id="fPhone" type="text" class="field" placeholder="(optional)">
+            <input id="fPhone" type="text" class="field" placeholder="(optional)" autocomplete="off">
 
             <label class="field-label" for="fCreationDate">Creation Date</label>
             <input id="fCreationDate" type="date" class="field">
           </div>
 
           <div class="form-col">
-            <span class="field-label">Status Flags</span>
+            <span class="field-label status-flags">Status Flags</span>
             <div class="check-row">
               <label class="check"><input id="f2fa" type="checkbox"> 2FA enabled</label>
               <label class="check"><input id="fVerified" type="checkbox"> Email verified</label>
@@ -137,21 +177,27 @@
             </select>
 
             <label class="field-label" for="fBadges">Badges (comma separated)</label>
-            <input id="fBadges" type="text" class="field" placeholder="Early Supporter, Active Developer">
+            <input id="fBadges" type="text" class="field" placeholder="Early Supporter, Active Developer" autocomplete="off">
 
             <label class="field-label" for="fDecorations">Decorations (comma separated)</label>
-            <input id="fDecorations" type="text" class="field" placeholder="Avatar decoration name">
+            <input id="fDecorations" type="text" class="field" placeholder="Avatar decoration name" autocomplete="off">
 
             <label class="field-label" for="fNotes">Notes</label>
-            <input id="fNotes" type="text" class="field" placeholder="(optional)">
+            <input id="fNotes" type="text" class="field" placeholder="(optional)" autocomplete="off">
           </div>
         </div>
 
         <div class="modal-foot">
-          <input id="fBuyPrice" type="number" step="0.01" min="0" class="field buy-price" placeholder="Buy price (required)" required>
+          <div class="buy-box">
+            <label class="field-label" for="fBuyPrice">Buy Price *</label>
+            <input id="fBuyPrice" type="number" step="0.01" min="0" class="field" placeholder="0.00" aria-label="Buy price">
+          </div>
           <div class="modal-actions">
             <button type="button" id="saveCancel" class="btn btn-ghost">Cancel</button>
-            <button type="submit" id="saveBtn" class="btn btn-primary">Save Account</button>
+            <button type="submit" id="saveBtn" class="btn btn-primary">
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="btn-label">Save Account</span>
+            </button>
           </div>
         </div>
         <p id="saveStatus" class="fetch-status" role="status"></p>
@@ -161,6 +207,6 @@
 
   <div id="toast" class="toast hidden" role="status"></div>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
