@@ -394,6 +394,12 @@ function bindUI() {
   $('modalClose').addEventListener('click', closeModal);
   $('saveCancel').addEventListener('click', closeModal);
   $('fetchBtn').addEventListener('click', fetchDetail);
+  $('tokenInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      fetchDetail();
+    }
+  });
   $('accountForm').addEventListener('submit', saveAccount);
 
   var chips = document.querySelectorAll('.chip[data-filter]');
