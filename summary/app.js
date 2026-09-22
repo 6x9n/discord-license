@@ -83,7 +83,7 @@ function handleLogin(e) {
   var errEl = $('loginError');
   btn.disabled = true;
   btn.textContent = 'Signing in...';
-  api('auth/login', 'POST', { password: pw }).then(function (r) {
+  api('summary?op=login', 'POST', { password: pw }).then(function (r) {
     if (r.ok) {
       errEl.classList.add('hidden');
       showDash();
@@ -102,13 +102,13 @@ function handleLogin(e) {
 }
 
 function handleLogout() {
-  api('auth/logout', 'POST').then(showLogin).catch(showLogin);
+  api('summary?op=logout', 'POST').then(showLogin).catch(showLogin);
 }
 
 /* ---------------- Dashboard ---------------- */
 function loadAccounts() {
   state.busy = true;
-  api('accounts').then(function (r) {
+  api('summary').then(function (r) {
     if (r.status === 401) {
       showLogin();
       return;
@@ -259,7 +259,7 @@ function fetchDetail() {
   btn.textContent = 'Fetching...';
   statusEl.textContent = 'Querying Discord...';
   statusEl.className = 'fetch-status';
-  api('discord/fetch', 'POST', { token: token }).then(function (r) {
+  api('summary?op=fetch', 'POST', { token: token }).then(function (r) {
     if (!r.ok) {
       statusEl.textContent = (r.data && r.data.error) || 'Fetch failed.';
       statusEl.className = 'fetch-status err';
@@ -315,7 +315,7 @@ function saveAccount(e) {
   var btn = $('saveBtn');
   btn.disabled = true;
   btn.textContent = 'Saving...';
-  api('accounts', 'POST', payload).then(function (r) {
+  api('summary', 'POST', payload).then(function (r) {
     if (r.status === 401) { showLogin(); return; }
     if (!r.ok) {
       statusEl.textContent = (r.data && r.data.error) || 'Failed to save account.';
@@ -345,7 +345,7 @@ function markSold(id, name) {
     showToast('Sale price must be a valid non-negative number.', 'err');
     return;
   }
-  api('accounts/' + encodeURIComponent(id), 'PATCH', {
+  api('summary?id=' + encodeURIComponent(id), 'PATCH', {
     status: 'SOLD',
     sellPrice: sellPrice,
     soldAt: new Date().toISOString()
@@ -364,7 +364,7 @@ function markSold(id, name) {
 
 function deleteAccount(id) {
   if (!confirm('Delete this account record? This cannot be undone.')) return;
-  api('accounts/' + encodeURIComponent(id), 'DELETE').then(function (r) {
+  api('summary?id=' + encodeURIComponent(id), 'DELETE').then(function (r) {
     if (r.status === 401) { showLogin(); return; }
     if (!r.ok) {
       showToast((r.data && r.data.error) || 'Failed to delete account.', 'err');
@@ -428,7 +428,7 @@ function bindUI() {
 
 function init() {
   bindUI();
-  api('auth/check').then(function (r) {
+  api('summary?op=check').then(function (r) {
     if (r.ok && r.data && r.data.authenticated) {
       showDash();
       loadAccounts();

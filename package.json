@@ -4,7 +4,7 @@
   "private": true,
   "description": "Static Discord Account Manager + license server and admin dashboard",
   "scripts": {
-    "check": "node --check js/manager.js && node --check js/license.js && node --check js/cursor.js && node --check panel_x7k2n9p4h8r3/admin.js && node --check api/_lib/supabase.js && node --check api/_lib/summary-auth.js && node --check api/activate.js && node --check api/admin/keys.js && node --check \"api/admin/keys/[id].js\" && node --check \"api/admin/keys/[id]/activations.js\" && node --check api/admin/validate.js && node --check api/auth/login.js && node --check api/auth/check.js && node --check api/auth/logout.js && node --check api/discord/fetch.js && node --check api/accounts.js && node --check \"api/accounts/[id].js\" && node --check summary/app.js"
+    "check": "node --check js/manager.js && node --check js/license.js && node --check js/cursor.js && node --check panel_x7k2n9p4h8r3/admin.js && node --check api/_lib/supabase.js && node --check api/_lib/summary-auth.js && node --check api/activate.js && node --check api/deactivate.js && node --check api/validate.js && node --check api/summary.js && node --check api/admin/keys.js && node --check \"api/admin/keys/[id].js\" && node --check \"api/admin/keys/[id]/activations.js\" && node --check api/admin/plans.js && node --check \"api/admin/plans/[id].js\" && node --check api/admin/validate.js && node --check summary/app.js"
   },
   "engines": {
     "node": ">=18"
