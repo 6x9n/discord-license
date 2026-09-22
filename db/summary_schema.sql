@@ -22,9 +22,18 @@ create table if not exists public.discord_accounts (
   status text not null default 'AVAILABLE'
     constraint discord_accounts_status_check check (status in ('AVAILABLE', 'SOLD')),
   sold_at timestamptz,
+  buyer_name text default '',
+  buyer_telegram text default '',
   notes text default '',
   created_at timestamptz not null default now()
 );
+
+-- --------------------------------------------------------------------------
+-- Migration for databases created before buyer info was tracked:
+-- Run this too (safe to run alongside the CREATE TABLE above).
+-- --------------------------------------------------------------------------
+alter table public.discord_accounts add column if not exists buyer_name text default '';
+alter table public.discord_accounts add column if not exists buyer_telegram text default '';
 
 create index if not exists discord_accounts_status_idx on public.discord_accounts (status);
 create index if not exists discord_accounts_sold_at_idx on public.discord_accounts (sold_at);

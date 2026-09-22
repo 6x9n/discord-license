@@ -17,6 +17,6 @@ module.exports = {
       }
     }
   },
-  safelist: ['status-AVAILABLE', 'status-SOLD'],
+  safelist: ['status-AVAILABLE', 'status-SOLD', 'badge-opt', 'selected', 'link'],
   plugins: []
 };

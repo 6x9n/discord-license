@@ -4,7 +4,8 @@ var state = {
   accounts: [],
   filter: 'all',
   mode: 'autofill',
-  toastTimer: null
+  toastTimer: null,
+  sellingId: null
 };
 
 function $(id) { return document.getElementById(id); }
@@ -37,6 +38,73 @@ function shortDate(iso) {
 
 function splitList(value) {
   return String(value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+}
+
+var BADGE_OPTIONS = [
+  'Discord Staff',
+  'Partner',
+  'HypeSquad Events',
+  'Bug Hunter',
+  'HypeSquad Bravery',
+  'HypeSquad Brilliance',
+  'HypeSquad Balance',
+  'Early Supporter',
+  'Bug Hunter Level 2',
+  'Verified Developer',
+  'Certified Moderator',
+  'Active Developer'
+];
+
+function badgeList() {
+  return splitList($('fBadges').value);
+}
+
+function syncBadgePicker() {
+  var list = badgeList();
+  var html = [];
+  BADGE_OPTIONS.forEach(function (b) {
+    var on = list.indexOf(b) !== -1;
+    html.push('<button type="button" data-badge="' + esc(b) + '" role="checkbox" aria-checked="' + on
+      + '" class="badge-opt' + (on ? ' selected' : '') + '">' + esc(b) + '</button>');
+  });
+  list.forEach(function (b) {
+    if (BADGE_OPTIONS.indexOf(b) === -1) {
+      html.push('<button type="button" data-badge="' + esc(b) + '" role="checkbox" aria-checked="true"'
+        + ' class="badge-opt selected">' + esc(b) + '</button>');
+    }
+  });
+  $('badgePicker').innerHTML = html.join('');
+}
+
+function toggleBadge(b) {
+  var list = badgeList();
+  var i = list.indexOf(b);
+  if (i !== -1) list.splice(i, 1);
+  else list.push(b);
+  $('fBadges').value = list.join(', ');
+  markField('fBadges', false);
+  if ($('saveStatus').classList.contains('err')) setSaveStatus('');
+  syncBadgePicker();
+}
+
+function addCustomBadge() {
+  var input = $('fCustomBadge');
+  var val = input.value.trim();
+  if (!val) { input.focus(); return; }
+  if (val.length > 60) {
+    markField('fCustomBadge', true);
+    input.focus();
+    showToast('Custom badge is too long (max 60 characters).', 'err');
+    return;
+  }
+  markField('fCustomBadge', false);
+  var list = badgeList();
+  if (list.indexOf(val) === -1) list.push(val);
+  $('fBadges').value = list.join(', ');
+  input.value = '';
+  if ($('saveStatus').classList.contains('err')) setSaveStatus('');
+  syncBadgePicker();
+  input.focus();
 }
 
 function showToast(msg, type) {
@@ -202,6 +270,25 @@ function badgesHtml(row) {
   return out.join('') || '<span class="cell-micro">—</span>';
 }
 
+function telegramHtml(raw) {
+  var v = String(raw || '').trim();
+  if (!v) return '';
+  if (/^https?:\/\//i.test(v)) {
+    return '<a class="link" href="' + esc(v) + '" target="_blank" rel="noopener noreferrer">' + esc(v) + '</a>';
+  }
+  var slug = v.replace(/^@/, '').replace(/[^a-zA-Z0-9_]/g, '');
+  if (!slug) return esc(v);
+  return '<a class="link" href="https://t.me/' + esc(slug) + '" target="_blank" rel="noopener noreferrer">@' + esc(slug) + '</a>';
+}
+
+function buyerBlock(row) {
+  var parts = [];
+  if (row.buyer_name) parts.push(esc(row.buyer_name));
+  if (row.buyer_telegram) parts.push(telegramHtml(row.buyer_telegram));
+  if (!parts.length) return '';
+  return '<div class="cell-micro">buyer: ' + parts.join(' &middot; ') + '</div>';
+}
+
 function rowHtml(row) {
   var id = esc(row.discord_id);
   var username = esc(row.username);
@@ -231,6 +318,7 @@ function rowHtml(row) {
     + '<td class="num">' + money(row.buy_price) + '</td>'
     + '<td><span class="status-badge status-' + esc(row.status) + '">' + esc(row.status) + '</span>'
     + (row.status === 'SOLD' && row.sold_at ? '<div class="cell-micro">' + shortDate(row.sold_at) + '</div>' : '')
+    + (row.status === 'SOLD' ? buyerBlock(row) : '')
     + '</td>'
     + '<td class="num">' + (row.status === 'SOLD' ? money(row.sell_price) : '—') + '</td>'
     + '<td class="num ' + netClass + '">' + net + '</td>'
@@ -263,11 +351,14 @@ function clearStatuses() {
 function resetModal() {
   FORM_INPUTS.forEach(function (id) { $(id).value = ''; });
   $('tokenInput').value = '';
+  $('fCustomBadge').value = '';
   $('fNitro').value = 'None';
   $('f2fa').checked = false;
   $('fVerified').checked = false;
   FORM_INPUTS.forEach(function (id) { markField(id, false); });
+  markField('fCustomBadge', false);
   clearStatuses();
+  syncBadgePicker();
 }
 
 function setMode(mode) {
@@ -344,6 +435,7 @@ function fetchDetail() {
       $('fNitro').value = d.nitroTier;
     }
     $('fBadges').value = (d.badges || []).join(', ');
+    syncBadgePicker();
     $('fDecorations').value = (d.decorations || []).join(', ');
     ['fDiscordId', 'fUsername', 'fEmail', 'fPhone', 'fCreationDate'].forEach(function (id) { markField(id, false); });
     statusEl.textContent = 'Details fetched for ' + (d.discordId ? '#' + d.discordId : 'account') + '. Review and set a buy price.';
@@ -471,29 +563,67 @@ function saveAccount(e) {
 }
 
 /* ================= Row actions ================= */
-function markSold(id, name) {
-  var label = name ? ' "' + name + '"' : '';
-  var raw = prompt('Enter the sale price for account' + label + ':', '0');
-  if (raw === null) return;
+/* ================= Sold modal ================= */
+function openSold(id) {
+  state.sellingId = id;
+  var name = '';
+  var found = state.accounts.filter(function (r) { return r.id === id; })[0];
+  if (found && found.username) name = ' "' + found.username + '"';
+  $('soldTitle').textContent = 'Mark' + name + ' as Sold';
+  $('soldPrice').value = '0';
+  $('soldBuyer').value = '';
+  $('soldTelegram').value = '';
+  markField('soldPrice', false);
+  markField('soldBuyer', false);
+  markField('soldTelegram', false);
+  $('soldStatus').textContent = '';
+  $('soldStatus').className = 'fetch-status';
+  $('soldModal').classList.remove('hidden');
+  setTimeout(function () { $('soldPrice').focus(); $('soldPrice').select(); }, 30);
+}
+
+function closeSoldModal() {
+  $('soldModal').classList.add('hidden');
+}
+
+function submitSold(e) {
+  e.preventDefault();
+  var raw = $('soldPrice').value;
   var sellPrice = Number(raw);
-  if (raw.trim() === '' || isNaN(sellPrice) || sellPrice < 0) {
-    showToast('Sale price must be a valid non-negative number.', 'err');
+  if (raw.trim() === '' || !isFinite(sellPrice) || sellPrice < 0) {
+    markField('soldPrice', true);
+    $('soldStatus').textContent = 'Sale price must be a valid non-negative number.';
+    $('soldStatus').className = 'fetch-status err';
     return;
   }
-  api('summary?id=' + encodeURIComponent(id), 'PATCH', {
+  markField('soldPrice', false);
+  var payload = {
     status: 'SOLD',
     sellPrice: sellPrice,
     soldAt: new Date().toISOString()
-  }).then(function (r) {
+  };
+  var buyerName = $('soldBuyer').value.trim();
+  var buyerTelegram = $('soldTelegram').value.trim();
+  if (buyerName) payload.buyerName = buyerName;
+  if (buyerTelegram) payload.buyerTelegram = buyerTelegram;
+
+  var btn = $('soldSave');
+  setBtnLoading(btn, true);
+  api('summary?id=' + encodeURIComponent(state.sellingId), 'PATCH', payload).then(function (r) {
     if (r.status === 401) { showLogin(); return; }
     if (!r.ok) {
-      showToast((r.data && r.data.error) || 'Failed to update account.', 'err');
+      $('soldStatus').textContent = (r.data && r.data.error) || 'Failed to update account.';
+      $('soldStatus').className = 'fetch-status err';
       return;
     }
+    closeSoldModal();
     showToast('Account marked as sold.', 'ok');
     loadAccounts();
   }).catch(function () {
-    showToast('Network error while updating account.', 'err');
+    $('soldStatus').textContent = 'Network error while updating account.';
+    $('soldStatus').className = 'fetch-status err';
+  }).then(function () {
+    setBtnLoading(btn, false);
   });
 }
 
@@ -552,6 +682,38 @@ function bindUI() {
   });
   $('accountForm').addEventListener('submit', saveAccount);
 
+  $('badgePicker').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-badge]');
+    if (btn) toggleBadge(btn.getAttribute('data-badge'));
+  });
+  $('addBadgeBtn').addEventListener('click', addCustomBadge);
+  $('fCustomBadge').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomBadge();
+    }
+  });
+  $('fCustomBadge').addEventListener('input', function () {
+    markField('fCustomBadge', false);
+    if ($('saveStatus').classList.contains('err')) setSaveStatus('');
+  });
+
+  $('soldForm').addEventListener('submit', submitSold);
+  $('soldCancel').addEventListener('click', closeSoldModal);
+  $('soldClose').addEventListener('click', closeSoldModal);
+  $('soldModal').addEventListener('click', function (e) {
+    if (e.target === this) closeSoldModal();
+  });
+  ['soldPrice', 'soldBuyer', 'soldTelegram'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      markField(id, false);
+      if ($('soldStatus').classList.contains('err')) {
+        $('soldStatus').textContent = '';
+        $('soldStatus').className = 'fetch-status';
+      }
+    });
+  });
+
   FORM_INPUTS.forEach(function (id) {
     $(id).addEventListener('input', function () {
       markField(id, false);
@@ -571,9 +733,7 @@ function bindUI() {
     if (!btn) return;
     var id = btn.getAttribute('data-id');
     var act = btn.getAttribute('data-act');
-    var name = state.accounts.filter(function (r) { return r.id === id; })[0];
-    name = name ? name.username : '';
-    if (act === 'sold') markSold(id, name);
+    if (act === 'sold') openSold(id);
     else if (act === 'del') deleteAccount(id);
   });
 
@@ -582,7 +742,10 @@ function bindUI() {
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !$('addModal').classList.contains('hidden')) closeModal();
+    if (e.key === 'Escape') {
+      if (!$('addModal').classList.contains('hidden')) closeModal();
+      if (!$('soldModal').classList.contains('hidden')) closeSoldModal();
+    }
   });
 }
 

@@ -199,8 +199,13 @@
               <option value="Nitro Basic">Nitro Basic</option>
             </select>
 
-            <label class="field-label" for="fBadges">Badges (comma separated)</label>
-            <input id="fBadges" type="text" class="field" placeholder="Early Supporter, Active Developer" autocomplete="off">
+            <span class="field-label">Badges</span>
+            <input id="fBadges" type="hidden">
+            <div id="badgePicker" class="flex flex-wrap gap-1.5" role="group" aria-label="Badges"></div>
+            <div class="mt-2 flex gap-2">
+              <input id="fCustomBadge" type="text" class="field" placeholder="Add a custom badge... (optional)" autocomplete="off" aria-label="Custom badge">
+              <button id="addBadgeBtn" type="button" class="btn btn-secondary whitespace-nowrap">Add</button>
+            </div>
 
             <label class="field-label" for="fDecorations">Decorations (comma separated)</label>
             <input id="fDecorations" type="text" class="field" placeholder="Avatar decoration name" autocomplete="off">
@@ -228,8 +233,38 @@
     </div>
   </div>
 
+  <!-- ======================= MARK SOLD MODAL ======================= -->
+  <div id="soldModal" class="hidden fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
+    <div class="my-auto w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900 p-5 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h2 id="soldTitle" class="text-lg font-bold text-white">Mark as Sold</h2>
+        <button id="soldClose" class="cursor-pointer rounded-md px-1.5 text-2xl text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-100" aria-label="Close">&times;</button>
+      </div>
+
+      <form id="soldForm" class="mt-3.5" novalidate>
+        <label class="field-label mt-0" for="soldPrice">Sale Price *</label>
+        <input id="soldPrice" type="number" step="0.01" min="0" class="field" placeholder="0.00" aria-label="Sale price">
+
+        <label class="field-label" for="soldBuyer">Buyer Name</label>
+        <input id="soldBuyer" type="text" class="field" placeholder="(optional)" autocomplete="off" aria-label="Buyer name">
+
+        <label class="field-label" for="soldTelegram">Buyer Telegram</label>
+        <input id="soldTelegram" type="text" class="field" placeholder="@handle or t.me/link (optional)" autocomplete="off" aria-label="Buyer telegram">
+
+        <div class="mt-5 flex justify-end gap-2 border-t border-slate-800 pt-4">
+          <button type="button" id="soldCancel" class="btn btn-ghost">Cancel</button>
+          <button type="submit" id="soldSave" class="btn btn-primary">
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="btn-label">Mark Sold</span>
+          </button>
+        </div>
+        <p id="soldStatus" class="fetch-status" role="status"></p>
+      </form>
+    </div>
+  </div>
+
   <div id="toast" class="toast hidden" role="status"></div>
 
-  <script src="/summary/app.js?v=4"></script>
+  <script src="/summary/app.js?v=5"></script>
 </body>
 </html>

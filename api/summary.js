@@ -100,6 +100,14 @@ function assertProfile(body) {
   if (notes.length > 2000) {
     reject400('Notes are too long (max 2000 characters).');
   }
+  const buyerName = String(body.buyerName || '').trim();
+  if (buyerName.length > 120) {
+    reject400('Buyer name is too long (max 120 characters).');
+  }
+  const buyerTelegram = String(body.buyerTelegram || '').trim();
+  if (buyerTelegram.length > 200) {
+    reject400('Buyer telegram reference is too long (max 200 characters).');
+  }
   if (body.badges !== undefined) {
     if (!Array.isArray(body.badges)) reject400('Badges must be a list.');
     if (body.badges.length > 40) reject400('Too many badges (max 40).');
@@ -209,6 +217,12 @@ function sanitizeUpdate(body) {
     if (!isNaN(ts)) patch.sold_at = new Date(ts).toISOString();
   } else if (body.soldAt === null) {
     patch.sold_at = null;
+  }
+  if (body.buyerName !== undefined && body.buyerName !== null) {
+    patch.buyer_name = String(body.buyerName);
+  }
+  if (body.buyerTelegram !== undefined && body.buyerTelegram !== null) {
+    patch.buyer_telegram = String(body.buyerTelegram);
   }
   return patch;
 }
