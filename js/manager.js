@@ -3513,31 +3513,6 @@ window.manager = {
     }];
   }
 
-  function buildTextSearchDeleteItems(query) {
-    const cleanQuery = String(query || '').trim();
-    if (!cleanQuery) {
-      return [];
-    }
-    return [{
-      label: 'Search every DM for messages containing "' + cleanQuery + '", then delete each matching message you sent.',
-      action: function () {
-        emitLine('Searching all DMs for messages containing "' + cleanQuery + '"...');
-        return searchOwnDMMessages(cleanQuery).then(function (list) {
-          if (state.stopped) {
-            return null;
-          }
-          const dmGroups = groupOwnMessagesByChannel(Array.isArray(list) ? list : []).filter(function (group) {
-            if (!group.channel) {
-              return true;
-            }
-            return !dmWhitelisted(group.channel);
-          });
-          return deleteOwnMessageGroups(dmGroups);
-        });
-      }
-    }];
-  }
-
   function buildDeleteAttachmentItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
@@ -5073,6 +5048,10 @@ window.manager = {
     const textError = byId('deleteDmTextError');
     if (searchTextBtn) {
       searchTextBtn.addEventListener('click', function () {
+        if (state.running) {
+          toast('An operation is already running.', 'error');
+          return;
+        }
         const text = textInput ? textInput.value.trim() : '';
         if (!text) {
           if (textError) textError.textContent = 'Enter the text to search for first.';
@@ -5083,12 +5062,63 @@ window.manager = {
         closeDeleteDmModal();
         showView('operation', { persist: true });
         resetTerminal('Delete Messages Containing Text');
-        if (opPill) opPill.textContent = 'preparing';
-        emitLine('Preparing text-search message deletion...');
+        if (opPill) opPill.textContent = 'searching';
         const btn = byId('deleteUserDMsBtn');
-        openOperationConfirmModal('Delete Messages Containing "' + text + '"', function () {
-          return buildTextSearchDeleteItems(text);
-        }, btn, 'Search every DM for your messages that contain the given text, then delete each match. Whitelisted DMs are skipped. Only your own messages can be deleted.');
+        emitLine('Searching all DMs for messages containing "' + text + '"...');
+        loadAccountData()
+          .then(function () {
+            if (state.stopped) {
+              return [];
+            }
+            return searchOwnDMMessages(text);
+          })
+          .then(function (found) {
+            if (state.stopped) {
+              return;
+            }
+            const foundList = Array.isArray(found) ? found : [];
+            const groups = groupOwnMessagesByChannel(foundList).filter(function (group) {
+              if (!group.channel) {
+                return true;
+              }
+              return !dmWhitelisted(group.channel);
+            });
+            const totalMessages = groups.reduce(function (sum, group) {
+              return sum + (group.messages ? group.messages.length : 0);
+            }, 0);
+            if (groups.length === 0) {
+              emitLine('Found no messages containing "' + text + '" - nothing to delete.');
+              if (opPill) opPill.textContent = 'done';
+              emitLine('Operation stopped.');
+              toast('No messages found containing "' + text + '".', 'info');
+              return;
+            }
+            const items = groups.map(function (group) {
+              return {
+                label: 'Delete ' + group.messages.length + ' message(s) in: ' + group.channelName + ' (' + group.channelId + ')',
+                messageCount: group.messages.length,
+                action: function () {
+                  return deleteOwnMessagesInChannel(group.channelId, group.channelName, group.messages);
+                }
+              };
+            });
+            emitLine('Search complete: ' + totalMessages + ' of your message(s) found in ' + groups.length + ' conversation(s).');
+            openOperationConfirmModal('Delete Messages Containing "' + text + '"', function () {
+              return items;
+            }, btn, 'Search complete - ' + totalMessages + ' message(s) found in ' + groups.length + ' conversation(s). Delete each match? Whitelisted DMs are already skipped. Only your own messages can be deleted.');
+            const countEl = byId('operationConfirmCount');
+            const skippedEl = byId('operationConfirmSkipped');
+            const estimateEl = byId('operationConfirmEstimate');
+            if (countEl) countEl.textContent = String(totalMessages) + ' found';
+            if (skippedEl) skippedEl.textContent = '• ' + groups.length + ' conversation(s) ready';
+            if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((totalMessages * Math.max(150, currentDelay())) / 1000)) + 's';
+          })
+          .catch(function (err) {
+            emitLine('Search failed: ' + ((err && err.message) || 'unknown error'));
+            if (opPill) opPill.textContent = 'failed';
+            emitLine('Operation stopped.');
+            toast('Search failed. Check the terminal log.', 'error');
+          });
       });
     }
 
