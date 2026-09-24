@@ -146,7 +146,13 @@ async function rest(path, options) {
 
   if (!res.ok) {
     const pgrstMessage = (bodyText && typeof bodyText === 'string' && bodyText.trim()) ? bodyText.trim() : null;
-    const message = (pgrstMessage && pgrstMessage.length < 300) ? pgrstMessage : ('Supabase error ' + res.status);
+    const statusGuide = {
+      522: 'Supabase is unreachable (HTTP 522) - the database looks paused or is restarting. Open supabase.com/dashboard, restore or restart the project, and retry.',
+      503: 'Supabase is temporarily unavailable (HTTP 503). Wait a moment and retry.',
+      504: 'Supabase timed out (HTTP 504) - the database may be paused. Restore it in the Supabase dashboard and retry.'
+    };
+    const message = statusGuide[res.status]
+      || ((pgrstMessage && pgrstMessage.length < 300) ? pgrstMessage : ('Supabase error ' + res.status));
     const err = new Error(message);
     err.status = res.status;
     err.detail = data;
