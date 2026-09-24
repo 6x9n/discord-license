@@ -3186,7 +3186,7 @@ window.manager = {
     return (c.recipients && c.recipients[0] && (c.recipients[0].username || c.recipients[0].id)) || c.name || c.id || 'DM';
   }
 
-  function searchOwnDMMessages() {
+  function searchOwnDMMessages(textQuery) {
     const myId = state.user && state.user.id ? String(state.user.id) : '';
     if (!myId) {
       return Promise.reject(new Error('No account loaded.'));
@@ -3195,6 +3195,8 @@ window.manager = {
     if (!username) {
       return Promise.reject(new Error('Cannot search: account has no username.'));
     }
+    const cleanQuery = String(textQuery || '').trim();
+    const content = cleanQuery ? ('from:' + username + ' ' + cleanQuery) : ('from:' + username);
     const collected = [];
     const seen = {};
     let pages = 0;
@@ -3205,7 +3207,7 @@ window.manager = {
           messages: {
             sort_by: 'timestamp',
             sort_order: 'desc',
-            content: 'from:' + username,
+            content: content,
             cursor: cursor || null,
             limit: 25
           }
@@ -3511,6 +3513,66 @@ window.manager = {
     }];
   }
 
+  function buildTextSearchDeleteItems(query) {
+    const cleanQuery = String(query || '').trim();
+    if (!cleanQuery) {
+      return [];
+    }
+    return [{
+      label: 'Search every DM for messages containing "' + cleanQuery + '", then delete each matching message you sent.',
+      action: function () {
+        emitLine('Searching all DMs for messages containing "' + cleanQuery + '"...');
+        return searchOwnDMMessages(cleanQuery).then(function (list) {
+          if (state.stopped) {
+            return null;
+          }
+          const dmGroups = groupOwnMessagesByChannel(Array.isArray(list) ? list : []).filter(function (group) {
+            if (!group.channel) {
+              return true;
+            }
+            return !dmWhitelisted(group.channel);
+          });
+          return deleteOwnMessageGroups(dmGroups);
+        });
+      }
+    }];
+  }
+
+  function buildDeleteAttachmentItems() {
+    const items = [];
+    const channels = (state.channels || []).filter(function (c) {
+      return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
+    });
+    if (channels.length > 0) {
+      channels.forEach(function (c) {
+        const isGroup = c.type === 3;
+        const recipientName = isGroup
+          ? (c.name || 'Group Chat (' + ((c.recipients && c.recipients.length) || 0) + ' members)')
+          : ((c.recipients && c.recipients[0] && (c.recipients[0].username || c.recipients[0].id)) || c.name || c.id);
+        items.push({
+          label: 'Fetch attachments in DM and delete their messages: ' + recipientName + ' (' + c.id + ')',
+          action: function () {
+            return fetchAllMyDMMessages(c.id, recipientName).then(function (myMessages) {
+              if (state.stopped) {
+                return null;
+              }
+              const withAttachments = (myMessages || []).filter(function (m) {
+                return isOwnMessage(m) && m.attachments && m.attachments.length > 0;
+              });
+              if (withAttachments.length === 0) {
+                emitLine('[' + recipientName + '] No attachment messages found in this conversation.');
+                return null;
+              }
+              emitLine('[' + recipientName + '] ' + withAttachments.length + ' message(s) with attachment files found.');
+              return deleteOwnMessagesInChannel(c.id, recipientName, withAttachments);
+            });
+          }
+        });
+      });
+    }
+    return items;
+  }
+
   function buildCleanDMsItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
@@ -3556,6 +3618,7 @@ window.manager = {
     'badgeActionBtn',
     'closeDMsBtn',
     'deleteUserDMsBtn',
+    'deleteAttachmentsBtn',
     'allInOneBtn',
     'accountDetailsBtn'
   ];
@@ -4921,6 +4984,14 @@ window.manager = {
         }
         openDeleteDmModal();
       },
+      deleteAttachmentsBtn: function () {
+        if (!hasAccount()) {
+          toast('Please log in first.', 'error');
+          return;
+        }
+        const btn = byId('deleteAttachmentsBtn');
+        openOperationConfirmModal('Delete Attachment Messages', buildDeleteAttachmentItems, btn, 'Scan the entire message history of every non-whitelisted DM, then delete each message you sent that contains an attachment file. Deleting a message also removes its uploaded files. This can be slow on accounts with long conversations.');
+      },
       allInOneBtn: function () {
         const btn = byId('allInOneBtn');
         openOperationConfirmModal('All-in-One Cleanup', buildAllInOneItems, btn, 'Choose the operations and cooldown, then run them sequentially.');
@@ -4997,6 +5068,42 @@ window.manager = {
       });
     }
 
+    const searchTextBtn = byId('deleteDmSearchTextBtn');
+    const textInput = byId('deleteDmTextInput');
+    const textError = byId('deleteDmTextError');
+    if (searchTextBtn) {
+      searchTextBtn.addEventListener('click', function () {
+        const text = textInput ? textInput.value.trim() : '';
+        if (!text) {
+          if (textError) textError.textContent = 'Enter the text to search for first.';
+          if (textInput) textInput.focus();
+          return;
+        }
+        if (textError) textError.textContent = '';
+        closeDeleteDmModal();
+        showView('operation', { persist: true });
+        resetTerminal('Delete Messages Containing Text');
+        if (opPill) opPill.textContent = 'preparing';
+        emitLine('Preparing text-search message deletion...');
+        const btn = byId('deleteUserDMsBtn');
+        openOperationConfirmModal('Delete Messages Containing "' + text + '"', function () {
+          return buildTextSearchDeleteItems(text);
+        }, btn, 'Search every DM for your messages that contain the given text, then delete each match. Whitelisted DMs are skipped. Only your own messages can be deleted.');
+      });
+    }
+
+    if (textInput && searchTextBtn) {
+      textInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          searchTextBtn.click();
+        }
+      });
+      textInput.addEventListener('input', function () {
+        if (textError) textError.textContent = '';
+      });
+    }
+
     const allBtn = byId('deleteDmAllBtn');
     if (allBtn) {
       allBtn.addEventListener('click', function () {
@@ -5032,6 +5139,8 @@ window.manager = {
         closeDeleteDmModal();
         if (targetInput) targetInput.value = '';
         if (targetError) targetError.textContent = '';
+        if (textInput) textInput.value = '';
+        if (textError) textError.textContent = '';
       });
     }
   }
