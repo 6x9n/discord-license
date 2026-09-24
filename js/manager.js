@@ -3548,6 +3548,44 @@ window.manager = {
     return items;
   }
 
+  function buildTextSearchChannelWalkItems(text) {
+    const items = [];
+    const query = String(text || '').toLowerCase();
+    const channels = (state.channels || []).filter(function (c) {
+      return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
+    });
+    if (channels.length > 0) {
+      channels.forEach(function (c) {
+        const isGroup = c.type === 3;
+        const recipientName = isGroup
+          ? (c.name || 'Group Chat (' + ((c.recipients && c.recipients.length) || 0) + ' members)')
+          : ((c.recipients && c.recipients[0] && (c.recipients[0].username || c.recipients[0].id)) || c.name || c.id);
+        items.push({
+          label: 'Check DM: ' + recipientName + ' (' + c.id + ')',
+          channelId: c.id,
+          channelName: recipientName,
+          action: function () {
+            return fetchAllMyDMMessages(c.id, recipientName).then(function (myMessages) {
+              if (state.stopped) {
+                return null;
+              }
+              const matches = (Array.isArray(myMessages) ? myMessages : []).filter(function (m) {
+                return typeof m.content === 'string' && m.content.toLowerCase().indexOf(query) !== -1;
+              });
+              if (matches.length === 0) {
+                emitLine('[' + recipientName + '] No messages found containing "' + text + '".');
+                return null;
+              }
+              emitLine('[' + recipientName + '] ' + matches.length + ' message(s) containing "' + text + '" found.');
+              return deleteOwnMessagesInChannel(c.id, recipientName, matches);
+            });
+          }
+        });
+      });
+    }
+    return items;
+  }
+
   function buildCleanDMsItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
@@ -5077,6 +5115,43 @@ window.manager = {
               return;
             }
             const foundList = Array.isArray(found) ? found : [];
+            const hasDms = (state.channels || []).some(function (c) {
+              return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
+            });
+            if (foundList.length === 0 && hasDms) {
+              emitLine('Discord search returned nothing - checking every DM conversation instead to find messages containing "' + text + '".');
+              return buildTextSearchChannelWalkItems(text).then(function (walkGroups) {
+                if (state.stopped) {
+                  return;
+                }
+                const groups = (Array.isArray(walkGroups) ? walkGroups : []).filter(function (group) {
+                  if (!group.channel) {
+                    return true;
+                  }
+                  return !dmWhitelisted(group.channel);
+                });
+                const totalMessages = groups.reduce(function (sum, group) {
+                  return sum + (group.messages ? group.messages.length : 0);
+                }, 0);
+                if (groups.length === 0) {
+                  emitLine('Found no messages containing "' + text + '" - nothing to delete.');
+                  if (opPill) opPill.textContent = 'done';
+                  emitLine('Operation stopped.');
+                  toast('No messages found containing "' + text + '".', 'info');
+                  return;
+                }
+                emitLine('Search complete: ' + totalMessages + ' of your message(s) found in ' + groups.length + ' conversation(s).');
+                openOperationConfirmModal('Delete Messages Containing "' + text + '"', function () {
+                  return groupsToDeleteItems(groups);
+                }, btn, 'Search complete - ' + totalMessages + ' message(s) found in ' + groups.length + ' conversation(s). Whitelisted DMs are skipped. Only your own messages can be deleted.');
+                const countEl = byId('operationConfirmCount');
+                const skippedEl = byId('operationConfirmSkipped');
+                const estimateEl = byId('operationConfirmEstimate');
+                if (countEl) countEl.textContent = String(totalMessages) + ' found';
+                if (skippedEl) skippedEl.textContent = '• ' + groups.length + ' conversation(s) ready';
+                if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((totalMessages * Math.max(150, currentDelay())) / 1000)) + 's';
+              });
+            }
             const groups = groupOwnMessagesByChannel(foundList).filter(function (group) {
               if (!group.channel) {
                 return true;
