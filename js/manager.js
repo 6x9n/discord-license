@@ -246,9 +246,57 @@ window.manager = {
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg>'
   };
 
+  // Notification visibility is a user preference, not a session flag, so it is
+  // persisted in dmt.prefs. When notifications are hidden we still count the
+  // toasts instead of dropping them silently, so the toggle can show how many
+  // messages were missed and nothing is lost without feedback.
+  function toastPrefs() {
+    const prefs = jsonGet(localStorage, CONFIG.prefs.key) || {};
+    return prefs;
+  }
+
+  function saveToastPrefs(patch) {
+    const prefs = toastPrefs();
+    Object.keys(patch).forEach(function (k) {
+      prefs[k] = patch[k];
+    });
+    jsonSet(localStorage, CONFIG.prefs.key, prefs);
+    return prefs;
+  }
+
+  let toastToggleBound = false;
+
+  function applyToastVisibility() {
+    const prefs = toastPrefs();
+    const hidden = !!prefs.toastsHidden;
+    document.body.classList.toggle('toasts-hidden', hidden);
+    const btn = byId('toastToggleBtn');
+    if (btn) {
+      btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+      btn.setAttribute('aria-label', hidden ? 'Show notifications' : 'Hide notifications');
+      btn.title = hidden ? 'Show notifications' : 'Hide notifications';
+      const badge = btn.querySelector('.toast-toggle-badge');
+      if (badge) {
+        badge.textContent = suppressedToastCount > 0 ? String(suppressedToastCount) : '';
+        badge.hidden = suppressedToastCount === 0;
+      }
+    }
+  }
+
+  let suppressedToastCount = 0;
+
   function toast(message, kind) {
     const container = byId('toastContainer') || document.getElementById('toastContainer');
     if (!container) return;
+    // Guard body: toast() can fire very early (license check) and a null body
+    // here would throw inside the caller instead of showing a message.
+    const toastsHidden = !!(document.body && document.body.classList.contains('toasts-hidden'));
+    if (toastsHidden) {
+      // Suppressed: record it so the toggle can reveal that something happened.
+      suppressedToastCount += 1;
+      applyToastVisibility();
+      return;
+    }
     const k = kind || 'info';
     const node = document.createElement('div');
     node.className = 'toast ' + k;
@@ -269,6 +317,29 @@ window.manager = {
         node.parentNode.removeChild(node);
       }
     }, 4350);
+  }
+
+  function setToastsHidden(hidden) {
+    saveToastPrefs({ toastsHidden: !!hidden });
+    if (!hidden) {
+      // Re-showing clears the missed count: they were delivered by definition.
+      suppressedToastCount = 0;
+    }
+    applyToastVisibility();
+  }
+  function bindToastToggle() {
+    if (toastToggleBound) {
+      return;
+    }
+    const btn = byId('toastToggleBtn');
+    if (!btn) {
+      return;
+    }
+    toastToggleBound = true;
+    btn.addEventListener('click', function () {
+      setToastsHidden(!document.body.classList.contains('toasts-hidden'));
+    });
+    applyToastVisibility();
   }
 
   function setBusy(node, busy) {
@@ -1322,35 +1393,57 @@ window.manager = {
     renderSavedAccounts();
   }
 
-  function pruneInvalidSavedAccounts() {
+  // Refresh every saved token's Discord profile (name + avatar) on startup and
+  // drop the ones Discord definitively rejects.
+  //
+  // The previous version deleted an account on ANY rejection. A rate limit
+  // (429), a Discord 5xx, or a flaky connection therefore silently wiped saved
+  // accounts, and their tokens with them, which is unrecoverable. Only 401/403
+  // is treated as "token is dead"; every other failure keeps the account and is
+  // retried on the next load.
+  function refreshSavedAccounts() {
     const storedSnapshot = jsonGet(localStorage, CONFIG.dsc.accounts);
     const accounts = loadAccounts();
     if (!accounts.length) {
       return Promise.resolve(0);
     }
+
     const checks = accounts.map(function (acc) {
       return validateToken(acc.token)
         .then(function (res) {
           const profile = res && res.data && res.data.id ? res.data : null;
           if (profile) {
+            // The renderer reads name from acc.username and the avatar from
+            // acc.user (avatarUrl(acc.user)), so replacing the whole user
+            // object is what actually refreshes the avatar.
             acc.user = profile;
             acc.username = profile.global_name || profile.username || acc.username;
           }
-          return { valid: true, account: acc };
+          return { ok: true, account: acc };
         })
-        .catch(function () {
-          return { valid: false, account: acc };
+        .catch(function (err) {
+          const status = (err && err.status) || 0;
+          const invalid = !!(err && err.invalidToken) || status === 401 || status === 403;
+          return { ok: false, invalid: invalid, account: acc };
         });
     });
+
     return Promise.all(checks).then(function (results) {
-      const kept = results.filter(function (r) {
-        return r.valid;
-      }).map(function (r) {
-        return r.account;
+      const kept = [];
+      let removed = 0;
+      let deferred = 0;
+      results.forEach(function (r) {
+        if (r.ok) {
+          kept.push(r.account);
+        } else if (r.invalid) {
+          removed += 1;
+        } else {
+          // Transient: keep the account exactly as it was stored.
+          kept.push(r.account);
+          deferred += 1;
+        }
       });
-      const removed = results.filter(function (r) {
-        return !r.valid;
-      }).length;
+
       let changed = removed > 0;
       for (let i = 0; i < kept.length && !changed; i++) {
         const acc = kept[i];
@@ -1368,11 +1461,18 @@ window.manager = {
       }
       if (removed > 0) {
         toast(removed + ' saved account' + (removed === 1 ? '' : 's') + ' removed (token no longer valid).', 'error');
+      } else if (deferred > 0) {
+        // Quiet, non-alarming: the accounts are still there.
+        toast('Could not refresh ' + deferred + ' saved account' + (deferred === 1 ? '' : 's') + ' right now. Will retry later.', 'warning');
       }
       return removed;
     }).catch(function () {
       return 0;
     });
+  }
+
+  function pruneInvalidSavedAccounts() {
+    return refreshSavedAccounts();
   }
 
   function renderSavedAccounts() {
@@ -1543,10 +1643,21 @@ window.manager = {
         if (res && res.status >= 200 && res.status < 300 && payload && payload.id) {
           return { status: res.status, data: payload };
         }
-        if (res && res.status === 429) {
-          return Promise.reject(new Error('Discord rate limited the profile request. Please wait a moment and try again.'));
+        const err = new Error((res && res.status === 429)
+          ? 'Discord rate limited the profile request. Please wait a moment and try again.'
+          : 'Invalid token or profile request failed.');
+        // Carry the status so callers can tell a definitive auth rejection
+        // (401/403 -> drop the token) from a transient failure
+        // (429/5xx/network -> keep the token and retry later).
+        err.status = (res && res.status) || 0;
+        if (res && res.status === 401) {
+          err.invalidToken = true;
+        } else if (res && res.status === 403) {
+          // 403 here is Discord refusing the token, not a permissions problem
+          // on a channel, so it is safe to treat as an invalid token.
+          err.invalidToken = true;
         }
-        return Promise.reject(new Error('Invalid token or profile request failed.'));
+        return Promise.reject(err);
       })
       .catch(function (err) {
         if (err && err.message) {
@@ -3631,7 +3742,10 @@ window.manager = {
     'badgeActionBtn',
     'closeDMsBtn',
     'deleteUserDMsBtn',
+    'deleteAllDmsBtn',
+    'deleteAllMyMsgsBtn',
     'deleteAttachmentsBtn',
+    'deleteTextWalkBtn',
     'allInOneBtn',
     'accountDetailsBtn'
   ];
@@ -4077,6 +4191,96 @@ window.manager = {
     }
   }
 
+  function openDeleteTextWalkModal() {
+    const modal = byId('deleteTextWalkModal');
+    const input = byId('deleteTextWalkInput');
+    const error = byId('deleteTextWalkError');
+    if (input) {
+      input.value = '';
+    }
+    if (error) {
+      error.textContent = '';
+    }
+    if (modal) {
+      modal.classList.add('active');
+    }
+    if (input) {
+      input.focus();
+    }
+  }
+
+  function closeDeleteTextWalkModal() {
+    const modal = byId('deleteTextWalkModal');
+    if (modal) {
+      modal.classList.remove('active');
+    }
+  }
+
+  // Runs the deterministic DM-by-DM channel walk for a text query. Unlike the
+  // Discord search-index flow this never queries the search API, so it is immune
+  // to index lag and tokenization gaps. Every non-whitelisted DM conversation is
+  // fetched in full and filtered locally by content match.
+  function runTextWalkOperation(text) {
+    const opPill = byId('opStatPill');
+    showView('operation', { persist: true });
+    resetTerminal('Delete Messages Containing "' + text + '"');
+    if (opPill) opPill.textContent = 'scanning';
+    const btn = byId('deleteTextWalkBtn');
+    emitLine('Scanning every DM conversation for messages containing "' + text + '"...');
+    loadAccountData()
+      .then(function () {
+        if (state.stopped) {
+          return [];
+        }
+        return buildTextSearchChannelWalkItems(text);
+      })
+      .then(function (walkGroups) {
+        if (state.stopped) {
+          return;
+        }
+        const groups = (Array.isArray(walkGroups) ? walkGroups : []).filter(function (group) {
+          if (!group || !group.channel) {
+            return true;
+          }
+          return !dmWhitelisted(group.channel);
+        });
+        if (groups.length === 0) {
+          emitLine('Found no DM conversations to scan.');
+          if (opPill) opPill.textContent = 'done';
+          emitLine('Operation stopped.');
+          toast('No DM conversations available to scan.', 'info');
+          return;
+        }
+        if (opPill) opPill.textContent = 'preparing';
+        emitLine('Scan pass queued for ' + groups.length + ' conversation(s) - each is fetched in full and filtered locally.');
+        openOperationConfirmModal(
+          'Delete Messages Containing "' + text + '"',
+          function () {
+            return groups.map(function (group) {
+              const c = group.channel;
+              const cId = group.channelId || (c && c.id);
+              const cName = group.channelName || (c && c.name) || cId;
+              return {
+                label: 'Check DM: ' + cName + ' (' + cId + ')',
+                channelId: cId,
+                channelName: cName,
+                action: group.action
+              };
+            });
+          },
+          btn,
+          'Each conversation is fetched in full and checked locally, then every message you sent containing "' + text + '" is deleted. No search index is used. This can be slow on accounts with long conversations.',
+          { preload: false }
+        );
+      })
+      .catch(function (err) {
+        emitLine('Scan failed: ' + ((err && err.message) || 'unknown error'));
+        if (opPill) opPill.textContent = 'failed';
+        emitLine('Operation stopped.');
+        toast('Scan failed. Check the terminal log.', 'error');
+      });
+  }
+
   function closeCloseDmsConfirmModal() {
     const modal = byId('closeDmsConfirmModal');
     if (modal) {
@@ -4121,16 +4325,105 @@ window.manager = {
     if (skippedEl) skippedEl.textContent = '• ' + (items.length - actionable.length) + ' protected/whitelisted';
     if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((actionable.length * currentDelay()) / 1000)) + 's';
     if (confirmBtn) confirmBtn.disabled = actionable.length === 0;
+    paintOperationConfirmTargets(actionable);
   }
 
   function closeOperationConfirmModal() {
     const modal = byId('operationConfirmModal');
+    const confirmBtn = byId('operationConfirmBtn');
+    const targetsEl = byId('operationConfirmTargets');
+    // Invalidate any in-flight preload so a late resolve cannot repaint a
+    // modal that is already closed.
+    operationConfirmToken++;
+    if (confirmBtn) confirmBtn.classList.remove('btn-loading');
+    if (targetsEl) targetsEl.innerHTML = '';
     if (modal) modal.classList.remove('active');
     pendingOperation = null;
   }
 
-  function openOperationConfirmModal(title, buildFn, triggerBtn, description) {
+  // Monotonic token so a closed/reopened modal ignores a stale in-flight load.
+  let operationConfirmToken = 0;
+
+  function paintOperationConfirmLoading(title, description) {
+    const modal = byId('operationConfirmModal');
+    const countEl = byId('operationConfirmCount');
+    const skippedEl = byId('operationConfirmSkipped');
+    const estimateEl = byId('operationConfirmEstimate');
+    const titleEl = byId('operationConfirmTitle');
+    const descriptionEl = byId('operationConfirmDescription');
+    const confirmBtn = byId('operationConfirmBtn');
+    const targetsEl = byId('operationConfirmTargets');
+    if (titleEl) titleEl.textContent = title;
+    if (descriptionEl) descriptionEl.textContent = description || 'Review the operation before it starts.';
+    if (countEl) countEl.textContent = '...';
+    if (skippedEl) skippedEl.textContent = '• fetching fresh data from Discord';
+    if (estimateEl) estimateEl.textContent = 'Collecting targets before showing the confirmation screen...';
+    if (targetsEl) {
+      const row = document.createElement('li');
+      const badge = document.createElement('span');
+      const label = document.createElement('span');
+      badge.className = 'leave-log-status pending';
+      badge.textContent = 'loading';
+      label.className = 'leave-log-name';
+      label.textContent = 'Collecting targets from Discord...';
+      row.appendChild(label);
+      row.appendChild(badge);
+      targetsEl.innerHTML = '';
+      targetsEl.appendChild(row);
+    }
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.classList.add('btn-loading');
+    }
+    if (modal) modal.classList.add('active');
+  }
+
+  // Renders the queued targets using the same row/status-pill model as the
+  // operation log modals, so the confirmation screen and the live log read as
+  // one surface. Built with DOM nodes (not innerHTML) to match the log models.
+  function paintOperationConfirmTargets(actionable) {
+    const targetsEl = byId('operationConfirmTargets');
+    if (!targetsEl) return;
+    const MAX_ROWS = 60;
+    targetsEl.innerHTML = '';
+    const rows = actionable.slice(0, MAX_ROWS);
+    rows.forEach(function (item) {
+      const row = document.createElement('li');
+      const name = document.createElement('span');
+      const badge = document.createElement('span');
+      const raw = String((item && item.name) || (item && item.label) || 'Target');
+      name.className = 'leave-log-name';
+      name.textContent = raw;
+      name.title = raw;
+      badge.className = 'leave-log-status ' + (item && item.skip ? 'skipped' : 'ready');
+      badge.textContent = item && item.skip ? String(item.skip) : 'ready';
+      row.appendChild(name);
+      row.appendChild(badge);
+      targetsEl.appendChild(row);
+    });
+    function addNote(text, status) {
+      const row = document.createElement('li');
+      const name = document.createElement('span');
+      const badge = document.createElement('span');
+      name.className = 'leave-log-name';
+      name.textContent = text;
+      badge.className = 'leave-log-status ' + status;
+      badge.textContent = status;
+      row.appendChild(name);
+      row.appendChild(badge);
+      targetsEl.appendChild(row);
+    }
+    if (actionable.length > MAX_ROWS) {
+      addNote('+' + (actionable.length - MAX_ROWS) + ' more target(s)', 'pending');
+    }
+    if (rows.length === 0) {
+      addNote('Nothing to process', 'skipped');
+    }
+  }
+
+  function openOperationConfirmModal(title, buildFn, triggerBtn, description, options) {
     closeInspector();
+    const opts = options || {};
     const modal = byId('operationConfirmModal');
     const countEl = byId('operationConfirmCount');
     const skippedEl = byId('operationConfirmSkipped');
@@ -4139,28 +4432,66 @@ window.manager = {
     const descriptionEl = byId('operationConfirmDescription');
     const allInOneOptions = byId('allInOneOptions');
     const confirmBtn = byId('operationConfirmBtn');
-    const items = typeof buildFn === 'function' ? buildFn() : [];
-    const actionable = Array.isArray(items) ? items.filter(function (item) { return item && !item.skip; }) : [];
-    const skipped = Array.isArray(items) ? items.length - actionable.length : 0;
-    if (titleEl) titleEl.textContent = title;
-    if (descriptionEl) descriptionEl.textContent = description || 'Review the operation before it starts.';
     if (allInOneOptions) allInOneOptions.hidden = title !== 'All-in-One Cleanup';
     if (title === 'All-in-One Cleanup' && allInOneOptions) {
       allInOneOptions.querySelectorAll('input, select').forEach(function (input) {
         input.onchange = updateAllInOneSummary;
       });
     }
-    if (countEl) countEl.textContent = String(actionable.length);
-    if (skippedEl) skippedEl.textContent = '• ' + skipped + ' protected/whitelisted';
-    if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((actionable.length * currentDelay()) / 1000)) + 's';
-    if (title === 'Delete All My Messages (Search)') {
-      if (countEl) countEl.textContent = 'scan';
-      if (skippedEl) skippedEl.textContent = '• searches every DM';
-      if (estimateEl) estimateEl.textContent = 'Search runs first, then every message found is deleted.';
-    }
     pendingOperation = { title: title, buildFn: buildFn, triggerBtn: triggerBtn, allInOne: title === 'All-in-One Cleanup' };
-    if (confirmBtn) confirmBtn.disabled = actionable.length === 0;
-    if (modal) modal.classList.add('active');
+
+    function paintReady() {
+      const items = typeof buildFn === 'function' ? buildFn() : [];
+      const actionable = Array.isArray(items) ? items.filter(function (item) { return item && !item.skip; }) : [];
+      const skipped = Array.isArray(items) ? items.length - actionable.length : 0;
+      if (titleEl) titleEl.textContent = title;
+      if (descriptionEl) descriptionEl.textContent = description || 'Review the operation before it starts.';
+      if (countEl) countEl.textContent = String(actionable.length);
+      if (skippedEl) skippedEl.textContent = '• ' + skipped + ' protected/whitelisted';
+      if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((actionable.length * currentDelay()) / 1000)) + 's';
+      if (title === 'Delete All My Messages (Search)') {
+        if (countEl) countEl.textContent = 'scan';
+        if (skippedEl) skippedEl.textContent = '• searches every DM';
+        if (estimateEl) estimateEl.textContent = 'Search runs first, then every message found is deleted.';
+      }
+      if (confirmBtn) {
+        confirmBtn.disabled = actionable.length === 0;
+        confirmBtn.classList.remove('btn-loading');
+      }
+      paintOperationConfirmTargets(actionable);
+      // Callers that already resolved real counts (message-level matches, etc.)
+      // repaint here so the async load cannot overwrite them.
+      if (typeof opts.overrides === 'function') {
+        opts.overrides(countEl, skippedEl, estimateEl, confirmBtn);
+      }
+    }
+
+    // Callers that already fetched their own data pass preload:false.
+    if (opts.preload === false) {
+      if (modal) modal.classList.add('active');
+      paintReady();
+      return;
+    }
+
+    // Fetch before the confirmation screen is populated. Without this the
+    // counts come from a stale (often empty) state snapshot and the confirmed
+    // run then operates on a completely different set of targets.
+    const token = ++operationConfirmToken;
+    paintOperationConfirmLoading(title, description);
+    loadAccountData()
+      .then(function (data) {
+        if (token !== operationConfirmToken) return;
+        updateMetricsFrom(data);
+        paintReady();
+      })
+      .catch(function (err) {
+        if (token !== operationConfirmToken) return;
+        if (confirmBtn) confirmBtn.classList.remove('btn-loading');
+        if (countEl) countEl.textContent = '0';
+        if (skippedEl) skippedEl.textContent = '• could not load data';
+        if (estimateEl) estimateEl.textContent = 'Failed to load Discord data. Close and try again.';
+        toast((err && err.message) || 'Could not load Discord data.', 'error');
+      });
   }
 
   function openCloseDmsConfirmModal() {
@@ -4904,6 +5235,11 @@ window.manager = {
       // Land back on the license-key screen rather than the token/login view.
       if (window.licenseGate && typeof window.licenseGate.lock === 'function') {
         window.licenseGate.lock();
+        // Re-arm the health poll so re-entering a key in this same tab is
+        // checked again (it used to stay stopped until a full page reload).
+        if (typeof window.licenseGate.resumeCheck === 'function') {
+          window.licenseGate.resumeCheck();
+        }
       } else {
         showView('login');
       }
@@ -4997,6 +5333,32 @@ window.manager = {
         }
         openDeleteDmModal();
       },
+      deleteAllDmsBtn: function () {
+        if (state.running) {
+          toast('An operation is already running.', 'error');
+          return;
+        }
+        if (!hasAccount()) {
+          toast('Please log in first.', 'error');
+          return;
+        }
+        const btn = byId('deleteAllDmsBtn');
+        openOperationConfirmModal('Delete All DM Messages', function () {
+          return buildDeleteAllDMsMessagesItems(true);
+        }, btn, 'Delete your messages from all non-whitelisted DM conversations (entire history). Only your own messages can be deleted. This can be slow on accounts with long conversations.');
+      },
+      deleteAllMyMsgsBtn: function () {
+        if (state.running) {
+          toast('An operation is already running.', 'error');
+          return;
+        }
+        if (!hasAccount()) {
+          toast('Please log in first.', 'error');
+          return;
+        }
+        const btn = byId('deleteAllMyMsgsBtn');
+        openOperationConfirmModal('Delete All My Messages (Search)', buildSearchDeleteItems, btn, 'Search your entire message history - every DM and every server you are in - then delete each message you sent. Whitelisted DMs and servers are skipped. This can take a very long time on big accounts. If search fails, it falls back to per-conversation fetch.');
+      },
       deleteAttachmentsBtn: function () {
         if (!hasAccount()) {
           toast('Please log in first.', 'error');
@@ -5004,6 +5366,17 @@ window.manager = {
         }
         const btn = byId('deleteAttachmentsBtn');
         openOperationConfirmModal('Delete Attachment Messages', buildDeleteAttachmentItems, btn, 'Scan the entire message history of every non-whitelisted DM, then delete each message you sent that contains an attachment file. Deleting a message also removes its uploaded files. This can be slow on accounts with long conversations.');
+      },
+      deleteTextWalkBtn: function () {
+        if (state.running) {
+          toast('An operation is already running.', 'error');
+          return;
+        }
+        if (!hasAccount()) {
+          toast('Please log in first.', 'error');
+          return;
+        }
+        openDeleteTextWalkModal();
       },
       allInOneBtn: function () {
         const btn = byId('allInOneBtn');
@@ -5141,15 +5514,29 @@ window.manager = {
                   return;
                 }
                 emitLine('Search complete: ' + totalMessages + ' of your message(s) found in ' + groups.length + ' conversation(s).');
+                const walkItems = groups.map(function (group) {
+                  const walkChannel = group.channel;
+                  const walkChannelId = group.channelId || (walkChannel && walkChannel.id);
+                  const walkChannelName = group.channelName || (walkChannel && walkChannel.name) || walkChannelId;
+                  return {
+                    label: 'Delete ' + group.messages.length + ' message(s) in: ' + walkChannelName + ' (' + walkChannelId + ')',
+                    name: walkChannelName + ' (' + walkChannelId + ')',
+                    messageCount: group.messages.length,
+                    action: group.action || function () {
+                      return deleteOwnMessagesInChannel(walkChannelId, walkChannelName, group.messages);
+                    }
+                  };
+                });
                 openOperationConfirmModal('Delete Messages Containing "' + text + '"', function () {
-                  return groupsToDeleteItems(groups);
-                }, btn, 'Search complete - ' + totalMessages + ' message(s) found in ' + groups.length + ' conversation(s). Whitelisted DMs are skipped. Only your own messages can be deleted.');
-                const countEl = byId('operationConfirmCount');
-                const skippedEl = byId('operationConfirmSkipped');
-                const estimateEl = byId('operationConfirmEstimate');
-                if (countEl) countEl.textContent = String(totalMessages) + ' found';
-                if (skippedEl) skippedEl.textContent = '• ' + groups.length + ' conversation(s) ready';
-                if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((totalMessages * Math.max(150, currentDelay())) / 1000)) + 's';
+                  return walkItems;
+                }, btn, 'Search complete - ' + totalMessages + ' message(s) found in ' + groups.length + ' conversation(s). Whitelisted DMs are skipped. Only your own messages can be deleted.', {
+                  preload: false,
+                  overrides: function (countEl, skippedEl, estimateEl) {
+                    if (countEl) countEl.textContent = String(totalMessages) + ' found';
+                    if (skippedEl) skippedEl.textContent = '• ' + groups.length + ' conversation(s) ready';
+                    if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((totalMessages * Math.max(150, currentDelay())) / 1000)) + 's';
+                  }
+                });
               });
             }
             const groups = groupOwnMessagesByChannel(foundList).filter(function (group) {
@@ -5180,13 +5567,14 @@ window.manager = {
             emitLine('Search complete: ' + totalMessages + ' of your message(s) found in ' + groups.length + ' conversation(s).');
             openOperationConfirmModal('Delete Messages Containing "' + text + '"', function () {
               return items;
-            }, btn, 'Search complete - ' + totalMessages + ' message(s) found in ' + groups.length + ' conversation(s). Delete each match? Whitelisted DMs are already skipped. Only your own messages can be deleted.');
-            const countEl = byId('operationConfirmCount');
-            const skippedEl = byId('operationConfirmSkipped');
-            const estimateEl = byId('operationConfirmEstimate');
-            if (countEl) countEl.textContent = String(totalMessages) + ' found';
-            if (skippedEl) skippedEl.textContent = '• ' + groups.length + ' conversation(s) ready';
-            if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((totalMessages * Math.max(150, currentDelay())) / 1000)) + 's';
+            }, btn, 'Search complete - ' + totalMessages + ' message(s) found in ' + groups.length + ' conversation(s). Delete each match? Whitelisted DMs are already skipped. Only your own messages can be deleted.', {
+              preload: false,
+              overrides: function (countEl, skippedEl, estimateEl) {
+                if (countEl) countEl.textContent = String(totalMessages) + ' found';
+                if (skippedEl) skippedEl.textContent = '• ' + groups.length + ' conversation(s) ready';
+                if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((totalMessages * Math.max(150, currentDelay())) / 1000)) + 's';
+              }
+            });
           })
           .catch(function (err) {
             emitLine('Search failed: ' + ((err && err.message) || 'unknown error'));
@@ -5246,6 +5634,51 @@ window.manager = {
         if (targetError) targetError.textContent = '';
         if (textInput) textInput.value = '';
         if (textError) textError.textContent = '';
+      });
+    }
+
+    const walkInput = byId('deleteTextWalkInput');
+    const walkError = byId('deleteTextWalkError');
+    const walkSearchBtn = byId('deleteTextWalkSearchBtn');
+    const walkCloseBtn = byId('deleteTextWalkClose');
+    const walkModal = byId('deleteTextWalkModal');
+    if (walkSearchBtn) {
+      walkSearchBtn.addEventListener('click', function () {
+        if (state.running) {
+          toast('An operation is already running.', 'error');
+          return;
+        }
+        const text = walkInput ? walkInput.value.trim() : '';
+        if (!text) {
+          if (walkError) walkError.textContent = 'Enter the text to search for first.';
+          if (walkInput) walkInput.focus();
+          return;
+        }
+        if (walkError) walkError.textContent = '';
+        closeDeleteTextWalkModal();
+        runTextWalkOperation(text);
+      });
+    }
+    if (walkInput && walkSearchBtn) {
+      walkInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          walkSearchBtn.click();
+        }
+      });
+    }
+    if (walkCloseBtn) {
+      walkCloseBtn.addEventListener('click', function () {
+        closeDeleteTextWalkModal();
+        if (walkInput) walkInput.value = '';
+        if (walkError) walkError.textContent = '';
+      });
+    }
+    if (walkModal) {
+      walkModal.addEventListener('click', function (e) {
+        if (e.target === walkModal) {
+          closeDeleteTextWalkModal();
+        }
       });
     }
   }
@@ -5867,6 +6300,7 @@ window.manager = {
     const autoStart = byId('setAutoStart');
     const minTray = byId('setMinTray');
     const speedSel = byId('setSpeed');
+    const toastsSwitch = byId('setToasts');
     const accentBox = byId('accentPickers');
     const wlSave = byId('wlSaveBtn');
     const deactivate = byId('deactivateLicenseBtn');
@@ -5897,6 +6331,27 @@ window.manager = {
         storageSet(localStorage, CONFIG.dsc.speed, speedSel.value);
         toast('Request speed: ' + speedSel.options[speedSel.selectedIndex].text + '.', 'info');
       });
+    }
+    if (toastsSwitch) {
+      // Reflect whatever state the prefs already hold (the icon toggle may have
+      // been used before ever opening Settings), and keep the switch in sync
+      // whenever the icon toggle is used afterwards.
+      toastsSwitch.checked = !document.body.classList.contains('toasts-hidden');
+      toastsSwitch.addEventListener('change', function () {
+        setToastsHidden(!toastsSwitch.checked);
+        toast('Notifications ' + (toastsSwitch.checked ? 'enabled' : 'hidden') + '.', 'info');
+      });
+      if (!window.__toastToggleHooked) {
+        window.__toastToggleHooked = true;
+        var toastToggleBtnEl = byId('toastToggleBtn');
+        if (toastToggleBtnEl) {
+          toastToggleBtnEl.addEventListener('click', function () {
+            if (toastsSwitch) {
+              toastsSwitch.checked = !document.body.classList.contains('toasts-hidden');
+            }
+          });
+        }
+      }
     }
     if (accentBox) {
       accentBox.addEventListener('click', function (e) {
@@ -5953,6 +6408,11 @@ window.manager = {
         showView('login');
         if (window.licenseGate && typeof window.licenseGate.lock === 'function') {
           window.licenseGate.lock();
+          // Re-arm the health poll so a key re-entered in this tab is
+          // re-validated instead of staying unchecked until a page reload.
+          if (typeof window.licenseGate.resumeCheck === 'function') {
+            window.licenseGate.resumeCheck();
+          }
         }
         toast('License deactivated on this device.', 'info');
       });
@@ -7245,6 +7705,7 @@ window.manager = {
   function boot() {
     applySettings();
     applyWhitelists();
+    bindToastToggle();
     renderSavedAccounts();
     pruneInvalidSavedAccounts();
     initAuth();
