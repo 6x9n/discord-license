@@ -26,9 +26,23 @@
     'Boost Level 1': 'boost_badges/discordboost1.svg',
     'Boost Level 2': 'boost_badges/discordboost2.svg',
     'Boost Level 3': 'boost_badges/discordboost3.svg',
+    'Boost Level 4': 'boost_badges/discordboost4.svg',
+    'Boost Level 5': 'boost_badges/discordboost5.svg',
+    'Boost Level 6': 'boost_badges/discordboost6.svg',
+    'Boost Level 7': 'boost_badges/discordboost7.svg',
+    'Boost Level 8': 'boost_badges/discordboost8.svg',
+    'Boost Level 9': 'boost_badges/discordboost9.svg',
 
     // Nitro
     'Nitro': 'discordnitro.svg',
+    'Bronze': 'nitro_badges/bronze.png',
+    'Silver': 'nitro_badges/silver.png',
+    'Gold': 'nitro_badges/gold.png',
+    'Platinum': 'nitro_badges/platinum.png',
+    'Emerald': 'nitro_badges/emerald.png',
+    'Ruby': 'nitro_badges/ruby.png',
+    'Opal': 'nitro_badges/opal.png',
+    'Diamond': 'nitro_badges/diamond.png',
 
     // People and programmes
     'Discord Staff': 'discordstaff.svg',
@@ -60,11 +74,29 @@
     'Nitro Basic': '<path d="M12 2.6l2.6 5.5 6 .9-4.3 4.2 1 6-5.3-2.8-5.3 2.8 1-6L3.4 9l6-.9z"/><path d="M9.6 13.4h4.8"/>',
     'Nitro Classic': '<path d="M12 2.6l2.6 5.5 6 .9-4.3 4.2 1 6-5.3-2.8-5.3 2.8 1-6L3.4 9l6-.9z"/><path d="M8.4 11.2h7.2M8.4 14h4.4"/>',
 
+    // Nitro material tiers, matching the artwork in nitro_badges/. Drawn as an
+    // ingot for the metals and a cut gem for the stones, so the fallback still
+    // tells the two families apart.
+    'Bronze': '<path d="M6.6 9.4h10.8l2.2 8.2H4.4z"/><path d="M6.6 9.4L9 5.6h6l2.4 3.8"/>',
+    'Silver': '<path d="M5.8 10.2h12.4l-2 7.4H7.8z"/><path d="M5.8 10.2L8.6 6h6.8l2.8 4.2M8.6 13.4h6.8"/>',
+    'Gold': '<path d="M5 11h14l-1.6 6.6H6.6z"/><path d="M5 11l3-4.4h8L19 11"/><path d="M9.4 14.2h5.2"/>',
+    'Platinum': '<path d="M4.4 12.2L12 5.4l7.6 6.8L12 19z"/><path d="M4.4 12.2h15.2M12 5.4v13.6"/>',
+    'Emerald': '<path d="M7.4 6.6h9.2l3.8 5.6-8.4 6.6-8.4-6.6z"/><path d="M3.6 12.2h16.8M7.4 6.6l4.6 5.6 4.6-5.6M12 12.2v6.6"/>',
+    'Ruby': '<path d="M7 6.4h10l3.6 5.8L12 19 3.4 12.2z"/><path d="M3.4 12.2h17.2M7 6.4l5 5.8 5-5.8"/>',
+    'Opal': '<path d="M12 3.4c4.8 3.4 7.2 6.6 7.2 9.4A7.2 7.2 0 014.8 12.8c0-2.8 2.4-6 7.2-9.4z"/><path d="M8.6 13.4a3.4 3.4 0 006.8 0"/>',
+    'Diamond': '<path d="M7.6 5.4h8.8l3.4 6.8L12 20.6 4.2 12.2z"/><path d="M4.2 12.2h15.6M7.6 5.4L12 12.2l4.4-6.8M12 12.2v8.4"/>',
+
     // Server boost tiers: a rising bolt, tier shown as a count.
     'Boost Level 0': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/>',
     'Boost Level 1': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.5 4.2l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
     'Boost Level 2': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.5 2.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6zM22.4 7.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/>',
     'Boost Level 3': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5z"/>',
+    'Boost Level 4': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5zM21 10.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5z"/>',
+    'Boost Level 5': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5zM21 10.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5zM2 10.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/>',
+    'Boost Level 6': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5zM21 10.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5zM2 10.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/><path d="M4 2.4l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/>',
+    'Boost Level 7': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5zM21 10.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5zM2 10.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM4 2.4l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM19.8 17.8l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/>',
+    'Boost Level 8': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5zM21 10.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5zM2 10.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM4 2.4l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM19.8 17.8l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM4.2 17.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/>',
+    'Boost Level 9': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5zM21 10.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5zM2 10.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM4 2.4l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM19.8 17.8l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM4.2 17.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4zM11.6 3.4l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/>',
 
     // People and programmes
     'Discord Staff': '<path d="M12 2.6l7.4 3v6.1c0 4.2-3 8.1-7.4 9.7-4.4-1.6-7.4-5.5-7.4-9.7V5.6z"/><path d="M9.4 12.1l1.9 1.9 3.4-3.6"/>',
@@ -116,6 +148,12 @@
     'boosttier1': 'Boost Level 1',
     'boosttier2': 'Boost Level 2',
     'boosttier3': 'Boost Level 3',
+    'boosttier4': 'Boost Level 4',
+    'boosttier5': 'Boost Level 5',
+    'boosttier6': 'Boost Level 6',
+    'boosttier7': 'Boost Level 7',
+    'boosttier8': 'Boost Level 8',
+    'boosttier9': 'Boost Level 9',
     'boosttier0': 'Boost Level 0'
   };
 
@@ -129,6 +167,12 @@
     'boost tier 1': 'Boost Level 1',
     'boost tier 2': 'Boost Level 2',
     'boost tier 3': 'Boost Level 3',
+    'boost tier 4': 'Boost Level 4',
+    'boost tier 5': 'Boost Level 5',
+    'boost tier 6': 'Boost Level 6',
+    'boost tier 7': 'Boost Level 7',
+    'boost tier 8': 'Boost Level 8',
+    'boost tier 9': 'Boost Level 9',
     'boost tier': 'Boost Level 0',
     'bug hunter': 'Bug Hunter Level 1',
     'bug hunter level 1': 'Bug Hunter Level 1',

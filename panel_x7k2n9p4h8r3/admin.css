@@ -1511,3 +1511,32 @@ img.badge-icon {
 .badge-chip img.badge-icon {
   opacity: 1;
 }
+
+/* ---------- badge names ----------
+   Badges render as artwork only, so the name is pulled out of the visual flow
+   but left in the accessibility tree and surfaced on hover. Entries with no
+   artwork yet re-add .badge-label-show so the option is still readable. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.badge-label-show {
+  display: inline;
+  margin-left: 5px;
+  vertical-align: -2px;
+}
+
+/* With no text to size the button, centre the artwork and give it a hit area
+   that is still comfortable to click. */
+.badge-opt {
+  min-width: 34px;
+  justify-content: center;
+}

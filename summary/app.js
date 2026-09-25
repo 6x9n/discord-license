@@ -41,6 +41,27 @@ function splitList(value) {
 }
 
 var BADGE_OPTIONS = [
+  'Boost Level 0',
+  'Boost Level 1',
+  'Boost Level 2',
+  'Boost Level 3',
+  'Boost Level 4',
+  'Boost Level 5',
+  'Boost Level 6',
+  'Boost Level 7',
+  'Boost Level 8',
+  'Boost Level 9',
+  'Nitro',
+  'Nitro Basic',
+  'Nitro Classic',
+  'Bronze',
+  'Silver',
+  'Gold',
+  'Platinum',
+  'Emerald',
+  'Ruby',
+  'Opal',
+  'Diamond',
   'Discord Staff',
   'Partner',
   'HypeSquad Events',
@@ -93,16 +114,21 @@ function syncBadgePicker() {
   var html = [];
   BADGE_OPTIONS.forEach(function (b) {
     var on = list.some(function (x) { return sameBadge(x, b); });
+    // The artwork identifies the badge, so the name is hidden visually and
+    // stays available as a tooltip and to screen readers. Without artwork the
+    // name has to stay visible, otherwise the option is unreadable.
+    var art = badgeIcon(b);
     html.push('<button type="button" data-badge="' + esc(b) + '" role="checkbox" aria-checked="' + on
-      + '" class="badge-opt' + (on ? ' selected' : '') + '">'
-      + badgeIcon(b) + '<span class="badge-label">' + esc(b) + '</span></button>');
+      + '" class="badge-opt' + (on ? ' selected' : '') + '" title="' + esc(b) + '">'
+      + art + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(b) + '</span></button>');
   });
   list.forEach(function (b) {
     var isKnown = BADGE_OPTIONS.some(function (x) { return sameBadge(x, b); });
     if (!isKnown) {
+      var cArt = badgeIcon(b);
       html.push('<button type="button" data-badge="' + esc(b) + '" role="checkbox" aria-checked="true"'
-        + ' class="badge-opt selected">' + badgeIcon(b)
-        + '<span class="badge-label">' + esc(b) + '</span></button>');
+        + ' class="badge-opt selected" title="' + esc(b) + '">' + cArt
+        + '<span class="badge-label' + (cArt ? ' sr-only' : ' badge-label-show') + '">' + esc(b) + '</span></button>');
     }
   });
   $('badgePicker').innerHTML = html.join('');
@@ -293,8 +319,10 @@ function renderTable() {
 function badgesHtml(row) {
   var out = [];
   function tag(label, cls) {
-    return '<span class="' + (cls || 'chip-tag') + '">' + badgeIcon(label)
-      + '<span class="badge-label">' + esc(label) + '</span></span>';
+    // Image-only, with the name kept for tooltips and screen readers.
+    var art = badgeIcon(label);
+    return '<span class="' + (cls || 'chip-tag') + '" title="' + esc(label) + '">' + art
+      + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(label) + '</span></span>';
   }
   if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
     out.push(tag(row.nitro_tier, 'chip-tag nitro'));

@@ -990,12 +990,12 @@
     {
       key: 'boost',
       label: 'Server Boost',
-      options: ['Boost Level 0', 'Boost Level 1', 'Boost Level 2', 'Boost Level 3']
+      options: ['Boost Level 0', 'Boost Level 1', 'Boost Level 2', 'Boost Level 3', 'Boost Level 4', 'Boost Level 5', 'Boost Level 6', 'Boost Level 7', 'Boost Level 8', 'Boost Level 9']
     },
     {
       key: 'nitro',
       label: 'Nitro',
-      options: ['Nitro', 'Nitro Basic', 'Nitro Classic']
+      options: ['Nitro', 'Nitro Basic', 'Nitro Classic', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond']
     },
     {
       key: 'other',
@@ -1082,11 +1082,15 @@
       if (!wrap) return;
       wrap.innerHTML = group.options.map(function (badge) {
         var on = selected.some(function (x) { return sameBadge(x, badge); });
+        // The artwork identifies the badge, so the name is hidden visually and
+        // stays available as a tooltip and to screen readers. When there is no
+        // artwork to go by the name has to be shown, so keep it visible.
+        var art = badgeIcon(badge);
         return '<button type="button" class="badge-opt' + (on ? ' selected' : '') + '" role="checkbox"'
           + ' aria-checked="' + (on ? 'true' : 'false') + '" data-badge="' + esc(badge) + '"'
           + ' title="' + esc(badge) + '">'
-          + badgeIcon(badge)
-          + '<span class="badge-label">' + esc(badge) + '</span>'
+          + art
+          + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(badge) + '</span>'
           + '</button>';
       }).join('');
       if (countEl) {
@@ -1216,16 +1220,21 @@
 
   function accBadgesHtml(row) {
     var out = [];
+    // Image-only chips now that we ship the artwork. The name moves to a
+    // tooltip and to a screen-reader-only label, so the row still identifies
+    // every badge to assistive tech.
+    function chip(cls, name) {
+      var art = badgeIcon(name);
+      return '<span class="badge ' + cls + '" title="' + esc(name) + '">' + art
+        + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(name) + '</span></span>';
+    }
     if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
-      out.push('<span class="badge badge-nitro">' + badgeIcon(row.nitro_tier)
-        + '<span class="badge-label">' + esc(row.nitro_tier) + '</span></span>');
+      out.push(chip('badge-nitro', row.nitro_tier));
     }
     (row.badges || []).forEach(function (b) {
       // Show the current badge name so rows saved before the rename read the
       // same as newly added ones.
-      var name = badgeName(b);
-      out.push('<span class="badge badge-muted">' + badgeIcon(name)
-        + '<span class="badge-label">' + esc(name) + '</span></span>');
+      out.push(chip('badge-muted', badgeName(b)));
     });
     if (row.nitro_ends) {
       out.push('<span class="badge badge-warn">' + badgeIcon('Nitro')
