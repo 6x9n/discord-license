@@ -416,6 +416,19 @@
           </div>
         </div>
 
+        <!-- Sale record. Kept editable so a mistyped buyer can be corrected
+             without having to mark the account as sold all over again. -->
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label" for="accBuyerName">Buyer name</label>
+            <input id="accBuyerName" class="input" type="text" placeholder="(optional)" autocomplete="off">
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="accBuyerTelegram">Buyer Telegram</label>
+            <input id="accBuyerTelegram" class="input" type="text" placeholder="@handle" autocomplete="off">
+          </div>
+        </div>
+
         <div class="form-field">
           <span class="field-label">Badges</span>
           <input id="accBadges" type="hidden">

@@ -55,6 +55,8 @@
       accSource: g('accSource'),
       accPaid: g('accPaid'),
       accSell: g('accSell'),
+      accBuyerName: g('accBuyerName'),
+      accBuyerTelegram: g('accBuyerTelegram'),
       accNotes: g('accNotes'),
       accBadges: g('accBadges'),
       accCustomBadge: g('accCustomBadge'),
@@ -1231,6 +1233,25 @@
       + '</button></span>';
   }
 
+  // Who bought it, captured when the account was marked sold. Kept as plain
+  // escaped text rather than a link so the admin table cannot navigate away.
+  function accBuyerHtml(row) {
+    var parts = [];
+    if (row.buyer_name) parts.push(esc(row.buyer_name));
+    if (row.buyer_telegram) parts.push(esc(row.buyer_telegram));
+    if (!parts.length) return '';
+    return '<div class="cell-micro">buyer: ' + parts.join(' &middot; ') + '</div>';
+  }
+
+  // When the account entered stock. Shown for sold rows too, so the added and
+  // sold dates can be read together to see how long it was held.
+  function accStockAgeHtml(row) {
+    if (!row.created_at) return '';
+    var added = new Date(row.created_at);
+    if (isNaN(added.getTime())) return '';
+    return '<div class="cell-micro">added ' + esc(fmtDate(row.created_at)) + '</div>';
+  }
+
   function accRowHtml(row) {
     var net = null;
     if (row.status === 'SOLD') net = (Number(row.sell_price) || 0) - (Number(row.buy_price) || 0);
@@ -1242,18 +1263,24 @@
       ? '<strong class="cell-id">' + esc(row.discord_id) + '</strong>'
       : '<span class="muted-text">no id</span>';
     if (row.username) identity += '<div class="muted-text">@' + esc(row.username) + '</div>';
+    identity += accStockAgeHtml(row);
 
     var statusCell = '<span class="badge ' + (row.status === 'SOLD' ? 'badge-warn' : 'badge-ok') + '">'
       + esc(row.status) + '</span>';
     if (row.status_label) {
       statusCell += '<div class="status-label">' + esc(row.status_label) + '</div>';
     }
-    // Surface the sale timestamp so the admin table agrees with the summary.
-    if (row.status === 'SOLD' && row.sold_at) {
-      var soldOn = new Date(row.sold_at);
-      if (!isNaN(soldOn.getTime())) {
-        statusCell += '<div class="cell-micro">sold ' + esc(fmtDate(row.sold_at)) + '</div>';
+    // Surface the sale timestamp and buyer so the admin table carries the same
+    // information as the summary. The buyer is shown independently of
+    // sold_at, because a sold record can legitimately be missing a timestamp.
+    if (row.status === 'SOLD') {
+      if (row.sold_at) {
+        var soldOn = new Date(row.sold_at);
+        if (!isNaN(soldOn.getTime())) {
+          statusCell += '<div class="cell-micro">sold ' + esc(fmtDate(row.sold_at)) + '</div>';
+        }
       }
+      statusCell += accBuyerHtml(row);
     }
 
     var pws = '<div class="pw-stack">'
@@ -1328,6 +1355,8 @@
       if (el.accSource) el.accSource.value = row.source || '';
       if (el.accPaid) el.accPaid.value = row.buy_price != null ? Number(row.buy_price) : '';
       if (el.accSell) el.accSell.value = row.sell_price != null ? Number(row.sell_price) : '';
+      if (el.accBuyerName) el.accBuyerName.value = row.buyer_name || '';
+      if (el.accBuyerTelegram) el.accBuyerTelegram.value = row.buyer_telegram || '';
       if (el.accNotes) el.accNotes.value = row.notes || '';
       setAccBadges((row.badges || []).map(String));
     } else {
@@ -1403,6 +1432,10 @@
     };
     if ((el.accPaid.value || '').trim() !== '') payload.buyPrice = Number(el.accPaid.value);
     if ((el.accSell.value || '').trim() !== '') payload.sellPrice = Number(el.accSell.value);
+    // Always send the buyer fields, including when emptied, so clearing the
+    // buyer on a record actually clears it instead of being ignored.
+    if (el.accBuyerName) payload.buyerName = el.accBuyerName.value.trim();
+    if (el.accBuyerTelegram) payload.buyerTelegram = el.accBuyerTelegram.value.trim();
 
     el.accSaveBtn.disabled = true;
     try {
