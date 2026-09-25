@@ -40,8 +40,11 @@ function splitList(value) {
   return String(value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
 }
 
+/* Every option here ships real Discord artwork. A badge we have no file for is
+   left out rather than shown as an invented icon, because a hand-drawn badge is
+   not the badge the account actually has. Values already saved under a removed
+   name still resolve through BadgeIcons and show as removable custom chips. */
 var BADGE_OPTIONS = [
-  'Boost Level 0',
   'Boost Level 1',
   'Boost Level 2',
   'Boost Level 3',
@@ -52,8 +55,6 @@ var BADGE_OPTIONS = [
   'Boost Level 8',
   'Boost Level 9',
   'Nitro',
-  'Nitro Basic',
-  'Nitro Classic',
   'Bronze',
   'Silver',
   'Gold',
@@ -71,7 +72,6 @@ var BADGE_OPTIONS = [
   'HypeSquad Balance',
   'Early Supporter',
   'Bug Hunter Level 2',
-  'Verified Developer',
   'Discord Certified Moderator',
   'Active Developer'
 ];

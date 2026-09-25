@@ -988,14 +988,19 @@
   // how Discord labels the badges themselves.
   var BADGE_GROUPS = [
     {
-      key: 'boost',
+      // Every option here ships real Discord artwork. Anything without a matching
+    // file is left out rather than shown as an invented icon, because a badge
+    // drawn by hand is not the badge the account actually has. Rows saved with
+    // one of the removed names still resolve through BadgeIcons and surface in
+    // the removable custom chips below, so nothing is lost silently.
+    key: 'boost',
       label: 'Server Boost',
-      options: ['Boost Level 0', 'Boost Level 1', 'Boost Level 2', 'Boost Level 3', 'Boost Level 4', 'Boost Level 5', 'Boost Level 6', 'Boost Level 7', 'Boost Level 8', 'Boost Level 9']
+      options: ['Boost Level 1', 'Boost Level 2', 'Boost Level 3', 'Boost Level 4', 'Boost Level 5', 'Boost Level 6', 'Boost Level 7', 'Boost Level 8', 'Boost Level 9']
     },
     {
       key: 'nitro',
       label: 'Nitro',
-      options: ['Nitro', 'Nitro Basic', 'Nitro Classic', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond']
+      options: ['Nitro', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond']
     },
     {
       key: 'other',
@@ -1003,7 +1008,7 @@
       options: [
         'Discord Staff', 'Partner', 'Bug Hunter Level 1', 'Bug Hunter Level 2',
         'Early Supporter', 'HypeSquad Events', 'HypeSquad Bravery',
-        'HypeSquad Brilliance', 'HypeSquad Balance', 'Verified Developer',
+        'HypeSquad Brilliance', 'HypeSquad Balance',
         'Discord Certified Moderator', 'Active Developer'
       ]
     }
