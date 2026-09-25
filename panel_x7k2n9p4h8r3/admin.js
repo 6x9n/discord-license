@@ -984,29 +984,45 @@
   };
 
   // Boost and Nitro are inventory labels, not public_flags bits, so they are
-  // free text rather than decoded from the Discord response.
+  // free text rather than decoded from the Discord response. The names mirror
+  // how Discord labels the badges themselves.
   var BADGE_GROUPS = [
     {
       key: 'boost',
-      label: 'Boost',
-      options: ['Boost Tier 0', 'Boost Tier 1', 'Boost Tier 2', 'Boost Tier 3']
+      label: 'Server Boost',
+      options: ['Boost Level 0', 'Boost Level 1', 'Boost Level 2', 'Boost Level 3']
     },
     {
       key: 'nitro',
       label: 'Nitro',
-      options: ['Nitro', 'Nitro Basic', 'Nitro Classic', 'Nitro Prime']
+      options: ['Nitro', 'Nitro Basic', 'Nitro Classic']
     },
     {
       key: 'other',
       label: 'Other',
       options: [
-        'Discord Staff', 'Partner', 'Bug Hunter', 'Bug Hunter Level 2',
-        'Early Supporter', 'HypeSquad Bravery', 'HypeSquad Brilliance',
-        'HypeSquad Balance', 'Verified Developer', 'Certified Moderator',
-        'Active Developer'
+        'Discord Staff', 'Partner', 'Bug Hunter Level 1', 'Bug Hunter Level 2',
+        'Early Supporter', 'HypeSquad Events', 'HypeSquad Bravery',
+        'HypeSquad Brilliance', 'HypeSquad Balance', 'Verified Developer',
+        'Discord Certified Moderator', 'Active Developer'
       ]
     }
   ];
+
+  // Badge labels are stored as free text, so a row saved under an older name
+  // ("Boost Tier 1", "Bug Hunter") must still tick the matching box and must
+  // not be dropped when the account is saved again. Compare and store the
+  // current name instead.
+  function badgeName(value) {
+    if (window.BadgeIcons && typeof window.BadgeIcons.canonical === 'function') {
+      return window.BadgeIcons.canonical(value);
+    }
+    return String(value == null ? '' : value);
+  }
+
+  function sameBadge(a, b) {
+    return badgeName(a) === badgeName(b);
+  }
 
   function accMoney(n) {
     var v = Number(n);
@@ -1020,7 +1036,7 @@
     var seen = {};
     return String((el.accBadges && el.accBadges.value) || '')
       .split(',')
-      .map(function (s) { return s.trim(); })
+      .map(function (s) { return badgeName(s.trim()); })
       .filter(function (s) {
         if (!s || seen[s]) return false;
         seen[s] = true;
@@ -1065,7 +1081,7 @@
       var countEl = el.accBadgeGroups.querySelector('[data-count="' + group.key + '"]');
       if (!wrap) return;
       wrap.innerHTML = group.options.map(function (badge) {
-        var on = selected.indexOf(badge) !== -1;
+        var on = selected.some(function (x) { return sameBadge(x, badge); });
         return '<button type="button" class="badge-opt' + (on ? ' selected' : '') + '" role="checkbox"'
           + ' aria-checked="' + (on ? 'true' : 'false') + '" data-badge="' + esc(badge) + '"'
           + ' title="' + esc(badge) + '">'
@@ -1074,7 +1090,9 @@
           + '</button>';
       }).join('');
       if (countEl) {
-        var n = group.options.filter(function (b) { return selected.indexOf(b) !== -1; }).length;
+        var n = group.options.filter(function (b) {
+          return selected.some(function (x) { return sameBadge(x, b); });
+        }).length;
         countEl.textContent = String(n);
         countEl.classList.toggle('has-items', n > 0);
       }
@@ -1101,9 +1119,12 @@
 
   function toggleAccBadge(badge) {
     var list = accBadges();
-    var i = list.indexOf(badge);
+    var i = -1;
+    for (var k = 0; k < list.length; k++) {
+      if (sameBadge(list[k], badge)) { i = k; break; }
+    }
     if (i !== -1) list.splice(i, 1);
-    else list.push(badge);
+    else list.push(badgeName(badge));
     setAccBadges(list);
     renderBadgeGroups();
   }
@@ -1117,7 +1138,8 @@
       return;
     }
     var list = accBadges();
-    if (list.indexOf(val) === -1) list.push(val);
+    var already = list.some(function (b) { return sameBadge(b, val); });
+    if (!already) list.push(val);
     setAccBadges(list);
     el.accCustomBadge.value = '';
     renderBadgeGroups();
@@ -1196,8 +1218,11 @@
         + '<span class="badge-label">' + esc(row.nitro_tier) + '</span></span>');
     }
     (row.badges || []).forEach(function (b) {
-      out.push('<span class="badge badge-muted">' + badgeIcon(b)
-        + '<span class="badge-label">' + esc(b) + '</span></span>');
+      // Show the current badge name so rows saved before the rename read the
+      // same as newly added ones.
+      var name = badgeName(b);
+      out.push('<span class="badge badge-muted">' + badgeIcon(name)
+        + '<span class="badge-label">' + esc(name) + '</span></span>');
     });
     if (row.nitro_ends) {
       out.push('<span class="badge badge-warn">' + badgeIcon('Nitro')

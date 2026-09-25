@@ -21,10 +21,10 @@
     'Nitro Classic': '<path d="M12 2.6l2.6 5.5 6 .9-4.3 4.2 1 6-5.3-2.8-5.3 2.8 1-6L3.4 9l6-.9z"/><path d="M8.4 11.2h7.2M8.4 14h4.4"/>',
 
     // Server boost tiers: a rising bolt, tier shown as a count.
-    'Boost Tier 0': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/>',
-    'Boost Tier 1': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.5 4.2l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
-    'Boost Tier 2': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.5 2.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6zM22.4 7.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/>',
-    'Boost Tier 3': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5z"/>',
+    'Boost Level 0': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/>',
+    'Boost Level 1': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.5 4.2l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
+    'Boost Level 2': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.5 2.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6zM22.4 7.6l.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4z"/>',
+    'Boost Level 3': '<path d="M13 2.5L5.5 13.2h5l-1.5 8.3L18.5 10.6h-5.2z"/><path d="M19.6 2.4l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7zM3.6 3.2l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2L2 4.9l1.2-.5z"/>',
 
     // People and programmes
     'Discord Staff': '<path d="M12 2.6l7.4 3v6.1c0 4.2-3 8.1-7.4 9.7-4.4-1.6-7.4-5.5-7.4-9.7V5.6z"/><path d="M9.4 12.1l1.9 1.9 3.4-3.6"/>',
@@ -37,9 +37,9 @@
     'Team User': '<circle cx="12" cy="8" r="3.6"/><path d="M4.8 20.2a7.2 7.2 0 0114.4 0"/>',
 
     // Bugs and moderation
-    'Bug Hunter': '<path d="M8.6 9.4a3.4 3.4 0 016.8 0"/><path d="M7.4 9.4h9.2v4.4a4.6 4.6 0 01-9.2 0z"/><path d="M7.4 11.2H4.2M7.4 14.2H4.6M19.8 11.2h-3.2M19.4 14.2h-2.8M9.6 9.4L8 6.8M14.4 9.4L16 6.8"/>',
+    'Bug Hunter Level 1': '<path d="M8.6 9.4a3.4 3.4 0 016.8 0"/><path d="M7.4 9.4h9.2v4.4a4.6 4.6 0 01-9.2 0z"/><path d="M7.4 11.2H4.2M7.4 14.2H4.6M19.8 11.2h-3.2M19.4 14.2h-2.8M9.6 9.4L8 6.8M14.4 9.4L16 6.8"/>',
     'Bug Hunter Level 2': '<path d="M8.6 9.4a3.4 3.4 0 016.8 0"/><path d="M7.4 9.4h9.2v4.4a4.6 4.6 0 01-9.2 0z"/><path d="M7.4 11.2H4.2M7.4 14.2H4.6M19.8 11.2h-3.2M19.4 14.2h-2.8M9.6 9.4L8 6.8M14.4 9.4L16 6.8"/><path d="M19.4 3.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z"/>',
-    'Certified Moderator': '<path d="M12 2.6l7.4 3v6.1c0 4.2-3 8.1-7.4 9.7-4.4-1.6-7.4-5.5-7.4-9.7V5.6z"/><path d="M9.2 12.2l2 2 3.6-3.9"/>',
+    'Discord Certified Moderator': '<path d="M12 2.6l7.4 3v6.1c0 4.2-3 8.1-7.4 9.7-4.4-1.6-7.4-5.5-7.4-9.7V5.6z"/><path d="M9.2 12.2l2 2 3.6-3.9"/>',
     'Verified Developer': '<path d="M8.6 7.4L4.8 12l3.8 4.6M15.4 7.4L19.2 12l-3.8 4.6M13.4 5.2l-2.8 13.6"/>',
 
     // Programs
@@ -51,23 +51,51 @@
   // Loose matching so minor naming differences still resolve to an icon.
   var ALIASES = {
     'nitro prime': 'Nitro',
-    'boost': 'Boost Tier 0',
+    'boost': 'Boost Level 0',
     'hypesquad': 'HypeSquad Events',
     'hypesquad bravery': 'HypeSquad Bravery',
     'hypesquad brilliance': 'HypeSquad Brilliance',
     'hypesquad balance': 'HypeSquad Balance',
-    'bughunter': 'Bug Hunter',
+    'bughunter': 'Bug Hunter Level 1',
+    'bughunter1': 'Bug Hunter Level 1',
+    'bughunterlevel1': 'Bug Hunter Level 1',
+    'bug hunter 1': 'Bug Hunter Level 1',
     'bughunter2': 'Bug Hunter Level 2',
     'bughunterlevel2': 'Bug Hunter Level 2',
     'bug hunter 2': 'Bug Hunter Level 2',
     'staff': 'Discord Staff',
     'discordstaff': 'Discord Staff',
-    'mod': 'Certified Moderator',
+    'mod': 'Discord Certified Moderator',
+    'certifiedmoderator': 'Discord Certified Moderator',
     'dev': 'Verified Developer',
-    'boosttier1': 'Boost Tier 1',
-    'boosttier2': 'Boost Tier 2',
-    'boosttier3': 'Boost Tier 3',
-    'boosttier0': 'Boost Tier 0'
+    'boostlevel1': 'Boost Level 1',
+    'boostlevel2': 'Boost Level 2',
+    'boostlevel3': 'Boost Level 3',
+    'boostlevel0': 'Boost Level 0',
+    // Legacy names kept so accounts saved before the rename still resolve.
+    'boosttier1': 'Boost Level 1',
+    'boosttier2': 'Boost Level 2',
+    'boosttier3': 'Boost Level 3',
+    'boosttier0': 'Boost Level 0'
+  };
+
+  // Badge labels are stored as free text in the database, so rows saved before
+  // the rename still carry the old wording. These map the old wording onto the
+  // current name so existing accounts keep their icon, keep ticking the right
+  // box in the picker, and display consistently with newly added ones. Rows
+  // are migrated to the new wording the next time they are saved.
+  var RENAMES = {
+    'boost tier 0': 'Boost Level 0',
+    'boost tier 1': 'Boost Level 1',
+    'boost tier 2': 'Boost Level 2',
+    'boost tier 3': 'Boost Level 3',
+    'boost tier': 'Boost Level 0',
+    'bug hunter': 'Bug Hunter Level 1',
+    'bug hunter level 1': 'Bug Hunter Level 1',
+    'certified moderator': 'Discord Certified Moderator',
+    'discord certified moderator': 'Discord Certified Moderator',
+    'nitro prime': 'Nitro',
+    'moderator program alumni': 'Moderator Program Alumni'
   };
 
   function normalise(label) {
@@ -97,6 +125,22 @@
     return !!resolve(label);
   }
 
+  // The current display name for a badge, or the input unchanged when it is a
+  // custom badge we do not recognise. Used for display and for picker
+  // matching so a row saved under the old wording behaves like a new one.
+  function canonical(label) {
+    var raw = String(label === undefined || label === null ? '' : label);
+    var key = normalise(raw);
+    if (!key) return '';
+    if (BY_KEY[key]) return BY_KEY[key];
+    if (RENAMES[key]) return RENAMES[key];
+    var compact = key.replace(/\s+/g, '');
+    if (ALIASES[compact]) return ALIASES[compact];
+    if (ALIASES[key]) return ALIASES[key];
+    // Unknown or custom: hand it back untouched.
+    return raw;
+  }
+
   // Returns an inline <svg> string, or '' when the label is unknown.
   function svg(label, className) {
     var key = resolve(label);
@@ -108,9 +152,11 @@
   }
 
   // A badge chip: icon plus label, with the label kept for screen readers and
-  // for anyone who cannot distinguish the glyph.
+  // for anyone who cannot distinguish the glyph. The label is canonicalised so
+  // rows saved before a rename still display the current wording.
   function chip(label, className) {
-    var text = String(label === undefined || label === null ? '' : label);
+    var name = canonical(label);
+    var text = String(name === undefined || name === null ? '' : name);
     var cls = className ? className : 'chip-tag';
     return '<span class="' + cls + '">' + svg(text) + '<span class="badge-label">' + escapeHtml(text) + '</span></span>';
   }
@@ -121,5 +167,8 @@
     });
   }
 
-  global.BadgeIcons = { svg: svg, chip: chip, has: has, resolve: resolve, labels: Object.keys(GLYPHS) };
+  global.BadgeIcons = {
+    svg: svg, chip: chip, has: has, resolve: resolve,
+    canonical: canonical, labels: Object.keys(GLYPHS)
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

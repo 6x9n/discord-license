@@ -44,33 +44,64 @@ var BADGE_OPTIONS = [
   'Discord Staff',
   'Partner',
   'HypeSquad Events',
-  'Bug Hunter',
+  'Bug Hunter Level 1',
   'HypeSquad Bravery',
   'HypeSquad Brilliance',
   'HypeSquad Balance',
   'Early Supporter',
   'Bug Hunter Level 2',
   'Verified Developer',
-  'Certified Moderator',
+  'Discord Certified Moderator',
   'Active Developer'
 ];
 
+/* Badge labels are stored as free text, so rows saved before the rename still
+   carry the old wording ("Bug Hunter", "Boost Tier 1"). Compare and store the
+   current name so those rows keep working instead of looking like custom
+   badges or being dropped on save. Unknown labels pass through untouched. */
+function badgeName(value) {
+  if (window.BadgeIcons && typeof window.BadgeIcons.canonical === 'function') {
+    return window.BadgeIcons.canonical(value);
+  }
+  return String(value === undefined || value === null ? '' : value);
+}
+
+function sameBadge(a, b) {
+  return badgeName(a) === badgeName(b);
+}
+
+/* Inline glyph for a badge, or '' for a custom badge with no glyph. */
+function badgeIcon(label) {
+  var icons = window.BadgeIcons;
+  return (icons && typeof icons.svg === 'function') ? icons.svg(label) : '';
+}
+
 function badgeList() {
-  return splitList($('fBadges').value);
+  var seen = {};
+  return splitList($('fBadges').value)
+    .map(badgeName)
+    .filter(function (b) {
+      if (!b || seen[b]) return false;
+      seen[b] = true;
+      return true;
+    });
 }
 
 function syncBadgePicker() {
   var list = badgeList();
   var html = [];
   BADGE_OPTIONS.forEach(function (b) {
-    var on = list.indexOf(b) !== -1;
+    var on = list.some(function (x) { return sameBadge(x, b); });
     html.push('<button type="button" data-badge="' + esc(b) + '" role="checkbox" aria-checked="' + on
-      + '" class="badge-opt' + (on ? ' selected' : '') + '">' + esc(b) + '</button>');
+      + '" class="badge-opt' + (on ? ' selected' : '') + '">'
+      + badgeIcon(b) + '<span class="badge-label">' + esc(b) + '</span></button>');
   });
   list.forEach(function (b) {
-    if (BADGE_OPTIONS.indexOf(b) === -1) {
+    var isKnown = BADGE_OPTIONS.some(function (x) { return sameBadge(x, b); });
+    if (!isKnown) {
       html.push('<button type="button" data-badge="' + esc(b) + '" role="checkbox" aria-checked="true"'
-        + ' class="badge-opt selected">' + esc(b) + '</button>');
+        + ' class="badge-opt selected">' + badgeIcon(b)
+        + '<span class="badge-label">' + esc(b) + '</span></button>');
     }
   });
   $('badgePicker').innerHTML = html.join('');
@@ -78,9 +109,12 @@ function syncBadgePicker() {
 
 function toggleBadge(b) {
   var list = badgeList();
-  var i = list.indexOf(b);
+  var i = -1;
+  for (var k = 0; k < list.length; k++) {
+    if (sameBadge(list[k], b)) { i = k; break; }
+  }
   if (i !== -1) list.splice(i, 1);
-  else list.push(b);
+  else list.push(badgeName(b));
   $('fBadges').value = list.join(', ');
   markField('fBadges', false);
   if ($('saveStatus').classList.contains('err')) setSaveStatus('');
@@ -99,7 +133,8 @@ function addCustomBadge() {
   }
   markField('fCustomBadge', false);
   var list = badgeList();
-  if (list.indexOf(val) === -1) list.push(val);
+  var already = list.some(function (b) { return sameBadge(b, val); });
+  if (!already) list.push(val);
   $('fBadges').value = list.join(', ');
   input.value = '';
   if ($('saveStatus').classList.contains('err')) setSaveStatus('');
@@ -256,10 +291,8 @@ function renderTable() {
 
 function badgesHtml(row) {
   var out = [];
-  var icons = window.BadgeIcons;
-  function icon(label) { return (icons && icons.svg) ? icons.svg(label) : ''; }
   function tag(label, cls) {
-    return '<span class="' + (cls || 'chip-tag') + '">' + icon(label)
+    return '<span class="' + (cls || 'chip-tag') + '">' + badgeIcon(label)
       + '<span class="badge-label">' + esc(label) + '</span></span>';
   }
   if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
@@ -271,7 +304,7 @@ function badgesHtml(row) {
   } else if (row.email) {
     out.push('<span class="chip-tag unv">Unverified</span>');
   }
-  (row.badges || []).forEach(function (b) { out.push(tag(b)); });
+  (row.badges || []).forEach(function (b) { out.push(tag(badgeName(b))); });
   (row.decorations || []).slice(0, 2).forEach(function (d) { out.push(tag(d)); });
   return out.join('') || '<span class="cell-micro">—</span>';
 }
