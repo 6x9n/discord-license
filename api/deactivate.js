@@ -14,8 +14,8 @@ module.exports = async function handler(req, res) {
   }
 
   const body = await readBody(req);
-  const key = String(body.key || '').trim();
-  const deviceId = String(body.deviceId || '').trim();
+  const key = String((body && body.key) || '').trim();
+  const deviceId = String((body && body.deviceId) || '').trim();
 
   if (!key) {
     return json(res, 400, { success: false, error: 'License key is required.' });

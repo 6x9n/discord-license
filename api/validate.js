@@ -41,9 +41,9 @@ module.exports = async function handler(req, res) {
   }
 
   const body = await readBody(req);
-  const key = String(body.key || '').trim();
-  const deviceId = String(body.deviceId || '').trim();
-  const accountId = String(body.accountId || '').trim();
+  const key = String((body && body.key) || '').trim();
+  const deviceId = String((body && body.deviceId) || '').trim();
+  const accountId = String((body && body.accountId) || '').trim();
 
   if (!key) {
     return json(res, 400, { success: false, error: 'License key is required.' });
@@ -72,17 +72,51 @@ module.exports = async function handler(req, res) {
 
   let devicesUsed = 0;
   let accountsUsed = 0;
+  // Track whether the usage counts are trustworthy. Previously the failures
+  // were swallowed and the counts stayed 0, which made the limit checks below
+  // silently pass ("fail open") during a database outage.
+  let usageCountsReliable = true;
   try {
     devicesUsed = await currentDeviceCount(row.id);
-  } catch (e) { }
+  } catch (e) {
+    usageCountsReliable = false;
+  }
   try {
     accountsUsed = await currentAccountCount(row.id);
-  } catch (e) { }
+  } catch (e) {
+    usageCountsReliable = false;
+  }
 
   const maxDevices = row.max_devices || 1;
   const maxActivations = row.max_activations || 1;
-  const thisDeviceRecorded = await deviceRecorded(row.id, deviceId);
-  const thisAccountRecorded = await accountRecorded(row.id, accountId);
+
+  // These two used to be unguarded, so any database error rejected out of the
+  // handler and returned a non-JSON 500. The client treats a non-JSON body as
+  // "license invalid" and force-logs the user out, so a transient Supabase
+  // error was enough to kick every licensed user off the app.
+  let thisDeviceRecorded = false;
+  let thisAccountRecorded = false;
+  let recordedLookupFailed = false;
+  try {
+    thisDeviceRecorded = await deviceRecorded(row.id, deviceId);
+  } catch (e) {
+    recordedLookupFailed = true;
+  }
+  try {
+    thisAccountRecorded = await accountRecorded(row.id, accountId);
+  } catch (e) {
+    recordedLookupFailed = true;
+  }
+
+  if (!usageCountsReliable || recordedLookupFailed) {
+    // Report the infrastructure failure honestly with a 5xx so the client can
+    // distinguish "could not check" from "license is invalid".
+    return json(res, 503, {
+      success: false,
+      code: 'SERVICE_UNAVAILABLE',
+      error: 'Could not verify license usage right now. Please retry.'
+    });
+  }
 
   return json(res, 200, {
     success: true,

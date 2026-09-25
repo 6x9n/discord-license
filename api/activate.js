@@ -83,9 +83,9 @@ module.exports = async function handler(req, res) {
   }
 
   const body = await readBody(req);
-  const key = String(body.key || '').trim();
-  const deviceId = String(body.deviceId || '').trim();
-  const accountId = String(body.accountId || '').trim();
+  const key = String((body && body.key) || '').trim();
+  const deviceId = String((body && body.deviceId) || '').trim();
+  const accountId = String((body && body.accountId) || '').trim();
 
   if (!key) {
     return json(res, 400, { success: false, error: 'License key is required.' });
@@ -102,15 +102,15 @@ module.exports = async function handler(req, res) {
 
   const row = (rows && rows[0]) || null;
   if (!row) {
-    return json(res, 404, { success: false, error: 'Invalid license key.' });
+    return json(res, 404, { success: false, code: 'INVALID', error: 'Invalid license key.' });
   }
   if (row.revoked) {
-    return json(res, 403, { success: false, error: 'This license has been revoked.' });
+    return json(res, 403, { success: false, code: 'REVOKED', error: 'This license has been revoked.' });
   }
 
   const expiresAt = parseIso(row.expires_at);
   if (expiresAt && expiresAt <= Date.now()) {
-    return json(res, 403, { success: false, error: 'This license has expired.' });
+    return json(res, 403, { success: false, code: 'EXPIRED', error: 'This license has expired.' });
   }
 
   // Device lock first.

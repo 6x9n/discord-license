@@ -47,24 +47,53 @@ function isAuthorized(req) {
 }
 
 // Read the request body as a parsed JSON object (Node http.IncomingMessage style).
+// Always resolves to a plain object so callers can dereference safely:
+//   * JSON.parse('null') / JSON.parse('5') / JSON.parse('"x"') succeed but are
+//     not objects, and previously leaked a null/undefined out of here which
+//     made `body.key` throw a TypeError and returned a non-JSON 500.
+//   * The body is size-capped so a large upload cannot exhaust memory.
+const MAX_BODY_BYTES = 64 * 1024;
+
 function readBody(req) {
   return new Promise(function (resolve) {
     let data = '';
+    let size = 0;
+    let settled = false;
+    function finish(value) {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    }
+    if (!req || typeof req.on !== 'function') {
+      // Not a Node IncomingMessage (e.g. an edge runtime or a rewritten
+      // invocation). Degrade to an empty object instead of throwing.
+      return finish({});
+    }
     req.on('data', function (chunk) {
+      if (settled) return;
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        return finish({});
+      }
       data += chunk;
     });
     req.on('end', function () {
+      if (settled) return;
       if (!data) {
-        return resolve({});
+        return finish({});
       }
       try {
-        resolve(JSON.parse(data));
+        const parsed = JSON.parse(data);
+        finish(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {});
       } catch (e) {
-        resolve({});
+        finish({});
       }
     });
     req.on('error', function () {
-      resolve({});
+      finish({});
+    });
+    req.on('aborted', function () {
+      finish({});
     });
   });
 }
@@ -91,12 +120,12 @@ function handleOptions(res) {
   res.end();
 }
 
+// Build the "not configured" message once. Only the service key matters for the
+// public license endpoints, so never name LICENSE_ADMIN_SECRET here: this text
+// is returned verbatim to anonymous callers on the activation screen.
 const NOT_CONFIGURED_MESSAGE = (function () {
-  const missing = [];
-  if (!SERVICE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
-  if (!adminSecret) missing.push('LICENSE_ADMIN_SECRET');
-  if (!missing.length) return null;
-  return 'Server not configured. Missing environment variable' + (missing.length > 1 ? 's: ' : ': ') + missing.join(', ') + '. Set these in the Vercel project settings and redeploy.';
+  if (SERVICE_KEY) return null;
+  return 'Server not configured. Missing SUPABASE_SERVICE_ROLE_KEY environment variable. Set it in the Vercel project settings and redeploy.';
 })();
 
 async function rest(path, options) {
@@ -121,18 +150,39 @@ async function rest(path, options) {
 
   let res;
   let bodyText;
+  let timer = null;
   try {
     if (typeof fetch !== 'function') {
       throw new Error('Fetch API not available in this runtime.');
     }
     const joinPath = (String(path).charAt(0) === '/') ? String(path) : '/' + path;
+    // Abort hung Supabase calls. Without this a stalled request blocks the
+    // function until the platform limit and the client promise never settles.
+    if (typeof AbortController === 'function') {
+      const controller = new AbortController();
+      reqOpts.signal = controller.signal;
+      const timeoutMs = opts.timeoutMs || 12000;
+      timer = setTimeout(function () {
+        try { controller.abort(); } catch (e) {}
+      }, timeoutMs);
+    }
     res = await fetch(restBase + joinPath, reqOpts);
     bodyText = await res.text();
   } catch (e) {
-    const err = new Error((e && e.message === 'Fetch API not available in this runtime.') ? e.message : 'Unable to reach Supabase. Check SUPABASE_URL.');
-    err.status = 502;
+    const aborted = e && (e.name === 'AbortError' || e.name === 'TimeoutError');
+    const err = new Error(aborted
+      ? 'Supabase request timed out. Retry in a moment.'
+      : ((e && e.message === 'Fetch API not available in this runtime.') ? e.message : 'Unable to reach Supabase. Check SUPABASE_URL.'));
+    // 504 here is a client-side timeout, not a database problem, so the
+    // generic "check SUPABASE_URL" wording would misdirect the user.
+    err.status = aborted ? 504 : 502;
     err.detail = e && e.message;
     throw err;
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
   }
 
   let data = null;
