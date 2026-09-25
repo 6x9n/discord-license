@@ -256,8 +256,14 @@ function renderTable() {
 
 function badgesHtml(row) {
   var out = [];
+  var icons = window.BadgeIcons;
+  function icon(label) { return (icons && icons.svg) ? icons.svg(label) : ''; }
+  function tag(label, cls) {
+    return '<span class="' + (cls || 'chip-tag') + '">' + icon(label)
+      + '<span class="badge-label">' + esc(label) + '</span></span>';
+  }
   if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
-    out.push('<span class="chip-tag nitro">' + esc(row.nitro_tier) + '</span>');
+    out.push(tag(row.nitro_tier, 'chip-tag nitro'));
   }
   if (row.two_factor_enabled) out.push('<span class="chip-tag mfa">2FA</span>');
   if (row.verified) {
@@ -265,8 +271,8 @@ function badgesHtml(row) {
   } else if (row.email) {
     out.push('<span class="chip-tag unv">Unverified</span>');
   }
-  (row.badges || []).forEach(function (b) { out.push('<span class="chip-tag">' + esc(b) + '</span>'); });
-  (row.decorations || []).slice(0, 2).forEach(function (d) { out.push('<span class="chip-tag">' + esc(d) + '</span>'); });
+  (row.badges || []).forEach(function (b) { out.push(tag(b)); });
+  (row.decorations || []).slice(0, 2).forEach(function (d) { out.push(tag(d)); });
   return out.join('') || '<span class="cell-micro">—</span>';
 }
 

@@ -1427,3 +1427,46 @@ button {
     transform: none;
   }
 }
+/* ---------- badge icons ---------- */
+
+.badge-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 5px;
+  opacity: 0.9;
+}
+
+.badge-label {
+  white-space: nowrap;
+}
+
+.badge .badge-icon,
+.badge-opt .badge-icon,
+.badge-chip .badge-icon {
+  color: currentColor;
+}
+
+.badge-opt {
+  display: inline-flex;
+  align-items: center;
+}
+
+.badge-opt .badge-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: 0;
+}
+
+.badge-chip {
+  display: inline-flex;
+  align-items: center;
+}
+
+.badge-chip .badge-icon {
+  margin-right: 5px;
+  vertical-align: 0;
+}

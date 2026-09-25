@@ -1053,8 +1053,11 @@
       wrap.innerHTML = group.options.map(function (badge) {
         var on = selected.indexOf(badge) !== -1;
         return '<button type="button" class="badge-opt' + (on ? ' selected' : '') + '" role="checkbox"'
-          + ' aria-checked="' + (on ? 'true' : 'false') + '" data-badge="' + esc(badge) + '">'
-          + esc(badge) + '</button>';
+          + ' aria-checked="' + (on ? 'true' : 'false') + '" data-badge="' + esc(badge) + '"'
+          + ' title="' + esc(badge) + '">'
+          + badgeIcon(badge)
+          + '<span class="badge-label">' + esc(badge) + '</span>'
+          + '</button>';
       }).join('');
       if (countEl) {
         var n = group.options.filter(function (b) { return selected.indexOf(b) !== -1; }).length;
@@ -1073,7 +1076,8 @@
     if (el.accSelectedBadges) {
       el.accSelectedBadges.innerHTML = custom.length
         ? 'Custom: ' + custom.map(function (b) {
-          return '<span class="badge-chip" data-badge="' + esc(b) + '">' + esc(b)
+          return '<span class="badge-chip">' + badgeIcon(b)
+            + '<span class="badge-label">' + esc(b) + '</span>'
             + '<button type="button" class="badge-chip-x" data-remove-badge="' + esc(b)
             + '" aria-label="Remove ' + esc(b) + '">&times;</button></span>';
         }).join('')
@@ -1165,16 +1169,25 @@
     }
   }
 
+  // Badge glyphs come from the shared icon set. Unknown/custom labels still
+  // render, just without an icon, so nothing ever disappears.
+  function badgeIcon(label) {
+    return (window.BadgeIcons && window.BadgeIcons.svg) ? window.BadgeIcons.svg(label) : '';
+  }
+
   function accBadgesHtml(row) {
     var out = [];
     if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
-      out.push('<span class="badge badge-nitro">' + esc(row.nitro_tier) + '</span>');
+      out.push('<span class="badge badge-nitro">' + badgeIcon(row.nitro_tier)
+        + '<span class="badge-label">' + esc(row.nitro_tier) + '</span></span>');
     }
     (row.badges || []).forEach(function (b) {
-      out.push('<span class="badge badge-muted">' + esc(b) + '</span>');
+      out.push('<span class="badge badge-muted">' + badgeIcon(b)
+        + '<span class="badge-label">' + esc(b) + '</span></span>');
     });
     if (row.nitro_ends) {
-      out.push('<span class="badge badge-warn">ends ' + esc(fmtDate(row.nitro_ends)) + '</span>');
+      out.push('<span class="badge badge-warn">' + badgeIcon('Nitro')
+        + '<span class="badge-label">ends ' + esc(fmtDate(row.nitro_ends)) + '</span></span>');
     }
     return out.join('') || '<span class="muted-text">—</span>';
   }
