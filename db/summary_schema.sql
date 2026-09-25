@@ -1,6 +1,12 @@
 -- Discord Account Manager - Financial / Inventory schema
 -- Run this ONCE in Supabase: Dashboard -> SQL Editor -> New query -> Run.
 -- Requires the pgcrypto extension for gen_random_uuid().
+--
+-- NOTE: sql/summary_account_fields.sql is the maintained file. It contains
+-- this same schema plus the account-inventory columns added for the admin
+-- console (email/discord passwords, source, status_label) and row level
+-- security. Prefer that one; this file is kept for reference and for
+-- databases created before those columns existed.
 
 create extension if not exists pgcrypto;
 

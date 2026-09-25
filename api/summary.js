@@ -389,6 +389,18 @@ async function opList(req, res) {
   return json(res, 200, { success: true, data: rows || [] });
 }
 
+// PostgREST hands back the raw driver message, which for a unique index reads
+// like "duplicate key value violates unique constraint ...". Translate the
+// cases an operator can actually trigger into something actionable.
+function friendlyDbError(err, fallback) {
+  if (err && err.code === '23505') {
+    const wrapped = new Error('That Discord ID is already saved. Edit the existing account instead.');
+    wrapped.status = 409;
+    return wrapped;
+  }
+  return new Error((err && err.message) || fallback);
+}
+
 async function opCreate(req, res) {
   const body = await readBody(req);
   let row;
@@ -404,10 +416,8 @@ async function opCreate(req, res) {
   try {
     inserted = await rest('discord_accounts', { method: 'POST', body: row });
   } catch (err) {
-    return json(res, (err && err.status) ? err.status : 500, {
-      success: false,
-      error: (err && err.message) || 'Failed to save account.'
-    });
+    const friendly = friendlyDbError(err, 'Failed to save account.');
+    return json(res, friendly.status || 500, { success: false, error: friendly.message });
   }
   return json(res, 200, { success: true, data: (inserted && inserted[0]) || row });
 }
@@ -430,7 +440,8 @@ async function opUpdate(req, res, id) {
   try {
     updated = await rest('discord_accounts?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: patch });
   } catch (err) {
-    return json(res, (err && err.status) ? err.status : 500, { success: false, error: (err && err.message) || 'Update failed.' });
+    const friendly = friendlyDbError(err, 'Update failed.');
+    return json(res, friendly.status || 500, { success: false, error: friendly.message });
   }
   return json(res, 200, { success: true, data: (updated && updated[0]) || null });
 }
