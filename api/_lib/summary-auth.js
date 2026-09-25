@@ -9,14 +9,44 @@ function summaryPassword() {
   return process.env.SUMMARY_PASSWORD || '';
 }
 
-function cookieConfigured() {
-  return !!summaryPassword();
+// The admin console can now drive the Summary section, so its secret is
+// accepted here too. Without this, merging the two dashboards would mean two
+// logins in the same page.
+function adminSecret() {
+  return process.env.LICENSE_ADMIN_SECRET || '';
 }
 
-// Stateless token derived from SUMMARY_PASSWORD. Changing the env var
+// The session cookie has to be derivable from whichever secret is actually
+// configured, otherwise a deployment that only sets LICENSE_ADMIN_SECRET could
+// never mint a cookie and every read would 401.
+function sessionSecret() {
+  return summaryPassword() || adminSecret();
+}
+
+function cookieConfigured() {
+  return !!sessionSecret();
+}
+
+// Constant-time compare against every accepted secret. Returns true if any
+// matches, and still touches both operands so the timing does not leak which
+// secret was close.
+function secretMatches(candidate) {
+  const value = Buffer.from(String(candidate === undefined || candidate === null ? '' : candidate));
+  const accepted = [summaryPassword(), adminSecret()].filter(Boolean);
+  if (!accepted.length) return false;
+  let ok = false;
+  for (let i = 0; i < accepted.length; i++) {
+    const ref = Buffer.from(accepted[i]);
+    if (ref.length !== value.length) continue;
+    if (crypto.timingSafeEqual(ref, value)) ok = true;
+  }
+  return ok;
+}
+
+// Stateless token derived from the session secret. Changing the env var
 // invalidates every existing session without needing a store.
 function cookieValue() {
-  const pw = summaryPassword();
+  const pw = sessionSecret();
   if (!pw) return null;
   return crypto.createHmac('sha256', pw).update('summary-auth-v1').digest('base64url');
 }
@@ -62,6 +92,9 @@ function clearAuthCookie(res) {
 module.exports = {
   COOKIE_NAME: COOKIE_NAME,
   summaryPassword: summaryPassword,
+  adminSecret: adminSecret,
+  sessionSecret: sessionSecret,
+  secretMatches: secretMatches,
   cookieConfigured: cookieConfigured,
   isAuthed: isAuthed,
   setAuthCookie: setAuthCookie,

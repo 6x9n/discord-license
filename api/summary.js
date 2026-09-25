@@ -16,7 +16,7 @@
 const crypto = require('crypto');
 const { rest, readBody, json, handleOptions } = require('./_lib/supabase.js');
 const {
-  summaryPassword,
+  secretMatches,
   cookieConfigured,
   isAuthed,
   setAuthCookie,
@@ -48,7 +48,7 @@ function authGuard(req, res) {
   if (!cookieConfigured()) {
     json(res, 503, {
       success: false,
-      error: 'SUMMARY_PASSWORD is not configured on the server. Add it in the Vercel project settings and redeploy.'
+      error: 'No access secret is configured on the server. Set SUMMARY_PASSWORD or LICENSE_ADMIN_SECRET in the Vercel project settings and redeploy.'
     });
     return false;
   }
@@ -59,12 +59,7 @@ function authGuard(req, res) {
   return true;
 }
 
-function safeEqual(a, b) {
-  const ba = Buffer.from(String(a));
-  const bb = Buffer.from(String(b));
-  if (ba.length !== bb.length) return false;
-  return crypto.timingSafeEqual(ba, bb);
-}
+
 
 function parseMoney(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -122,6 +117,20 @@ function assertProfile(body) {
       if (String(d).trim().length > 60) reject400('A decoration label is too long (max 60 characters).');
     });
   }
+  // Credentials, workflow status and provenance. Length-capped so a row can
+  // never be used as an unbounded blob.
+  const emailPassword = String(body.emailPassword || '').trim();
+  if (emailPassword.length > 200) reject400('Email password is too long (max 200 characters).');
+  const discordPassword = String(body.discordPassword || '').trim();
+  if (discordPassword.length > 200) reject400('Discord password is too long (max 200 characters).');
+  const source = String(body.source || '').trim();
+  if (source.length > 300) reject400('Source is too long (max 300 characters).');
+  const statusLabel = String(body.statusLabel || '').trim();
+  if (statusLabel.length > 60) reject400('Status is too long (max 60 characters).');
+  const nitroEnds = String(body.nitroEnds || '').trim();
+  if (nitroEnds && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(nitroEnds)) {
+    reject400('Nitro end must be a date in YYYY-MM-DD form.');
+  }
   return true;
 }
 
@@ -160,6 +169,8 @@ function sanitizeCreate(body) {
     discord_id: String(body.discordId || '').trim(),
     username: String(body.username || '').trim(),
     email: String(body.email || '').trim(),
+    email_password: String(body.emailPassword || '').trim(),
+    discord_password: String(body.discordPassword || '').trim(),
     phone: String(body.phone || '').trim(),
     two_factor_enabled: !!body.twoFactorEnabled,
     verified: !!body.verified,
@@ -167,8 +178,15 @@ function sanitizeCreate(body) {
     badges: Array.isArray(body.badges) ? body.badges.map(String) : [],
     decorations: Array.isArray(body.decorations) ? body.decorations.map(String) : [],
     buy_price: buyPrice,
-    sell_price: 0,
+    // New rows start AVAILABLE, but never silently drop a price the operator
+    // typed into the form.
+    sell_price: (function () {
+      const s = parseMoney(body.sellPrice);
+      return s === null || s < 0 ? 0 : s;
+    })(),
     status: 'AVAILABLE',
+    status_label: String(body.statusLabel || '').trim(),
+    source: String(body.source || '').trim(),
     notes: String(body.notes || '').trim()
   };
   if (body.creationDate) {
@@ -182,11 +200,27 @@ function sanitizeCreate(body) {
 function sanitizeUpdate(body) {
   assertProfile(body);
   const patch = {};
-  const stringFields = ['username', 'email', 'phone', 'notes', 'nitro_tier', 'nitro_ends'];
-  stringFields.forEach(function (key) {
-    if (body[key] !== undefined && body[key] !== null) patch[key] = String(body[key]);
+  // The admin console posts camelCase while older/standalone callers may post
+  // the raw column name, so accept either spelling for every mapped field.
+  const fieldAliases = {
+    username: 'username',
+    email: 'email',
+    phone: 'phone',
+    notes: 'notes',
+    nitro_tier: 'nitroTier',
+    nitro_ends: 'nitroEnds',
+    email_password: 'emailPassword',
+    discord_password: 'discordPassword',
+    source: 'source',
+    status_label: 'statusLabel'
+  };
+  Object.keys(fieldAliases).forEach(function (key) {
+    const camel = fieldAliases[key];
+    if (body[camel] !== undefined && body[camel] !== null) patch[key] = String(body[camel]);
+    else if (body[key] !== undefined && body[key] !== null) patch[key] = String(body[key]);
   });
   if (body.discordId !== undefined && body.discordId !== null) patch.discord_id = String(body.discordId).trim();
+  else if (body.discord_id !== undefined && body.discord_id !== null) patch.discord_id = String(body.discord_id).trim();
   if (typeof body.twoFactorEnabled === 'boolean') patch.two_factor_enabled = body.twoFactorEnabled;
   if (typeof body.verified === 'boolean') patch.verified = body.verified;
   if (Array.isArray(body.badges)) patch.badges = body.badges.map(String);
@@ -232,11 +266,14 @@ async function opLogin(req, res) {
   if (!cookieConfigured()) {
     return json(res, 503, {
       success: false,
-      error: 'SUMMARY_PASSWORD is not configured on the server. Add it in the Vercel project settings and redeploy.'
+      error: 'No access secret is configured on the server. Set SUMMARY_PASSWORD or LICENSE_ADMIN_SECRET in the Vercel project settings and redeploy.'
     });
   }
   const body = await readBody(req);
-  if (!safeEqual(body.password || '', summaryPassword())) {
+  // Accepts either the standalone summary password or the admin console
+  // secret, so the merged dashboard only asks for one credential.
+  const supplied = body.password !== undefined ? body.password : body.secret;
+  if (!secretMatches(supplied)) {
     return json(res, 401, { success: false, error: 'Incorrect password.' });
   }
   setAuthCookie(res);
@@ -247,7 +284,7 @@ function opCheck(req, res) {
   if (!cookieConfigured()) {
     return json(res, 503, {
       success: false,
-      error: 'SUMMARY_PASSWORD is not configured on the server. Add it in the Vercel project settings and redeploy.'
+      error: 'No access secret is configured on the server. Set SUMMARY_PASSWORD or LICENSE_ADMIN_SECRET in the Vercel project settings and redeploy.'
     });
   }
   if (!isAuthed(req)) return json(res, 401, { authenticated: false });

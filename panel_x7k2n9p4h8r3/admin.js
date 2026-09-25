@@ -30,6 +30,40 @@
       statRevoked: g('statRevoked'),
       statAccounts: g('statAccounts'),
       statPlans: g('statPlans'),
+      accountsView: g('accountsView'),
+      accountsRefreshBtn: g('accountsRefreshBtn'),
+      addAccountBtn: g('addAccountBtn'),
+      accSearch: g('accSearch'),
+      accResultCount: g('accResultCount'),
+      accBody: g('accBody'),
+      accEmptyMsg: g('accEmptyMsg'),
+      accStatCount: g('accStatCount'),
+      accStatSpent: g('accStatSpent'),
+      accStatRevenue: g('accStatRevenue'),
+      accStatNet: g('accStatNet'),
+      accModal: g('accModal'),
+      accModalTitle: g('accModalTitle'),
+      accForm: g('accForm'),
+      accEditId: g('accEditId'),
+      accEmail: g('accEmail'),
+      accEmailPw: g('accEmailPw'),
+      accDiscordPw: g('accDiscordPw'),
+      accDiscordId: g('accDiscordId'),
+      accUsername: g('accUsername'),
+      accNitroEnds: g('accNitroEnds'),
+      accStatus: g('accStatus'),
+      accSource: g('accSource'),
+      accPaid: g('accPaid'),
+      accSell: g('accSell'),
+      accNotes: g('accNotes'),
+      accBadges: g('accBadges'),
+      accCustomBadge: g('accCustomBadge'),
+      accAddBadgeBtn: g('accAddBadgeBtn'),
+      accBadgeGroups: g('accBadgeGroups'),
+      accSelectedBadges: g('accSelectedBadges'),
+      accFormMsg: g('accFormMsg'),
+      accCancelBtn: g('accCancelBtn'),
+      accSaveBtn: g('accSaveBtn'),
       keyModal: g('keyModal'),
       modalTitle: g('modalTitle'),
       newKeyBox: g('newKeyBox'),
@@ -58,8 +92,7 @@
       planMaxAccounts: g('planMaxAccounts'),
       planMaxDevices: g('planMaxDevices'),
       planDuration: g('planDuration'),
-      planNotes: g('planNotes'),
-      planFormMsg: g('planFormMsg'),
+      planNotes: g('planNotes'),      planFormMsg: g('planFormMsg'),
       planCancelBtn: g('planCancelBtn'),
       submitPlanBtn: g('submitPlanBtn'),
       plansBody: g('plansBody'),
@@ -741,6 +774,9 @@
     if (el.overviewView) {
       el.overviewView.hidden = name !== 'overview';
     }
+    if (el.accountsView) {
+      el.accountsView.hidden = name !== 'accounts';
+    }
     if (el.settingsView) {
       el.settingsView.hidden = name !== 'settings';
     }
@@ -749,6 +785,9 @@
     });
     if (name === 'settings') {
       loadPlans();
+    }
+    if (name === 'accounts') {
+      loadAccounts();
     }
   }
 
@@ -813,7 +852,42 @@
     });
 
     if (el.overviewRefreshBtn) {
-      el.overviewRefreshBtn.addEventListener('click', function () { loadKeys(); loadPlans(); });
+      el.overviewRefreshBtn.addEventListener('click', async function () {
+        const btn = el.overviewRefreshBtn;
+        // loadKeys/loadPlans already catch and toast their own errors, so they
+        // resolve either way. The previous handler just fired them off with no
+        // pending state, which let a user click repeatedly and stack requests.
+        if (btn.dataset.busy === '1') {
+          return;
+        }
+        btn.dataset.busy = '1';
+        btn.disabled = true;
+        // Do NOT swap textContent here: the button contains an inline SVG icon
+        // and a label, and replacing the text would permanently drop the icon.
+        // The spinning icon in admin.css is the whole pending indicator.
+        btn.classList.add('is-loading');
+        btn.setAttribute('aria-busy', 'true');
+        const labelEl = btn.querySelector('.btn-label');
+        if (labelEl && !labelEl.getAttribute('data-label')) {
+          labelEl.setAttribute('data-label', labelEl.textContent);
+        }
+        if (labelEl) {
+          labelEl.textContent = 'Refreshing...';
+        }
+        try {
+          await Promise.all([loadKeys(), loadPlans()]);
+        } finally {
+          btn.disabled = false;
+          btn.classList.remove('is-loading');
+          btn.removeAttribute('aria-busy');
+          const restore = btn.querySelector('.btn-label');
+          if (restore) {
+            restore.textContent = restore.getAttribute('data-label') || 'Refresh';
+            restore.removeAttribute('data-label');
+          }
+          btn.dataset.busy = '';
+        }
+      });
     }
     if (el.exportKeysBtn) {
       el.exportKeysBtn.addEventListener('click', exportKeysCsv);
@@ -878,8 +952,613 @@
     });
     el.searchInput.addEventListener('input', renderTable);
 
+    initAccounts();
+
     tickClock();
     setInterval(tickClock, 30000);
+  }
+
+  /* =======================================================================
+     Accounts (merged Summary)
+     ======================================================================= */
+
+  var acc = {
+    rows: [],
+    filter: 'all',
+    query: '',
+    ready: false
+  };
+
+  // Boost and Nitro are inventory labels, not public_flags bits, so they are
+  // free text rather than decoded from the Discord response.
+  var BADGE_GROUPS = [
+    {
+      key: 'boost',
+      label: 'Boost',
+      options: ['Boost Tier 0', 'Boost Tier 1', 'Boost Tier 2', 'Boost Tier 3']
+    },
+    {
+      key: 'nitro',
+      label: 'Nitro',
+      options: ['Nitro', 'Nitro Basic', 'Nitro Classic', 'Nitro Prime']
+    },
+    {
+      key: 'other',
+      label: 'Other',
+      options: [
+        'Discord Staff', 'Partner', 'Bug Hunter', 'Bug Hunter Level 2',
+        'Early Supporter', 'HypeSquad Bravery', 'HypeSquad Brilliance',
+        'HypeSquad Balance', 'Verified Developer', 'Certified Moderator',
+        'Active Developer'
+      ]
+    }
+  ];
+
+  function accMoney(n) {
+    var v = Number(n);
+    if (isNaN(v)) v = 0;
+    return '$' + v.toFixed(2);
+  }
+
+  // Backed by a comma-joined hidden input. Dedupe here as well so a legacy
+  // row with repeated labels cannot inflate the per-group counts.
+  function accBadges() {
+    var seen = {};
+    return String((el.accBadges && el.accBadges.value) || '')
+      .split(',')
+      .map(function (s) { return s.trim(); })
+      .filter(function (s) {
+        if (!s || seen[s]) return false;
+        seen[s] = true;
+        return true;
+      });
+  }
+
+  function setAccBadges(list) {
+    if (el.accBadges) {
+      el.accBadges.value = list.join(', ');
+    }
+  }
+
+  /* -------- badge groups (accordion: exactly one open at a time) -------- */
+
+  // Only one section is expanded at a time. Clicking the open section closes
+  // it, which is why this closes first and then decides what to open.
+  function openBadgeGroup(key) {
+    if (!el.accBadgeGroups) return;
+    var groups = el.accBadgeGroups.querySelectorAll('.badge-group');
+    for (var i = 0; i < groups.length; i++) {
+      var g = groups[i];
+      var isTarget = g.getAttribute('data-group') === key;
+      var head = g.querySelector('.badge-group-head');
+      var body = g.querySelector('.badge-group-body');
+      if (!head || !body) continue;
+      head.setAttribute('aria-expanded', isTarget ? 'true' : 'false');
+      g.classList.toggle('open', isTarget);
+      if (isTarget) {
+        body.hidden = false;
+      } else {
+        body.hidden = true;
+      }
+    }
+  }
+
+  function renderBadgeGroups() {
+    if (!el.accBadgeGroups) return;
+    var selected = accBadges();
+    BADGE_GROUPS.forEach(function (group) {
+      var wrap = el.accBadgeGroups.querySelector('.badge-group[data-group="' + group.key + '"] .badge-opts');
+      var countEl = el.accBadgeGroups.querySelector('[data-count="' + group.key + '"]');
+      if (!wrap) return;
+      wrap.innerHTML = group.options.map(function (badge) {
+        var on = selected.indexOf(badge) !== -1;
+        return '<button type="button" class="badge-opt' + (on ? ' selected' : '') + '" role="checkbox"'
+          + ' aria-checked="' + (on ? 'true' : 'false') + '" data-badge="' + esc(badge) + '">'
+          + esc(badge) + '</button>';
+      }).join('');
+      if (countEl) {
+        var n = group.options.filter(function (b) { return selected.indexOf(b) !== -1; }).length;
+        countEl.textContent = String(n);
+        countEl.classList.toggle('has-items', n > 0);
+      }
+    });
+
+    // Custom badges live in the same hidden input but have no group, so show
+    // them as removable chips under the groups.
+    var known = {};
+    BADGE_GROUPS.forEach(function (g) {
+      g.options.forEach(function (b) { known[b] = true; });
+    });
+    var custom = selected.filter(function (b) { return !known[b]; });
+    if (el.accSelectedBadges) {
+      el.accSelectedBadges.innerHTML = custom.length
+        ? 'Custom: ' + custom.map(function (b) {
+          return '<span class="badge-chip" data-badge="' + esc(b) + '">' + esc(b)
+            + '<button type="button" class="badge-chip-x" data-remove-badge="' + esc(b)
+            + '" aria-label="Remove ' + esc(b) + '">&times;</button></span>';
+        }).join('')
+        : '';
+    }
+  }
+
+  function toggleAccBadge(badge) {
+    var list = accBadges();
+    var i = list.indexOf(badge);
+    if (i !== -1) list.splice(i, 1);
+    else list.push(badge);
+    setAccBadges(list);
+    renderBadgeGroups();
+  }
+
+  function addCustomAccBadge() {
+    if (!el.accCustomBadge) return;
+    var val = el.accCustomBadge.value.trim();
+    if (!val) return;
+    if (val.length > 60) {
+      toast('Badge label is too long (max 60 characters).', 'error');
+      return;
+    }
+    var list = accBadges();
+    if (list.indexOf(val) === -1) list.push(val);
+    setAccBadges(list);
+    el.accCustomBadge.value = '';
+    renderBadgeGroups();
+  }
+
+  /* -------- auth: the admin secret also opens the summary session -------- */
+
+  var accAuthReady = false;
+
+  async function ensureAccAuth() {
+    if (accAuthReady) return;
+    try {
+      await api('/api/summary?op=check');
+      accAuthReady = true;
+    } catch (err) {
+      // Hand the admin secret to the summary endpoint so one console login
+      // covers both sections.
+      await api('/api/summary?op=login', { method: 'POST', body: { secret: getSecret() } });
+      accAuthReady = true;
+    }
+  }
+
+  /* -------- data -------- */
+
+  async function loadAccounts() {
+    try {
+      await ensureAccAuth();
+      const data = await api('/api/summary');
+      acc.rows = Array.isArray(data.data) ? data.data : [];
+      acc.ready = true;
+    } catch (err) {
+      acc.rows = [];
+      acc.ready = false;
+      toast(err.message || 'Could not load accounts.', 'error');
+    }
+    renderAccounts();
+  }
+
+  function accFiltered() {
+    var q = acc.query.trim().toLowerCase();
+    return acc.rows.filter(function (row) {
+      if (acc.filter !== 'all' && row.status !== acc.filter) return false;
+      if (!q) return true;
+      return [row.email, row.discord_id, row.username, row.source, row.status_label, row.notes]
+        .some(function (v) { return String(v || '').toLowerCase().indexOf(q) !== -1; });
+    });
+  }
+
+  function renderAccKPIs() {
+    var spent = 0, revenue = 0;
+    acc.rows.forEach(function (row) {
+      spent += Number(row.buy_price) || 0;
+      if (row.status === 'SOLD') revenue += Number(row.sell_price) || 0;
+    });
+    var net = revenue - spent;
+    if (el.accStatCount) el.accStatCount.textContent = String(acc.rows.length);
+    if (el.accStatSpent) el.accStatSpent.textContent = accMoney(spent);
+    if (el.accStatRevenue) el.accStatRevenue.textContent = accMoney(revenue);
+    if (el.accStatNet) {
+      el.accStatNet.textContent = accMoney(net);
+      el.accStatNet.classList.toggle('net-negative', net < 0);
+      el.accStatNet.classList.toggle('net-positive', net >= 0);
+    }
+  }
+
+  function accBadgesHtml(row) {
+    var out = [];
+    if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
+      out.push('<span class="badge badge-nitro">' + esc(row.nitro_tier) + '</span>');
+    }
+    (row.badges || []).forEach(function (b) {
+      out.push('<span class="badge badge-muted">' + esc(b) + '</span>');
+    });
+    if (row.nitro_ends) {
+      out.push('<span class="badge badge-warn">ends ' + esc(fmtDate(row.nitro_ends)) + '</span>');
+    }
+    return out.join('') || '<span class="muted-text">—</span>';
+  }
+
+  function accSourceHtml(raw) {
+    var v = String(raw || '').trim();
+    if (!v) return '<span class="muted-text">—</span>';
+    if (/^https?:\/\//i.test(v)) {
+      return '<a class="link" href="' + esc(v) + '" target="_blank" rel="noopener noreferrer">'
+        + esc(v.replace(/^https?:\/\//i, '')) + '</a>';
+    }
+    if (v.indexOf('@') === 0) {
+      return '<a class="link" href="https://t.me/' + esc(v.slice(1)) + '" target="_blank" rel="noopener noreferrer">'
+        + esc(v) + '</a>';
+    }
+    return '<span class="muted-text">' + esc(v) + '</span>';
+  }
+
+  var MASKED_PW = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+
+  // Passwords are returned by the API in plaintext, so the cell starts masked
+  // and only reveals on an explicit per-row click.
+  function accPwCell(value, label) {
+    if (!value) return '<span class="muted-text">—</span>';
+    return '<span class="pw-cell">'
+      + '<span class="pw-mask" data-pw="' + esc(value) + '">' + MASKED_PW + '</span>'
+      + '<button type="button" class="pw-reveal" data-reveal aria-label="Reveal ' + esc(label) + '">'
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+      + '</button></span>';
+  }
+
+  function accRowHtml(row) {
+    var net = null;
+    if (row.status === 'SOLD') net = (Number(row.sell_price) || 0) - (Number(row.buy_price) || 0);
+    var netHtml = net === null
+      ? '<span class="muted-text">—</span>'
+      : '<span class="' + (net < 0 ? 'net-negative' : 'net-positive') + '">' + accMoney(net) + '</span>';
+
+    var identity = row.discord_id
+      ? '<strong class="cell-id">' + esc(row.discord_id) + '</strong>'
+      : '<span class="muted-text">no id</span>';
+    if (row.username) identity += '<div class="muted-text">@' + esc(row.username) + '</div>';
+
+    var statusCell = '<span class="badge ' + (row.status === 'SOLD' ? 'badge-warn' : 'badge-ok') + '">'
+      + esc(row.status) + '</span>';
+    if (row.status_label) {
+      statusCell += '<div class="status-label">' + esc(row.status_label) + '</div>';
+    }
+
+    var pws = '<div class="pw-stack">'
+      + '<div class="pw-row"><span class="pw-kind">Email</span>' + accPwCell(row.email_password, 'email password') + '</div>'
+      + '<div class="pw-row"><span class="pw-kind">Discord</span>' + accPwCell(row.discord_password, 'Discord password') + '</div>'
+      + '</div>';
+
+    var actions = '<button class="btn btn-ghost mini-btn" data-acc-act="edit" data-id="' + esc(row.id) + '">Edit</button>'
+      + (row.status === 'AVAILABLE'
+        ? '<button class="btn btn-ghost mini-btn" data-acc-act="sold" data-id="' + esc(row.id) + '">Sold</button>'
+        : '')
+      + '<button class="btn btn-danger mini-btn" data-acc-act="del" data-id="' + esc(row.id) + '">Del</button>';
+
+    return '<tr>'
+      + '<td>' + identity + '</td>'
+      + '<td><span class="muted-text">' + esc(row.email || '—') + '</span></td>'
+      + '<td>' + pws + '</td>'
+      + '<td><div class="tag-row">' + accBadgesHtml(row) + '</div></td>'
+      + '<td>' + statusCell + '</td>'
+      + '<td class="num">' + accMoney(row.buy_price) + '</td>'
+      + '<td class="num">' + (row.status === 'SOLD' ? accMoney(row.sell_price) : '—') + '</td>'
+      + '<td class="num">' + netHtml + '</td>'
+      + '<td>' + accSourceHtml(row.source) + '</td>'
+      + '<td><div class="row-actions">' + actions + '</div></td>'
+      + '</tr>';
+  }
+
+  function renderAccounts() {
+    renderAccKPIs();
+    if (!el.accBody) return;
+    var rows = accFiltered();
+    if (el.accResultCount) {
+      el.accResultCount.textContent = rows.length + (rows.length === 1 ? ' account' : ' accounts');
+    }
+    if (el.accEmptyMsg) el.accEmptyMsg.hidden = rows.length > 0;
+    el.accBody.innerHTML = rows.map(accRowHtml).join('');
+  }
+
+  /* -------- modal -------- */
+
+  function setAccFormMsg(text, kind) {
+    if (!el.accFormMsg) return;
+    el.accFormMsg.textContent = text || '';
+    el.accFormMsg.className = 'msg' + (kind ? ' msg-' + kind : '');
+  }
+
+  function resetAccForm() {
+    [el.accEditId, el.accEmail, el.accEmailPw, el.accDiscordPw, el.accDiscordId,
+      el.accUsername, el.accNitroEnds, el.accStatus, el.accSource,
+      el.accPaid, el.accSell, el.accNotes, el.accCustomBadge].forEach(function (node) {
+      if (node) node.value = '';
+    });
+    setAccBadges([]);
+    renderBadgeGroups();
+    // Nothing open by default; the user picks a group.
+    openBadgeGroup(null);
+    setAccFormMsg('');
+  }
+
+  function openAccModal(row) {
+    resetAccForm();
+    if (row) {
+      if (el.accModalTitle) el.accModalTitle.textContent = 'Edit Account';
+      if (el.accEditId) el.accEditId.value = row.id || '';
+      if (el.accEmail) el.accEmail.value = row.email || '';
+      if (el.accEmailPw) el.accEmailPw.value = row.email_password || '';
+      if (el.accDiscordPw) el.accDiscordPw.value = row.discord_password || '';
+      if (el.accDiscordId) el.accDiscordId.value = row.discord_id || '';
+      if (el.accUsername) el.accUsername.value = row.username || '';
+      if (el.accNitroEnds) el.accNitroEnds.value = row.nitro_ends ? String(row.nitro_ends).slice(0, 10) : '';
+      if (el.accStatus) el.accStatus.value = row.status_label || '';
+      if (el.accSource) el.accSource.value = row.source || '';
+      if (el.accPaid) el.accPaid.value = row.buy_price != null ? Number(row.buy_price) : '';
+      if (el.accSell) el.accSell.value = row.sell_price != null ? Number(row.sell_price) : '';
+      if (el.accNotes) el.accNotes.value = row.notes || '';
+      setAccBadges((row.badges || []).map(String));
+    } else {
+      if (el.accModalTitle) el.accModalTitle.textContent = 'Add Account';
+    }
+    renderBadgeGroups();
+    if (el.accModal) el.accModal.hidden = false;
+    if (el.accEmail) el.accEmail.focus();
+  }
+
+  function closeAccModal() {
+    if (el.accModal) el.accModal.hidden = true;
+  }
+
+  function validateAccForm() {
+    var errors = [];
+    var email = (el.accEmail.value || '').trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      errors.push('Email address format looks invalid.');
+    }
+    var did = (el.accDiscordId.value || '').trim();
+    if (did && !/^[0-9]{15,21}$/.test(did)) {
+      errors.push('Account ID must be 15 to 21 digits.');
+    } else if (did) {
+      var clash = acc.rows.some(function (r) {
+        return r.discord_id === did && r.id !== el.accEditId.value;
+      });
+      if (clash) errors.push('That account ID is already tracked.');
+    }
+    if ((el.accEmailPw.value || '').length > 200) errors.push('Email password is too long (max 200).');
+    if ((el.accDiscordPw.value || '').length > 200) errors.push('Discord password is too long (max 200).');
+    if ((el.accSource.value || '').length > 300) errors.push('Source is too long (max 300).');
+    if ((el.accStatus.value || '').length > 60) errors.push('Status is too long (max 60).');
+
+    var paidRaw = (el.accPaid.value || '').trim();
+    var paid = Number(paidRaw);
+    if (paidRaw !== '' && (!isFinite(paid) || paid < 0)) {
+      errors.push('Paid must be a non-negative number.');
+    }
+    var sellRaw = (el.accSell.value || '').trim();
+    var sell = Number(sellRaw);
+    if (sellRaw !== '' && (!isFinite(sell) || sell < 0)) {
+      errors.push('Sold must be a non-negative number.');
+    }
+
+    var hasIdentity = !!(did || (el.accUsername.value || '').trim() || email);
+    if (!hasIdentity) {
+      errors.push('Add at least an email, a username, or an account ID.');
+    }
+    return errors;
+  }
+
+  async function submitAccForm(e) {
+    e.preventDefault();
+    setAccFormMsg('');
+    var errors = validateAccForm();
+    if (errors.length) {
+      setAccFormMsg(errors.join(' '), 'error');
+      return;
+    }
+    var id = (el.accEditId.value || '').trim();
+    var payload = {
+      email: (el.accEmail.value || '').trim(),
+      emailPassword: (el.accEmailPw.value || '').trim(),
+      discordPassword: (el.accDiscordPw.value || '').trim(),
+      discordId: (el.accDiscordId.value || '').trim(),
+      username: (el.accUsername.value || '').trim(),
+      nitroEnds: (el.accNitroEnds.value || '').trim(),
+      statusLabel: (el.accStatus.value || '').trim(),
+      source: (el.accSource.value || '').trim(),
+      notes: (el.accNotes.value || '').trim(),
+      badges: accBadges()
+    };
+    if ((el.accPaid.value || '').trim() !== '') payload.buyPrice = Number(el.accPaid.value);
+    if ((el.accSell.value || '').trim() !== '') payload.sellPrice = Number(el.accSell.value);
+
+    el.accSaveBtn.disabled = true;
+    try {
+      if (id) {
+        await api('/api/summary?id=' + encodeURIComponent(id), { method: 'PATCH', body: payload });
+      } else {
+        // A new record needs a buy price; default to 0 rather than rejecting.
+        if (payload.buyPrice === undefined) payload.buyPrice = 0;
+        await api('/api/summary', { method: 'POST', body: payload });
+      }
+      closeAccModal();
+      toast(id ? 'Account updated.' : 'Account added.', 'ok');
+      await loadAccounts();
+    } catch (err) {
+      setAccFormMsg(err.message || 'Could not save the account.', 'error');
+    } finally {
+      el.accSaveBtn.disabled = false;
+    }
+  }
+
+  function markAccSold(row) {
+    var raw = window.prompt('Sale price for this account', row.sell_price != null && Number(row.sell_price) ? String(row.sell_price) : '');
+    if (raw === null) return;
+    var price = Number(raw);
+    if (raw.trim() === '' || !isFinite(price) || price < 0) {
+      toast('Sale price must be a non-negative number.', 'error');
+      return;
+    }
+    api('/api/summary?id=' + encodeURIComponent(row.id), {
+      method: 'PATCH',
+      body: { status: 'SOLD', sellPrice: price, soldAt: new Date().toISOString() }
+    }).then(function () {
+      toast('Marked as sold.', 'ok');
+      return loadAccounts();
+    }).catch(function (err) {
+      toast(err.message || 'Could not update the account.', 'error');
+    });
+  }
+
+  function deleteAcc(row) {
+    if (!window.confirm('Delete this account record? This cannot be undone.')) return;
+    api('/api/summary?id=' + encodeURIComponent(row.id), { method: 'DELETE' })
+      .then(function () {
+        toast('Account deleted.', 'ok');
+        return loadAccounts();
+      })
+      .catch(function (err) {
+        toast(err.message || 'Could not delete the account.', 'error');
+      });
+  }
+
+  /* -------- wiring -------- */
+
+  function initAccounts() {
+    if (el.accountsRefreshBtn) {
+      el.accountsRefreshBtn.addEventListener('click', async function () {
+        var btn = el.accountsRefreshBtn;
+        if (btn.dataset.busy === '1') return;
+        btn.dataset.busy = '1';
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+        btn.setAttribute('aria-busy', 'true');
+        try {
+          await loadAccounts();
+        } finally {
+          btn.disabled = false;
+          btn.classList.remove('is-loading');
+          btn.removeAttribute('aria-busy');
+          btn.dataset.busy = '';
+        }
+      });
+    }
+
+    if (el.addAccountBtn) {
+      el.addAccountBtn.addEventListener('click', function () { openAccModal(null); });
+    }
+    if (el.accCancelBtn) {
+      el.accCancelBtn.addEventListener('click', closeAccModal);
+    }
+    if (el.accModal) {
+      el.accModal.addEventListener('click', function (e) {
+        if (e.target === el.accModal) closeAccModal();
+      });
+    }
+    if (el.accForm) {
+      el.accForm.addEventListener('submit', submitAccForm);
+    }
+    if (el.accSearch) {
+      el.accSearch.addEventListener('input', function () {
+        acc.query = el.accSearch.value || '';
+        renderAccounts();
+      });
+    }
+    if (el.accAddBadgeBtn) {
+      el.accAddBadgeBtn.addEventListener('click', addCustomAccBadge);
+    }
+    if (el.accCustomBadge) {
+      el.accCustomBadge.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addCustomAccBadge();
+        }
+      });
+    }
+
+    // Accordion + badge selection + custom badge removal, all delegated so the
+    // re-rendered badge buttons do not need per-node listeners.
+    if (el.accBadgeGroups) {
+      el.accBadgeGroups.addEventListener('click', function (e) {
+        var head = e.target.closest('.badge-group-head');
+        if (head) {
+          var group = head.closest('.badge-group');
+          var key = group ? group.getAttribute('data-group') : '';
+          var isOpen = group ? group.classList.contains('open') : false;
+          openBadgeGroup(isOpen ? null : key);
+          return;
+        }
+        var removeBtn = e.target.closest('[data-remove-badge]');
+        if (removeBtn) {
+          toggleAccBadge(removeBtn.getAttribute('data-remove-badge'));
+          return;
+        }
+        var opt = e.target.closest('.badge-opt');
+        if (opt) {
+          toggleAccBadge(opt.getAttribute('data-badge'));
+        }
+      });
+    }
+
+    if (el.accSelectedBadges) {
+      el.accSelectedBadges.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-remove-badge]');
+        if (btn) toggleAccBadge(btn.getAttribute('data-remove-badge'));
+      });
+    }
+
+    // Show/hide password buttons in the form.
+    document.querySelectorAll('.pw-eye[data-pw-for]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var input = document.getElementById(btn.getAttribute('data-pw-for'));
+        if (!input) return;
+        var show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.classList.toggle('active', show);
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      });
+    });
+
+    if (el.accBody) {
+      el.accBody.addEventListener('click', function (e) {
+        var reveal = e.target.closest('[data-reveal]');
+        if (reveal) {
+          var mask = reveal.parentNode.querySelector('.pw-mask');
+          if (!mask) return;
+          var shown = mask.classList.toggle('revealed');
+          mask.textContent = shown ? (mask.getAttribute('data-pw') || '') : MASKED_PW;
+          reveal.classList.toggle('active', shown);
+          return;
+        }
+        var btn = e.target.closest('[data-acc-act]');
+        if (!btn) return;
+        var id = btn.getAttribute('data-id');
+        var act = btn.getAttribute('data-acc-act');
+        var row = acc.rows.filter(function (r) { return r.id === id; })[0];
+        if (!row) return;
+        if (act === 'edit') openAccModal(row);
+        else if (act === 'sold') markAccSold(row);
+        else if (act === 'del') deleteAcc(row);
+      });
+    }
+
+    document.querySelectorAll('[data-acc-filter]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        acc.filter = chip.getAttribute('data-acc-filter');
+        document.querySelectorAll('[data-acc-filter]').forEach(function (c) {
+          var on = c === chip;
+          c.classList.toggle('chip-active', on);
+          c.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        renderAccounts();
+      });
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && el.accModal && !el.accModal.hidden) {
+        closeAccModal();
+      }
+    });
   }
 
   if (document.readyState === 'loading') {

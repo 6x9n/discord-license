@@ -226,6 +226,64 @@ button {
   height: 16px;
 }
 
+/* Focus ring: the panel does not load the main app stylesheet, so the app's
+   global :focus-visible rules never applied here. */
+.btn:focus-visible,
+.head-btn:focus-visible,
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:active:not(:disabled),
+.head-btn:active:not(:disabled),
+.icon-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* Pending state for the overview refresh. The icon spins instead of swapping
+   markup, so the button keeps its label and layout. */
+/* Keep the icon from being squashed when the label text changes width
+   between "Refresh" and "Refreshing...". */
+.btn-label {
+  white-space: nowrap;
+}
+
+.btn.is-loading {
+  cursor: progress;
+}
+
+.btn.is-loading svg {
+  animation: admin-spin 0.8s linear infinite;
+}
+
+@keyframes admin-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .head-btn,
+  .icon-btn {
+    transition: none;
+  }
+
+  .btn:active:not(:disabled),
+  .head-btn:active:not(:disabled),
+  .icon-btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  .btn.is-loading svg {
+    animation: none;
+  }
+}
+
 .btn-primary {
   background: var(--accent);
   color: #fff;
@@ -922,5 +980,450 @@ button {
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+}
+/* =======================================================================
+   Accounts (merged Summary)
+   ======================================================================= */
+
+.acc-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.acc-table td {
+  vertical-align: top;
+}
+
+.acc-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cell-id {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.acc-table .link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.acc-table .link:hover {
+  text-decoration: underline;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 260px;
+}
+
+.badge-nitro {
+  background: rgba(88, 101, 242, 0.18);
+  color: #a5b0ff;
+  border: 1px solid rgba(88, 101, 242, 0.4);
+}
+
+.net-positive {
+  color: var(--success);
+}
+
+.net-negative {
+  color: #ff7b72;
+}
+
+.status-label {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+  word-break: break-word;
+}
+
+/* ---------- masked passwords ---------- */
+
+.pw-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pw-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.pw-kind {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+  min-width: 46px;
+}
+
+.pw-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pw-mask {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text-2);
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pw-mask.revealed {
+  color: var(--text);
+  letter-spacing: normal;
+  user-select: all;
+}
+
+.pw-reveal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.pw-reveal svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pw-reveal:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.pw-reveal.active {
+  color: var(--accent);
+}
+
+.pw-reveal:focus-visible,
+.pw-eye:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* password input with an inline reveal button */
+.pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pw-wrap .input {
+  padding-right: 36px;
+  width: 100%;
+}
+
+.pw-eye {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.pw-eye svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pw-eye:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.pw-eye.active {
+  color: var(--accent);
+}
+
+/* ---------- filter chips ---------- */
+
+.filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.chip:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.chip-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- badge group accordion ---------- */
+
+.badge-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.badge-group {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.badge-group.open {
+  border-color: rgba(88, 101, 242, 0.5);
+  background: rgba(88, 101, 242, 0.06);
+}
+
+.badge-group-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.badge-group-head:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.badge-group-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.badge-group-name {
+  flex: 1;
+}
+
+.badge-group-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.badge-group-count.has-items {
+  background: var(--accent);
+  color: #fff;
+}
+
+.badge-group-caret {
+  width: 15px;
+  height: 15px;
+  color: var(--text-2);
+  transition: transform 0.2s ease;
+}
+
+.badge-group.open .badge-group-caret {
+  transform: rotate(180deg);
+}
+
+.badge-group-body {
+  padding: 2px 10px 11px;
+}
+
+.badge-group-body[hidden] {
+  display: none;
+}
+
+.badge-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge-opt {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.badge-opt:hover {
+  color: var(--text);
+  border-color: rgba(88, 101, 242, 0.55);
+}
+
+.badge-opt.selected {
+  background: rgba(88, 101, 242, 0.2);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.badge-opt:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.badge-custom-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.badge-custom-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.badge-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.badge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.badge-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.badge-chip-x:hover {
+  background: rgba(255, 91, 91, 0.2);
+  color: #ff8484;
+}
+
+.modal-card-wide {
+  max-width: 780px;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 1100px) {
+  .acc-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .acc-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tag-row {
+    max-width: 180px;
+  }
+
+  .pw-mask {
+    max-width: 84px;
+  }
+
+  .toolbar .acc-search,
+  #accSearch {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge-group,
+  .badge-group-caret,
+  .badge-opt,
+  .chip,
+  .pw-reveal,
+  .pw-eye {
+    transition: none;
+  }
+
+  .badge-group.open .badge-group-caret {
+    transform: none;
   }
 }
