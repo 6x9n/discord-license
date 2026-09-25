@@ -13,6 +13,46 @@
 (function (global) {
   'use strict';
 
+  // Real Discord badge artwork already shipped in the repo, under
+  // assets/images/badges. Referencing these files means the images are served
+  // from our own domain: they cannot break when Discord rotates its CDN, and
+  // they cannot be blocked by an ad blocker or a third-party outage.
+  //
+  // Badges with no matching file fall back to the inline glyph above, so a
+  // missing asset degrades to a drawn icon rather than an empty space.
+  var ASSET_BASE = '/assets/images/badges/';
+  var ASSETS = {
+    // Server boost levels
+    'Boost Level 1': 'boost_badges/discordboost1.svg',
+    'Boost Level 2': 'boost_badges/discordboost2.svg',
+    'Boost Level 3': 'boost_badges/discordboost3.svg',
+
+    // Nitro
+    'Nitro': 'discordnitro.svg',
+
+    // People and programmes
+    'Discord Staff': 'discordstaff.svg',
+    'Partner': 'discordpartner.svg',
+    'Early Supporter': 'discordearlysupporter.svg',
+    'HypeSquad Events': 'hypesquadevents.svg',
+    'HypeSquad Bravery': 'hypesquadbravery.svg',
+    'HypeSquad Brilliance': 'hypesquadbrilliance.svg',
+    'HypeSquad Balance': 'hypesquadbalance.svg',
+
+    // Bugs and moderation
+    'Bug Hunter Level 1': 'discordbughunter1.svg',
+    'Bug Hunter Level 2': 'discordbughunter2.svg',
+    'Discord Certified Moderator': 'discordmod.svg',
+    'Active Developer': 'activedeveloper.svg'
+  };
+
+  // The asset for a badge, or '' when there is none and the glyph is used.
+  function asset(label) {
+    var key = resolve(label);
+    if (!key || !ASSETS[key]) return '';
+    return ASSET_BASE + ASSETS[key];
+  }
+
   // viewBox 0 0 24 24, stroked with currentColor so icons inherit colour.
   var GLYPHS = {
     // Nitro
@@ -155,6 +195,21 @@
       + ' aria-hidden="true" focusable="false">' + GLYPHS[key] + '</svg>';
   }
 
+  // The real badge image when we have one, otherwise the inline glyph. This is
+  // what the pickers and tables use.
+  //
+  // The image is sized on the element itself, because an image with no
+  // intrinsic dimensions collapses to nothing and the badge would look absent.
+  // alt is empty on purpose: the badge name is always rendered next to it, so
+  // announcing the image too would just repeat the label to a screen reader.
+  function media(label, className) {
+    var src = asset(label);
+    if (!src) return svg(label, className);
+    var cls = className ? ' class="' + className + '"' : ' class="badge-icon"';
+    return '<img' + cls + ' src="' + src + '" width="18" height="18" alt=""'
+      + ' loading="lazy" decoding="async">';
+  }
+
   // A badge chip: icon plus label, with the label kept for screen readers and
   // for anyone who cannot distinguish the glyph. The label is canonicalised so
   // rows saved before a rename still display the current wording.
@@ -162,7 +217,7 @@
     var name = canonical(label);
     var text = String(name === undefined || name === null ? '' : name);
     var cls = className ? className : 'chip-tag';
-    return '<span class="' + cls + '">' + svg(text) + '<span class="badge-label">' + escapeHtml(text) + '</span></span>';
+    return '<span class="' + cls + '">' + media(text) + '<span class="badge-label">' + escapeHtml(text) + '</span></span>';
   }
 
   function escapeHtml(s) {
@@ -172,7 +227,8 @@
   }
 
   global.BadgeIcons = {
-    svg: svg, chip: chip, has: has, resolve: resolve,
-    canonical: canonical, labels: Object.keys(GLYPHS)
+    svg: svg, media: media, chip: chip, has: has, resolve: resolve,
+    asset: asset, canonical: canonical, labels: Object.keys(GLYPHS),
+    assets: ASSETS, assetBase: ASSET_BASE
   };
 })(typeof window !== 'undefined' ? window : globalThis);

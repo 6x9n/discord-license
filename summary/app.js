@@ -70,10 +70,11 @@ function sameBadge(a, b) {
   return badgeName(a) === badgeName(b);
 }
 
-/* Inline glyph for a badge, or '' for a custom badge with no glyph. */
+/* Real badge artwork when the repo has it, drawn glyph otherwise. */
 function badgeIcon(label) {
-  var icons = window.BadgeIcons;
-  return (icons && typeof icons.svg === 'function') ? icons.svg(label) : '';
+  var B = window.BadgeIcons;
+  if (!B) return '';
+  return typeof B.media === 'function' ? B.media(label) : B.svg(label);
 }
 
 function badgeList() {

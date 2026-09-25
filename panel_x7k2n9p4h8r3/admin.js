@@ -1208,7 +1208,10 @@
   // Badge glyphs come from the shared icon set. Unknown/custom labels still
   // render, just without an icon, so nothing ever disappears.
   function badgeIcon(label) {
-    return (window.BadgeIcons && window.BadgeIcons.svg) ? window.BadgeIcons.svg(label) : '';
+    var B = window.BadgeIcons;
+    if (!B) return '';
+    // Real badge artwork when the repo has it, drawn glyph otherwise.
+    return typeof B.media === 'function' ? B.media(label) : B.svg(label);
   }
 
   function accBadgesHtml(row) {
