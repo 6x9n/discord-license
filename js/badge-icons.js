@@ -142,11 +142,15 @@
   }
 
   // Returns an inline <svg> string, or '' when the label is unknown.
+  // width/height are set on the element itself rather than only in the
+  // stylesheet: an SVG with a viewBox but no intrinsic size collapses to
+  // nothing, which would hide the icon entirely whenever the page is served
+  // a cached copy of the CSS.
   function svg(label, className) {
     var key = resolve(label);
     if (!key) return '';
     var cls = className ? ' class="' + className + '"' : ' class="badge-icon"';
-    return '<svg' + cls + ' viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    return '<svg' + cls + ' width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
       + ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
       + ' aria-hidden="true" focusable="false">' + GLYPHS[key] + '</svg>';
   }
