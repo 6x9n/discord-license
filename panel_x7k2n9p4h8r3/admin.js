@@ -1220,21 +1220,22 @@
 
   function accBadgesHtml(row) {
     var out = [];
-    // Image-only chips now that we ship the artwork. The name moves to a
-    // tooltip and to a screen-reader-only label, so the row still identifies
-    // every badge to assistive tech.
-    function chip(cls, name) {
+    // Bare artwork: no chip fill or border, so the badges read as icons rather
+    // than pills. The name moves to a tooltip and to a screen-reader-only label.
+    // This uses its own class instead of .badge-muted/.badge-nitro so the
+    // status badges that share those classes keep their background.
+    function chip(name) {
       var art = badgeIcon(name);
-      return '<span class="badge ' + cls + '" title="' + esc(name) + '">' + art
+      return '<span class="badge badge-art" title="' + esc(name) + '">' + art
         + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(name) + '</span></span>';
     }
     if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
-      out.push(chip('badge-nitro', row.nitro_tier));
+      out.push(chip(row.nitro_tier));
     }
     (row.badges || []).forEach(function (b) {
       // Show the current badge name so rows saved before the rename read the
       // same as newly added ones.
-      out.push(chip('badge-muted', badgeName(b)));
+      out.push(chip(badgeName(b)));
     });
     if (row.nitro_ends) {
       out.push('<span class="badge badge-warn">' + badgeIcon('Nitro')

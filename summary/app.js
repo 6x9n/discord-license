@@ -319,9 +319,11 @@ function renderTable() {
 function badgesHtml(row) {
   var out = [];
   function tag(label, cls) {
-    // Image-only, with the name kept for tooltips and screen readers.
+    // Bare artwork: no chip fill or border, name kept for tooltips and screen
+    // readers. chip-art is separate from chip-tag so the text tags such as 2FA
+    // and Verified keep their background.
     var art = badgeIcon(label);
-    return '<span class="' + (cls || 'chip-tag') + '" title="' + esc(label) + '">' + art
+    return '<span class="' + (cls || 'chip-tag') + ' chip-art" title="' + esc(label) + '">' + art
       + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(label) + '</span></span>';
   }
   if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
