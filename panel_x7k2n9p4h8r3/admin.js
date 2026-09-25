@@ -63,6 +63,16 @@
       accSelectedBadges: g('accSelectedBadges'),
       accFormMsg: g('accFormMsg'),
       accCancelBtn: g('accCancelBtn'),
+      soldModal: g('soldModal'),
+      soldForm: g('soldForm'),
+      soldAccId: g('soldAccId'),
+      soldPrice: g('soldPrice'),
+      soldBuyerName: g('soldBuyerName'),
+      soldBuyerTelegram: g('soldBuyerTelegram'),
+      soldAccountLabel: g('soldAccountLabel'),
+      soldFormMsg: g('soldFormMsg'),
+      soldCancelBtn: g('soldCancelBtn'),
+      soldSubmitBtn: g('soldSubmitBtn'),
       accSaveBtn: g('accSaveBtn'),
       keyModal: g('keyModal'),
       modalTitle: g('modalTitle'),
@@ -765,8 +775,9 @@
   }
 
   function tickClock() {
-    if (el.overviewClock) {
-      el.overviewClock.textContent = new Date().toLocaleString();
+    // Shared live clock, mounted on the overview and the accounts header.
+    if (window.LiveClock && typeof window.LiveClock.mount === 'function') {
+      window.LiveClock.mount('.clock, .live-clock');
     }
   }
 
@@ -954,8 +965,9 @@
 
     initAccounts();
 
+    // The clock drives itself once mounted; re-mounting picks up any nodes
+    // that were not in the DOM at first paint.
     tickClock();
-    setInterval(tickClock, 30000);
   }
 
   /* =======================================================================
@@ -1236,6 +1248,13 @@
     if (row.status_label) {
       statusCell += '<div class="status-label">' + esc(row.status_label) + '</div>';
     }
+    // Surface the sale timestamp so the admin table agrees with the summary.
+    if (row.status === 'SOLD' && row.sold_at) {
+      var soldOn = new Date(row.sold_at);
+      if (!isNaN(soldOn.getTime())) {
+        statusCell += '<div class="cell-micro">sold ' + esc(fmtDate(row.sold_at)) + '</div>';
+      }
+    }
 
     var pws = '<div class="pw-stack">'
       + '<div class="pw-row"><span class="pw-kind">Email</span>' + accPwCell(row.email_password, 'email password') + '</div>'
@@ -1404,7 +1423,70 @@
     }
   }
 
-  function markAccSold(row) {
+  function setSoldFormMsg(msg, type) {
+    if (!el.soldFormMsg) return;
+    el.soldFormMsg.textContent = msg || '';
+    el.soldFormMsg.className = 'msg' + (msg ? (type === 'error' ? ' err' : ' ok') : '');
+  }
+
+  function openSoldModal(row) {
+    if (!el.soldModal) { markAccSoldLegacy(row); return; }
+    el.soldAccId.value = row.id;
+    el.soldPrice.value = row.sell_price != null && Number(row.sell_price) ? String(row.sell_price) : '';
+    el.soldBuyerName.value = row.buyer_name || '';
+    el.soldBuyerTelegram.value = row.buyer_telegram || '';
+    if (el.soldAccountLabel) {
+      el.soldAccountLabel.textContent = row.username ? ('@' + row.username) : 'this account';
+    }
+    setSoldFormMsg('');
+    el.soldModal.hidden = false;
+    // Land on the price field, since that is the one value we always need.
+    setTimeout(function () { if (el.soldPrice) el.soldPrice.focus(); }, 30);
+  }
+
+  function closeSoldModal() {
+    if (!el.soldModal) return;
+    el.soldModal.hidden = true;
+    setSoldFormMsg('');
+  }
+
+  async function submitSoldForm(e) {
+    e.preventDefault();
+    const id = el.soldAccId.value;
+    const raw = (el.soldPrice.value || '').trim();
+    const price = Number(raw);
+    if (raw === '' || !isFinite(price) || price < 0) {
+      setSoldFormMsg('Sale price must be a non-negative number.', 'error');
+      if (el.soldPrice) el.soldPrice.focus();
+      return;
+    }
+
+    const patch = {
+      status: 'SOLD',
+      sellPrice: price,
+      soldAt: new Date().toISOString()
+    };
+    const buyerName = (el.soldBuyerName.value || '').trim();
+    const buyerTg = (el.soldBuyerTelegram.value || '').trim();
+    if (buyerName) patch.buyerName = buyerName;
+    if (buyerTg) patch.buyerTelegram = buyerTg;
+
+    el.soldSubmitBtn.disabled = true;
+    setSoldFormMsg('Saving...');
+    try {
+      await api('/api/summary?id=' + encodeURIComponent(id), { method: 'PATCH', body: patch });
+      closeSoldModal();
+      toast('Sold for ' + accMoney(price) + '. Added to your summary.', 'ok');
+      await loadAccounts();
+    } catch (err) {
+      setSoldFormMsg(err.message || 'Could not update the account.', 'error');
+    } finally {
+      el.soldSubmitBtn.disabled = false;
+    }
+  }
+
+  // Fallback for the unlikely case the sold modal markup is missing.
+  function markAccSoldLegacy(row) {
     var raw = window.prompt('Sale price for this account', row.sell_price != null && Number(row.sell_price) ? String(row.sell_price) : '');
     if (raw === null) return;
     var price = Number(raw);
@@ -1470,6 +1552,17 @@
     }
     if (el.accForm) {
       el.accForm.addEventListener('submit', submitAccForm);
+    }
+    if (el.soldCancelBtn) {
+      el.soldCancelBtn.addEventListener('click', closeSoldModal);
+    }
+    if (el.soldModal) {
+      el.soldModal.addEventListener('click', function (e) {
+        if (e.target === el.soldModal) closeSoldModal();
+      });
+    }
+    if (el.soldForm) {
+      el.soldForm.addEventListener('submit', submitSoldForm);
     }
     if (el.accSearch) {
       el.accSearch.addEventListener('input', function () {
@@ -1550,7 +1643,7 @@
         var row = acc.rows.filter(function (r) { return r.id === id; })[0];
         if (!row) return;
         if (act === 'edit') openAccModal(row);
-        else if (act === 'sold') markAccSold(row);
+        else if (act === 'sold') openSoldModal(row);
         else if (act === 'del') deleteAcc(row);
       });
     }
@@ -1570,6 +1663,11 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && el.accModal && !el.accModal.hidden) {
         closeAccModal();
+      }
+      // The sold modal is never open at the same time as the account modal,
+      // so checking it after the other one keeps Escape unambiguous.
+      if (e.key === 'Escape' && el.soldModal && !el.soldModal.hidden) {
+        closeSoldModal();
       }
     });
   }

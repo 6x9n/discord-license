@@ -1470,3 +1470,21 @@ button {
   margin-right: 5px;
   vertical-align: 0;
 }
+/* ---------- live clock + sold date ---------- */
+
+/* Ticks once a second, so tabular figures stop the layout shifting as the
+   digits change. */
+.live-clock {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  align-self: center;
+  padding-right: 4px;
+}
+
+.cell-micro {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}

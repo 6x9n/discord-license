@@ -158,6 +158,7 @@
             <p class="page-sub">Inventory, credentials and profit for every Discord account you track.</p>
           </div>
           <div class="head-actions">
+            <time class="live-clock" data-live-clock aria-label="Current date and time"></time>
             <button id="accountsRefreshBtn" class="btn btn-ghost head-btn" type="button" title="Refresh accounts">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
               <span class="btn-label">Refresh</span>
@@ -473,7 +474,35 @@
     </div>
   </div>
 
-  <!-- Plan create / edit modal -->
+  <!-- Mark as sold modal -->
+  <div id="soldModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">Mark as Sold</h3>
+      <p id="soldAccountLabel" class="page-sub"></p>
+      <form id="soldForm">
+        <input id="soldAccId" type="hidden">
+        <div class="form-field">
+          <label class="field-label" for="soldPrice">Sale price</label>
+          <input id="soldPrice" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required autocomplete="off">
+          <div class="field-hint">Enter what you sold this account for. Shown in the summary revenue and profit totals.</div>
+        </div>
+        <div class="form-field">
+          <label class="field-label" for="soldBuyerName">Buyer name <span class="muted-text">(optional)</span></label>
+          <input id="soldBuyerName" class="input" type="text" placeholder="(optional)" autocomplete="off">
+        </div>
+        <div class="form-field">
+          <label class="field-label" for="soldBuyerTelegram">Buyer Telegram <span class="muted-text">(optional)</span></label>
+          <input id="soldBuyerTelegram" class="input" type="text" placeholder="@handle" autocomplete="off">
+        </div>
+        <div id="soldFormMsg" class="msg" role="status"></div>
+        <div class="modal-actions">
+          <button id="soldCancelBtn" class="btn btn-ghost" type="button">Cancel</button>
+          <button id="soldSubmitBtn" class="btn btn-primary" type="submit">Confirm Sale</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="planModal" class="modal" hidden>
     <div class="modal-card">
       <h3 id="planModalTitle" class="modal-title">New Plan</h3>
@@ -542,7 +571,8 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <script src="/js/badge-icons.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=4"></script>
+  <script src="/js/live-clock.js?v=1"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=5"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {

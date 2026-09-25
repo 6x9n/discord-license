@@ -757,6 +757,12 @@ function bindUI() {
 
 function init() {
   bindUI();
+  // Live date/time in the dashboard header. Mounted here because the header
+  // only exists once the dash markup is present, and the module keeps a
+  // single timer regardless of how often mount() is called.
+  if (window.LiveClock && typeof window.LiveClock.mount === 'function') {
+    window.LiveClock.mount('.live-clock');
+  }
   api('summary?op=check').then(function (r) {
     if (r.ok && r.data && r.data.authenticated) {
       showDash();
