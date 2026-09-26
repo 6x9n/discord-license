@@ -1709,7 +1709,7 @@
       + '<td class="num">' + payCell + '</td>'
       + '<td class="num">' + netHtml + '</td>'
       + '<td>' + accSourceHtml(row.source) + '</td>'
-      + '<td><div class="row-actions">' + actions + '</div></td>'
+      + '<td class="acc-actions"><div class="row-actions">' + actions + '</div></td>'
       + '</tr>';
   }
 

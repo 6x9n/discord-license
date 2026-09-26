@@ -1064,6 +1064,47 @@ button {
   white-space: nowrap;
 }
 
+/* The Details / Edit / Sold / Del buttons sit in the last column of a ten
+   column table that scrolls sideways. Without this they are pushed off the
+   right edge on a narrow screen and are only reachable by scrolling past
+   every other column, so the cell is pinned to the edge of the scroll area
+   and always stays put. */
+.acc-table th.acc-actions,
+.acc-table td.acc-actions {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
+  box-shadow: -10px 0 12px -10px rgba(0, 0, 0, 0.7);
+}
+
+.acc-table th.acc-actions {
+  z-index: 2;
+}
+
+.acc-table td.acc-actions {
+  z-index: 1;
+}
+
+/* The base .row-actions is nowrap, which is right for a two button cell but
+   would make four buttons dictate the whole table width here. */
+.acc-table td.acc-actions .row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  white-space: normal;
+  min-width: 116px;
+}
+
+@media (max-width: 760px) {
+  /* Full width buttons in a single column, so the pinned cell never grows wide
+     enough to swallow the data columns. */
+  .acc-table td.acc-actions .row-actions {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+}
+
+
 .cell-id {
   font-variant-numeric: tabular-nums;
   font-size: 13px;
