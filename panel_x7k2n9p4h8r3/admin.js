@@ -44,6 +44,11 @@
     accStatOwedCard: g('accStatOwedCard'),
     accStatOwed: g('accStatOwed'),
     accStatOwedLabel: g('accStatOwedLabel'),
+    kpiModal: g('kpiModal'),
+    kpiTitle: g('kpiTitle'),
+    kpiSub: g('kpiSub'),
+    kpiList: g('kpiList'),
+    kpiClose: g('kpiClose'),
       accModal: g('accModal'),
       accModalTitle: g('accModalTitle'),
       accForm: g('accForm'),
@@ -1266,6 +1271,144 @@
     }
   }
 
+  // ---------- tile drill-down ----------
+  // Every tile is a total over the same rows, so a figure you cannot explain is
+  // a figure you cannot trust. Each breakdown sums to exactly what the tile
+  // shows, which is why Profit lists unsold stock as a negative: the tile
+  // subtracts every buy_price, not just the ones that have been sold against.
+  function kpiBreakdown(kind) {
+    var out = { title: '', sub: '', rows: [], total: null, totalLabel: '' };
+
+    function label(r) { return esc(r.discord_id || 'no id'); }
+    function handle(r) { return r.username ? '@' + esc(r.username) : ''; }
+    function byAmount(a, b) { return b.amount - a.amount; }
+    function byName(a, b) {
+      var x = (a.raw || '').toLowerCase(), y = (b.raw || '').toLowerCase();
+      return x < y ? -1 : x > y ? 1 : 0;
+    }
+
+    if (kind === 'tracked') {
+      out.title = 'Tracked accounts';
+      out.rows = acc.rows.map(function (r) {
+        return {
+          raw: r.discord_id || '', label: label(r), handle: handle(r),
+          sub: esc(r.status), amount: null
+        };
+      }).sort(byName);
+      out.totalLabel = acc.rows.length + (acc.rows.length === 1 ? ' account' : ' accounts');
+      return out;
+    }
+
+    if (kind === 'spent') {
+      out.title = 'Spent';
+      out.sub = 'What each account cost to acquire.';
+      out.rows = acc.rows.map(function (r) {
+        return { raw: r.discord_id || '', label: label(r), handle: handle(r), amount: money2(r.buy_price) };
+      }).filter(function (i) { return i.amount !== 0; }).sort(byAmount);
+      out.total = out.rows.reduce(function (s, i) { return money2(s + i.amount); }, 0);
+      out.totalLabel = 'Total spent';
+      return out;
+    }
+
+    if (kind === 'collected') {
+      out.title = 'Collected';
+      out.sub = 'Instalments actually received, so a part-paid sale shows only what has arrived.';
+      out.rows = acc.rows.filter(function (r) { return r.status === 'SOLD'; }).map(function (r) {
+        var split = paySplit(r);
+        return {
+          raw: r.discord_id || '', label: label(r), handle: handle(r),
+          sub: 'of ' + accAmount(split.total) + (split.remaining > 0 ? ' · ' + accAmount(split.remaining) + ' still owed' : ''),
+          amount: money2(split.first + split.second)
+        };
+      }).filter(function (i) { return i.amount !== 0; }).sort(byAmount);
+      out.total = out.rows.reduce(function (s, i) { return money2(s + i.amount); }, 0);
+      out.totalLabel = 'Total collected';
+      return out;
+    }
+
+    if (kind === 'owed') {
+      out.title = 'Owed';
+      out.sub = 'Outstanding balance on each sale.';
+      out.rows = acc.rows.filter(function (r) { return r.status === 'SOLD'; }).map(function (r) {
+        var split = paySplit(r);
+        return {
+          raw: r.discord_id || '', label: label(r), handle: handle(r),
+          sub: 'of ' + accAmount(split.total), amount: split.remaining
+        };
+      }).filter(function (i) { return i.amount > 0; }).sort(byAmount);
+      out.total = out.rows.reduce(function (s, i) { return money2(s + i.amount); }, 0);
+      out.totalLabel = 'Total owed';
+      return out;
+    }
+
+    if (kind === 'profit') {
+      out.title = 'Profit';
+      out.sub = 'Received minus cost, per account. Stock you have not sold yet counts against '
+        + 'the total until it sells, which is why it is listed as a negative.';
+      out.rows = acc.rows.map(function (r) {
+        var buy = money2(r.buy_price);
+        if (r.status !== 'SOLD') {
+          return {
+            raw: r.discord_id || '', label: label(r), handle: handle(r),
+            sub: 'still in stock', amount: money2(-buy)
+          };
+        }
+        var split = paySplit(r);
+        var got = money2(split.first + split.second);
+        return {
+          raw: r.discord_id || '', label: label(r), handle: handle(r),
+          sub: 'sold · received ' + accAmount(got) + ' of ' + accAmount(split.total),
+          amount: money2(got - buy)
+        };
+      }).filter(function (i) { return i.amount !== 0; }).sort(byAmount);
+      out.total = out.rows.reduce(function (s, i) { return money2(s + i.amount); }, 0);
+      out.totalLabel = 'Total profit';
+      return out;
+    }
+
+    return out;
+  }
+
+  function kpiRowHtml(item) {
+    var amt = item.amount === null
+      ? '<span class="muted-text">—</span>'
+      : accAmount(item.amount);
+    var cls = item.amount !== null && item.amount < 0 ? ' net-negative' : '';
+    return '<div class="kpi-list-row">'
+      + '<div class="kpi-list-id"><strong>' + item.label + '</strong>'
+      + (item.handle ? '<div class="muted-text">' + item.handle + '</div>' : '')
+      + (item.sub ? '<div class="cell-micro">' + item.sub + '</div>' : '')
+      + '</div>'
+      + '<div class="kpi-list-amt' + cls + '">' + amt + '</div>'
+      + '</div>';
+  }
+
+  function openKpiModal(kind) {
+    if (!el.kpiModal) return;
+    var data = kpiBreakdown(kind);
+    el.kpiTitle.textContent = data.title;
+    el.kpiSub.textContent = data.sub;
+    el.kpiSub.hidden = !data.sub;
+    var html = data.rows.map(kpiRowHtml).join('');
+    if (!html) {
+      html = '<p class="kpi-list-empty">Nothing to show here yet.</p>';
+    } else if (data.total !== null) {
+      // Printed with the same formatter as the tile, so the figure at the foot
+      // of this list is visibly the same number as the card it came from.
+      html += '<div class="kpi-list-row kpi-list-total">'
+        + '<div class="kpi-list-id">' + esc(data.totalLabel) + '</div>'
+        + '<div class="kpi-list-amt' + (data.total < 0 ? ' net-negative' : '') + '">'
+        + accMoney(data.total) + '</div></div>';
+    }
+    el.kpiList.innerHTML = html;
+    el.kpiModal.hidden = false;
+    el.kpiClose.focus();
+  }
+
+  function closeKpiModal() {
+    if (el.kpiModal) el.kpiModal.hidden = true;
+  }
+
   // Badge glyphs come from the shared icon set. Unknown/custom labels still
   // render, just without an icon, so nothing ever disappears.
   function badgeIcon(label) {
@@ -1871,6 +2014,28 @@
     if (el.soldCancelBtn) {
       el.soldCancelBtn.addEventListener('click', closeSoldModal);
     }
+    if (el.kpiClose) {
+      el.kpiClose.addEventListener('click', closeKpiModal);
+    }
+    if (el.kpiModal) {
+      el.kpiModal.addEventListener('click', function (e) {
+        if (e.target === el.kpiModal) closeKpiModal();
+      });
+    }
+    // Delegated so the five tiles keep working after renderAccKPIs hides and
+    // unhides the Owed card, and so no handler has to be re-bound per tile.
+    var kpiCards = document.querySelectorAll('.acc-stats [data-kpi]');
+    for (var ki = 0; ki < kpiCards.length; ki++) {
+      (function (card) {
+        card.addEventListener('click', function () { openKpiModal(card.dataset.kpi); });
+        card.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openKpiModal(card.dataset.kpi);
+          }
+        });
+      })(kpiCards[ki]);
+    }
     if (el.soldModal) {
       el.soldModal.addEventListener('click', function (e) {
         if (e.target === el.soldModal) closeSoldModal();
@@ -1988,6 +2153,9 @@
       // so checking it after the other one keeps Escape unambiguous.
       if (e.key === 'Escape' && el.soldModal && !el.soldModal.hidden) {
         closeSoldModal();
+      }
+      if (e.key === 'Escape' && el.kpiModal && !el.kpiModal.hidden) {
+        closeKpiModal();
       }
     });
   }

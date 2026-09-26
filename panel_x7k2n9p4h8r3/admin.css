@@ -515,6 +515,68 @@ button {
   border-color: var(--line-strong);
 }
 
+/* Tiles that drill down into the accounts behind the number. The base .stat
+   already lifts on hover, so these only add the pointer and a visible ring for
+   keyboard users, since they are real controls rather than plain figures. */
+.stat-open {
+  cursor: pointer;
+  user-select: none;
+}
+
+.stat-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.kpi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.kpi-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.kpi-list-id {
+  min-width: 0;
+}
+
+.kpi-list-amt {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-list-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* Total line, so the figure at the foot of the list is visibly the same number
+   as the tile it was opened from. */
+.kpi-list-total {
+  background: transparent;
+  border-style: dashed;
+}
+
+@media (max-width: 560px) {
+  .kpi-list-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
+
 .stat-icon {
   width: 38px;
   height: 38px;
