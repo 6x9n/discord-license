@@ -997,19 +997,26 @@
     ready: false
   };
 
-  // Boost and Nitro are inventory labels, not public_flags bits, so they are
-  // free text rather than decoded from the Discord response. The names mirror
-  // how Discord labels the badges themselves.
+  // Badge groups, ordered the way the main profile tool draws a profile: the
+  // account badges in Discord flag order first, then Nitro, then Server Boost,
+  // then the gift tier last. The same sequence means the picker reads top to
+  // bottom in the order a profile actually displays them.
+  //
+  // Every option here ships real artwork in the repo. Anything without a
+  // matching file is left out rather than shown as an invented icon, because a
+  // badge drawn by hand is not the badge the account actually has. Rows saved
+  // with one of the removed names still resolve through BadgeIcons and surface
+  // in the removable custom chips below, so nothing is lost silently.
   var BADGE_GROUPS = [
     {
-      // Every option here ships real Discord artwork. Anything without a matching
-    // file is left out rather than shown as an invented icon, because a badge
-    // drawn by hand is not the badge the account actually has. Rows saved with
-    // one of the removed names still resolve through BadgeIcons and surface in
-    // the removable custom chips below, so nothing is lost silently.
-    key: 'boost',
-      label: 'Server Boost',
-      options: ['Boost Level 1', 'Boost Level 2', 'Boost Level 3', 'Boost Level 4', 'Boost Level 5', 'Boost Level 6', 'Boost Level 7', 'Boost Level 8', 'Boost Level 9']
+      key: 'profile',
+      label: 'Profile',
+      options: [
+        'Discord Staff', 'Partner', 'HypeSquad Events', 'Bug Hunter Level 1',
+        'HypeSquad Bravery', 'HypeSquad Brilliance', 'HypeSquad Balance',
+        'Early Supporter', 'Bug Hunter Level 2',
+        'Discord Certified Moderator', 'Active Developer'
+      ]
     },
     {
       key: 'nitro',
@@ -1017,14 +1024,14 @@
       options: ['Nitro', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond']
     },
     {
-      key: 'other',
-      label: 'Other',
-      options: [
-        'Discord Staff', 'Partner', 'Bug Hunter Level 1', 'Bug Hunter Level 2',
-        'Early Supporter', 'HypeSquad Events', 'HypeSquad Bravery',
-        'HypeSquad Brilliance', 'HypeSquad Balance',
-        'Discord Certified Moderator', 'Active Developer'
-      ]
+      key: 'boost',
+      label: 'Server Boost',
+      options: ['Boost Level 1', 'Boost Level 2', 'Boost Level 3', 'Boost Level 4', 'Boost Level 5', 'Boost Level 6', 'Boost Level 7', 'Boost Level 8', 'Boost Level 9']
+    },
+    {
+      key: 'gift',
+      label: 'Gift Tier',
+      options: ['Patron', 'Champion', 'Luminary', 'Icon', 'Hero', 'Legend']
     }
   ];
 
@@ -1369,7 +1376,8 @@
     });
   }
 
-  function accBadgesHtml(row) {    var out = [];
+  function accBadgesHtml(row) {
+    var out = [];
     // Bare artwork: no chip fill or border, so the badges read as icons rather
     // than pills. The name moves to a tooltip and to a screen-reader-only label.
     // This uses its own class instead of .badge-muted/.badge-nitro so the

@@ -43,26 +43,11 @@ function splitList(value) {
 /* Every option here ships real Discord artwork. A badge we have no file for is
    left out rather than shown as an invented icon, because a hand-drawn badge is
    not the badge the account actually has. Values already saved under a removed
-   name still resolve through BadgeIcons and show as removable custom chips. */
+   name still resolve through BadgeIcons and show as removable custom chips.
+
+   Ordered the way the main profile tool draws a profile: account badges in
+   Discord flag order, then Nitro, then Server Boost, then the gift tier. */
 var BADGE_OPTIONS = [
-  'Boost Level 1',
-  'Boost Level 2',
-  'Boost Level 3',
-  'Boost Level 4',
-  'Boost Level 5',
-  'Boost Level 6',
-  'Boost Level 7',
-  'Boost Level 8',
-  'Boost Level 9',
-  'Nitro',
-  'Bronze',
-  'Silver',
-  'Gold',
-  'Platinum',
-  'Emerald',
-  'Ruby',
-  'Opal',
-  'Diamond',
   'Discord Staff',
   'Partner',
   'HypeSquad Events',
@@ -73,7 +58,31 @@ var BADGE_OPTIONS = [
   'Early Supporter',
   'Bug Hunter Level 2',
   'Discord Certified Moderator',
-  'Active Developer'
+  'Active Developer',
+  'Nitro',
+  'Bronze',
+  'Silver',
+  'Gold',
+  'Platinum',
+  'Emerald',
+  'Ruby',
+  'Opal',
+  'Diamond',
+  'Boost Level 1',
+  'Boost Level 2',
+  'Boost Level 3',
+  'Boost Level 4',
+  'Boost Level 5',
+  'Boost Level 6',
+  'Boost Level 7',
+  'Boost Level 8',
+  'Boost Level 9',
+  'Patron',
+  'Champion',
+  'Luminary',
+  'Icon',
+  'Hero',
+  'Legend'
 ];
 
 /* Badge labels are stored as free text, so rows saved before the rename still

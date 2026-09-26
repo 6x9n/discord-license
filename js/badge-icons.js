@@ -57,7 +57,15 @@
     'Bug Hunter Level 1': 'discordbughunter1.svg',
     'Bug Hunter Level 2': 'discordbughunter2.svg',
     'Discord Certified Moderator': 'discordmod.svg',
-    'Active Developer': 'activedeveloper.svg'
+    'Active Developer': 'activedeveloper.svg',
+
+    // Gift tiers, same levels and artwork the main profile tool awards
+    'Patron': 'gift_badges/giftlvl1.png',
+    'Champion': 'gift_badges/giftlvl2.png',
+    'Luminary': 'gift_badges/giftlvl3.png',
+    'Icon': 'gift_badges/giftlvl4.png',
+    'Hero': 'gift_badges/giftlvl5.png',
+    'Legend': 'gift_badges/giftlvl6.png'
   };
 
   // The asset for a badge, or '' when there is none and the glyph is used.
@@ -117,7 +125,17 @@
     // Programs
     'Active Developer': '<path d="M9.2 6.6L3.8 12l5.4 5.4M14.8 6.6L20.2 12l-5.4 5.4"/>',
     'Verified Bot Developer': '<path d="M12 2.6l7.4 3v6.1c0 4.2-3 8.1-7.4 9.7-4.4-1.6-7.4-5.5-7.4-9.7V5.6z"/><path d="M9.2 12.2l2 2 3.6-3.9"/>',
-    'Moderator Program Alumni': '<path d="M12 3.2l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.8-5.1 2.8 1-5.7-4.1-4 5.7-.8z"/><path d="M8.6 13.6l2.4 2.4 4.4-4.6"/>'
+    'Moderator Program Alumni': '<path d="M12 3.2l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.8-5.1 2.8 1-5.7-4.1-4 5.7-.8z"/><path d="M8.6 13.6l2.4 2.4 4.4-4.6"/>',
+
+    // Gift tiers. A present with one pip per tier reached, so the fallback
+    // still shows which tier it is if the artwork ever fails to load. The real
+    // gift artwork is used whenever it is available.
+    'Patron': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M12 20.6h.01"/>',
+    'Champion': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M10 20.6h.01M14 20.6h.01"/>',
+    'Luminary': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M8.7 20.6h.01M12 20.6h.01M15.3 20.6h.01"/>',
+    'Icon': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M8 20.6h.01M10.7 20.6h.01M13.3 20.6h.01M16 20.6h.01"/>',
+    'Hero': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M7.4 20.6h.01M9.7 20.6h.01M12 20.6h.01M14.3 20.6h.01M16.6 20.6h.01"/>',
+    'Legend': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M6.8 20.6h.01M9 20.6h.01M11.2 20.6h.01M13.4 20.6h.01M15.6 20.6h.01M17.2 20.6h.01"/>'
   };
 
   // Loose matching so minor naming differences still resolve to an icon.
@@ -154,7 +172,28 @@
     'boosttier7': 'Boost Level 7',
     'boosttier8': 'Boost Level 8',
     'boosttier9': 'Boost Level 9',
-    'boosttier0': 'Boost Level 0'
+    'boosttier0': 'Boost Level 0',
+    // The main profile tool names the gift tiers after the donor, so accept
+    // either that or the level it awards when resolving a stored label.
+    'giftlvl1': 'Patron',
+    'giftlvl2': 'Champion',
+    'giftlvl3': 'Luminary',
+    'giftlvl4': 'Icon',
+    'giftlvl5': 'Hero',
+    'giftlvl6': 'Legend',
+    'giftlevel1': 'Patron',
+    'giftlevel2': 'Champion',
+    'giftlevel3': 'Luminary',
+    'giftlevel4': 'Icon',
+    'giftlevel5': 'Hero',
+    'giftlevel6': 'Legend',
+    'gift1': 'Patron',
+    'gift2': 'Champion',
+    'gift3': 'Luminary',
+    'gift4': 'Icon',
+    'gift5': 'Hero',
+    'gift6': 'Legend',
+    'giftbadge': 'Patron'
   };
 
   // Badge labels are stored as free text in the database, so rows saved before
