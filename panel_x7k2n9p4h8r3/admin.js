@@ -357,14 +357,12 @@
     }
   }
 
-  function copyKey(k) {
-    const text = k.plain_key || k.key_hash || '';
-    if (!text) {
-      toast('No key to copy.', 'error');
-      return;
-    }
+  // Single clipboard write with a hidden-textarea fallback, because the async
+  // clipboard API is refused outside a secure context and this page can be
+  // opened over plain http on a local network.
+  function copyToClipboard(text, okMsg) {
     const done = function () {
-      toast('Key copied to clipboard.', 'success');
+      toast(okMsg, 'success');
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(function () {
@@ -375,6 +373,15 @@
       fallbackCopy(text);
       done();
     }
+  }
+
+  function copyKey(k) {
+    const text = k.plain_key || k.key_hash || '';
+    if (!text) {
+      toast('No key to copy.', 'error');
+      return;
+    }
+    copyToClipboard(text, 'Key copied to clipboard.');
   }
 
   function fallbackCopy(text) {
@@ -1223,8 +1230,53 @@
     return typeof B.media === 'function' ? B.media(label) : B.svg(label);
   }
 
-  function accBadgesHtml(row) {
-    var out = [];
+  // Format an account into the compact export string requested by the user.
+  // Plain newlines keep it easy to copy and paste anywhere. Empty fields are
+  // left out entirely, so a blank line can never read as a real value.
+  function accExportText(row) {
+    var parts = [];
+
+    if (row.email) parts.push('email : ' + row.email);
+    if (row.email_password) parts.push('email password : ' + row.email_password);
+    if (row.discord_password) parts.push('discord password : ' + row.discord_password);
+
+    // Prefer the descriptive label the user typed over the raw AVAILABLE/SOLD
+    // state, since that is what the export is meant to convey.
+    var statusText = row.status_label || row.status;
+    if (statusText) parts.push('Status : ' + statusText);
+
+    if (row.nitro_ends) {
+      // Rendered as "may 4 2027" rather than a locale string, so the exported
+      // text looks the same for every user. An unparseable value is passed
+      // through untouched instead of being replaced with a guess.
+      var d = new Date(row.nitro_ends);
+      var months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      parts.push('nitro end : ' + (!isNaN(d.getTime())
+        ? months[d.getMonth()] + ' ' + d.getDate() + ' ' + d.getFullYear()
+        : row.nitro_ends));
+    }
+
+    // "paid" is what the account cost to acquire, which is the buy price. A
+    // whole amount prints without decimals so it reads 205$, not 205.00$.
+    var paid = Number(row.buy_price);
+    if (!isNaN(paid) && paid > 0) {
+      parts.push('paid : ' + (paid % 1 === 0 ? String(paid) : paid.toFixed(2)) + '$');
+    }
+
+    if (row.source) parts.push('from : ' + row.source);
+    return parts.join('\n');
+  }
+
+  function copyAccExport(row) {
+    var text = accExportText(row);
+    if (!text) {
+      toast('Nothing to export on this account.', 'error');
+      return;
+    }
+    copyToClipboard(text, 'Account details copied.');
+  }
+
+  function accBadgesHtml(row) {    var out = [];
     // Bare artwork: no chip fill or border, so the badges read as icons rather
     // than pills. The name moves to a tooltip and to a screen-reader-only label.
     // This uses its own class instead of .badge-muted/.badge-nitro so the
@@ -1331,7 +1383,8 @@
       + '<div class="pw-row"><span class="pw-kind">Discord</span>' + accPwCell(row.discord_password, 'Discord password') + '</div>'
       + '</div>';
 
-    var actions = '<button class="btn btn-ghost mini-btn" data-acc-act="edit" data-id="' + esc(row.id) + '">Edit</button>'
+    var actions = '<button class="btn btn-ghost mini-btn" data-acc-act="export" data-id="' + esc(row.id) + '" title="Copy account details to the clipboard">Details</button>'
+      + '<button class="btn btn-ghost mini-btn" data-acc-act="edit" data-id="' + esc(row.id) + '">Edit</button>'
       + (row.status === 'AVAILABLE'
         ? '<button class="btn btn-ghost mini-btn" data-acc-act="sold" data-id="' + esc(row.id) + '">Sold</button>'
         : '')
@@ -1721,6 +1774,7 @@
         if (act === 'edit') openAccModal(row);
         else if (act === 'sold') openSoldModal(row);
         else if (act === 'del') deleteAcc(row);
+        else if (act === 'export') copyAccExport(row);
       });
     }
 
