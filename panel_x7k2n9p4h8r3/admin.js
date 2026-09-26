@@ -55,6 +55,10 @@
       accSource: g('accSource'),
       accPaid: g('accPaid'),
       accSell: g('accSell'),
+      accPaySplitField: g('accPaySplitField'),
+      accPaidFirst: g('accPaidFirst'),
+      accPaidSecond: g('accPaidSecond'),
+      accBalanceHint: g('accBalanceHint'),
       accBuyerName: g('accBuyerName'),
       accBuyerTelegram: g('accBuyerTelegram'),
       accNotes: g('accNotes'),
@@ -69,6 +73,9 @@
       soldForm: g('soldForm'),
       soldAccId: g('soldAccId'),
       soldPrice: g('soldPrice'),
+      soldPaidFirst: g('soldPaidFirst'),
+      soldPaidSecond: g('soldPaidSecond'),
+      soldBalanceHint: g('soldBalanceHint'),
       soldBuyerName: g('soldBuyerName'),
       soldBuyerTelegram: g('soldBuyerTelegram'),
       soldAccountLabel: g('soldAccountLabel'),
@@ -1230,6 +1237,12 @@
     return typeof B.media === 'function' ? B.media(label) : B.svg(label);
   }
 
+  // Whole amounts print without decimals so it reads 205$ rather than 205.00$.
+  function accAmount(n) {
+    var v = money2(n);
+    return (v % 1 === 0 ? String(v) : v.toFixed(2)) + '$';
+  }
+
   // Format an account into the compact export string requested by the user.
   // Plain newlines keep it easy to copy and paste anywhere. Empty fields are
   // left out entirely, so a blank line can never read as a real value.
@@ -1258,12 +1271,20 @@
 
     // "paid" is what the account cost to acquire, which is the buy price. A
     // whole amount prints without decimals so it reads 205$, not 205.00$.
-    var paid = Number(row.buy_price);
-    if (!isNaN(paid) && paid > 0) {
-      parts.push('paid : ' + (paid % 1 === 0 ? String(paid) : paid.toFixed(2)) + '$');
-    }
+    var paid = money2(row.buy_price);
+    if (paid > 0) parts.push('paid : ' + accAmount(paid));
 
     if (row.source) parts.push('from : ' + row.source);
+
+    // Only a sold account that actually records instalments gets a payment
+    // block, so a one-off sale and an unsold account keep the short export.
+    var split = paySplit(row);
+    if (split.split) {
+      parts.push('total : ' + accAmount(split.total));
+      parts.push('part 1 : ' + accAmount(split.first));
+      parts.push('part 2 : ' + accAmount(split.second));
+      if (split.remaining > 0) parts.push('remaining : ' + accAmount(split.remaining));
+    }
     return parts.join('\n');
   }
 
@@ -1274,6 +1295,78 @@
       return;
     }
     copyToClipboard(text, 'Account details copied.');
+  }
+
+  // ---------- split payment maths ----------
+  // Only the two received instalments are stored in the database. The agreed
+  // second instalment and the outstanding balance are always derived from them
+  // and the total here, in one place, so no two screens can disagree and the
+  // figures cannot drift apart from the sale price.
+  function money2(n) {
+    var v = Number(n);
+    if (!isFinite(v)) return 0;
+    // Round to cents so repeated additions cannot produce 0.30000000000000004.
+    // The trailing +0 collapses the -0 that Math.round returns when a balance
+    // nets to exactly zero through float noise, which would otherwise leak
+    // into comparisons and string building.
+    return Math.round(v * 100) / 100 + 0;
+  }
+
+  function paySplit(row) {
+    var total = money2(row.sell_price);
+    var first = money2(row.sell_paid_first);
+    var second = money2(row.sell_paid_second);
+    var remaining = money2(total - first - second);
+    return {
+      total: total,
+      first: first,
+      second: second,
+      // What the second instalment was agreed to be, given the total and part 1.
+      part2Due: money2(total - first),
+      // Negative when the buyer has overpaid, which we report rather than hide.
+      remaining: remaining,
+      settled: remaining <= 0,
+      // A split is only "in play" once an instalment has actually been
+      // recorded. A plain one-off sale with nothing recorded yet still has a
+      // balance, but it is not a split, so it keeps the short export.
+      split: row.status === 'SOLD' && total > 0 && (first > 0 || second > 0)
+    };
+  }
+
+  // Live "remaining" readout under the two inputs, so the balance is visible
+  // while typing instead of only after a save.
+  function updateBalanceHint(totalInput, firstInput, secondInput, hint) {
+    if (!hint) return;
+    var total = money2(totalInput ? totalInput.value : 0);
+    var first = money2(firstInput ? firstInput.value : 0);
+    var second = money2(secondInput ? secondInput.value : 0);
+    if (total <= 0) {
+      hint.textContent = '';
+      hint.className = 'pay-balance';
+      return;
+    }
+    var remaining = money2(total - first - second);
+    if (remaining > 0) {
+      hint.textContent = 'Part 2 agreed: ' + accMoney(money2(total - first))
+        + '  ·  still owed: ' + accMoney(remaining);
+      hint.className = 'pay-balance pay-balance-due';
+    } else if (remaining < 0) {
+      hint.textContent = 'Overpaid by ' + accMoney(money2(-remaining)) + '.';
+      hint.className = 'pay-balance pay-balance-over';
+    } else {
+      hint.textContent = 'Fully paid. Nothing outstanding.';
+      hint.className = 'pay-balance pay-balance-clear';
+    }
+  }
+
+  function wireBalanceHint(totalInput, firstInput, secondInput, hint) {
+    if (!hint) return;
+    [totalInput, firstInput, secondInput].forEach(function (input) {
+      if (!input) return;
+      input.addEventListener('input', function () {
+        updateBalanceHint(totalInput, firstInput, secondInput, hint);
+      });
+    });
   }
 
   function accBadgesHtml(row) {    var out = [];
@@ -1383,6 +1476,17 @@
       + '<div class="pw-row"><span class="pw-kind">Discord</span>' + accPwCell(row.discord_password, 'Discord password') + '</div>'
       + '</div>';
 
+    var payCell = row.status === 'SOLD' ? accMoney(row.sell_price) : '<span class="muted-text">—</span>';
+    var split = paySplit(row);
+    // Show an outstanding balance on any sale, split or not, because an
+    // unrecorded payment is the thing worth catching. An unsold account never
+    // shows one, since its sell price is only an asking price.
+    if (split.remaining > 0) {
+      payCell += '<div class="pay-due">' + accMoney(split.remaining) + ' owed</div>';
+    } else if (split.split) {
+      payCell += '<div class="pay-clear">paid in full</div>';
+    }
+
     var actions = '<button class="btn btn-ghost mini-btn" data-acc-act="export" data-id="' + esc(row.id) + '" title="Copy account details to the clipboard">Details</button>'
       + '<button class="btn btn-ghost mini-btn" data-acc-act="edit" data-id="' + esc(row.id) + '">Edit</button>'
       + (row.status === 'AVAILABLE'
@@ -1397,7 +1501,7 @@
       + '<td><div class="tag-row">' + accBadgesHtml(row) + '</div></td>'
       + '<td>' + statusCell + '</td>'
       + '<td class="num">' + accMoney(row.buy_price) + '</td>'
-      + '<td class="num">' + (row.status === 'SOLD' ? accMoney(row.sell_price) : '—') + '</td>'
+      + '<td class="num">' + payCell + '</td>'
       + '<td class="num">' + netHtml + '</td>'
       + '<td>' + accSourceHtml(row.source) + '</td>'
       + '<td><div class="row-actions">' + actions + '</div></td>'
@@ -1426,9 +1530,12 @@
   function resetAccForm() {
     [el.accEditId, el.accEmail, el.accEmailPw, el.accDiscordPw, el.accDiscordId,
       el.accUsername, el.accNitroEnds, el.accStatus, el.accSource,
-      el.accPaid, el.accSell, el.accNotes, el.accCustomBadge].forEach(function (node) {
+      el.accPaid, el.accSell, el.accPaidFirst, el.accPaidSecond, el.accNotes, el.accCustomBadge].forEach(function (node) {
       if (node) node.value = '';
     });
+    // A new account is not sold, so the split stays hidden until it is.
+    if (el.accPaySplitField) el.accPaySplitField.hidden = true;
+    if (el.accBalanceHint) el.accBalanceHint.textContent = '';
     setAccBadges([]);
     renderBadgeGroups();
     // Nothing open by default; the user picks a group.
@@ -1451,6 +1558,12 @@
       if (el.accSource) el.accSource.value = row.source || '';
       if (el.accPaid) el.accPaid.value = row.buy_price != null ? Number(row.buy_price) : '';
       if (el.accSell) el.accSell.value = row.sell_price != null ? Number(row.sell_price) : '';
+    if (el.accPaidFirst) el.accPaidFirst.value = money2(row.sell_paid_first) || '';
+    if (el.accPaidSecond) el.accPaidSecond.value = money2(row.sell_paid_second) || '';
+    // The split only means something once the account is sold, so it stays
+    // hidden otherwise rather than showing a balance against an asking price.
+    if (el.accPaySplitField) el.accPaySplitField.hidden = !(row && row.status === 'SOLD');
+    updateBalanceHint(el.accSell, el.accPaidFirst, el.accPaidSecond, el.accBalanceHint);
       if (el.accBuyerName) el.accBuyerName.value = row.buyer_name || '';
       if (el.accBuyerTelegram) el.accBuyerTelegram.value = row.buyer_telegram || '';
       if (el.accNotes) el.accNotes.value = row.notes || '';
@@ -1528,6 +1641,10 @@
     };
     if ((el.accPaid.value || '').trim() !== '') payload.buyPrice = Number(el.accPaid.value);
     if ((el.accSell.value || '').trim() !== '') payload.sellPrice = Number(el.accSell.value);
+    // Always send both instalments, including as 0, so clearing a part payment
+    // actually clears it rather than being silently ignored.
+    payload.sellPaidFirst = money2(el.accPaidFirst ? el.accPaidFirst.value : 0);
+    payload.sellPaidSecond = money2(el.accPaidSecond ? el.accPaidSecond.value : 0);
     // Always send the buyer fields, including when emptied, so clearing the
     // buyer on a record actually clears it instead of being ignored.
     if (el.accBuyerName) payload.buyerName = el.accBuyerName.value.trim();
@@ -1562,6 +1679,9 @@
     if (!el.soldModal) { markAccSoldLegacy(row); return; }
     el.soldAccId.value = row.id;
     el.soldPrice.value = row.sell_price != null && Number(row.sell_price) ? String(row.sell_price) : '';
+    el.soldPaidFirst.value = money2(row.sell_paid_first) ? String(money2(row.sell_paid_first)) : '';
+    el.soldPaidSecond.value = money2(row.sell_paid_second) ? String(money2(row.sell_paid_second)) : '';
+    updateBalanceHint(el.soldPrice, el.soldPaidFirst, el.soldPaidSecond, el.soldBalanceHint);
     el.soldBuyerName.value = row.buyer_name || '';
     el.soldBuyerTelegram.value = row.buyer_telegram || '';
     if (el.soldAccountLabel) {
@@ -1595,6 +1715,10 @@
       sellPrice: price,
       soldAt: new Date().toISOString()
     };
+    // Both instalments are always sent, including as 0, so re-confirming a sale
+    // cannot leave a stale part payment behind from an earlier attempt.
+    patch.sellPaidFirst = money2(el.soldPaidFirst ? el.soldPaidFirst.value : 0);
+    patch.sellPaidSecond = money2(el.soldPaidSecond ? el.soldPaidSecond.value : 0);
     const buyerName = (el.soldBuyerName.value || '').trim();
     const buyerTg = (el.soldBuyerTelegram.value || '').trim();
     if (buyerName) patch.buyerName = buyerName;
@@ -1693,6 +1817,10 @@
     if (el.soldForm) {
       el.soldForm.addEventListener('submit', submitSoldForm);
     }
+    // Keep the outstanding balance visible while the operator types, in both
+    // the sold dialog and the account editor.
+    wireBalanceHint(el.soldPrice, el.soldPaidFirst, el.soldPaidSecond, el.soldBalanceHint);
+    wireBalanceHint(el.accSell, el.accPaidFirst, el.accPaidSecond, el.accBalanceHint);
     if (el.accSearch) {
       el.accSearch.addEventListener('input', function () {
         acc.query = el.accSearch.value || '';

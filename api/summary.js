@@ -186,6 +186,17 @@ function sanitizeCreate(body) {
     })(),
     status: 'AVAILABLE',
     status_label: String(body.statusLabel || '').trim(),
+    // A new account is not sold, so it starts with nothing received against a
+    // split. The columns are still written so the insert does not depend on
+    // their server-side default.
+    sell_paid_first: (function () {
+      const f = parseMoney(body.sellPaidFirst);
+      return f === null || f < 0 ? 0 : f;
+    })(),
+    sell_paid_second: (function () {
+      const s = parseMoney(body.sellPaidSecond);
+      return s === null || s < 0 ? 0 : s;
+    })(),
     source: String(body.source || '').trim(),
     notes: String(body.notes || '').trim()
   };
@@ -239,6 +250,15 @@ function sanitizeUpdate(body) {
     const n = Number(body.sellPrice);
     if (isFinite(n) && n >= 0) patch.sell_price = n;
   }
+  // The two received instalments of a split sale. Only these are stored; the
+  // second instalment and the outstanding balance are derived from them and
+  // sell_price, so nothing can be posted that contradicts the total.
+  ['sellPaidFirst', 'sellPaidSecond'].forEach(function (key) {
+    const raw = body[key];
+    if (raw === undefined || raw === null || raw === '') return;
+    const n = Number(raw);
+    if (isFinite(n) && n >= 0) patch[key === 'sellPaidFirst' ? 'sell_paid_first' : 'sell_paid_second'] = n;
+  });
   if (body.status) {
     const status = String(body.status).toUpperCase();
     if (status === 'AVAILABLE' || status === 'SOLD') {

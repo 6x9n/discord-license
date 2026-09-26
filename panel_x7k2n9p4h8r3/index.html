@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=7">
+  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=8">
 </head>
 <body>
   <div id="loginView" class="view login-view">
@@ -411,9 +411,24 @@
             <input id="accPaid" class="input" type="number" step="0.01" min="0" placeholder="0.00">
           </div>
           <div class="form-field">
-            <label class="field-label" for="accSell">Sold ($)</label>
-            <input id="accSell" class="input" type="number" step="0.01" min="0" placeholder="0.00">
+        <label class="field-label" for="accSell">Sold ($)</label>
+        <input id="accSell" class="input" type="number" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="form-field" id="accPaySplitField" hidden>
+        <label class="field-label">Payment split</label>
+        <div class="pay-split">
+          <div>
+            <label class="field-label" for="accPaidFirst">Part 1 received</label>
+            <input id="accPaidFirst" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" autocomplete="off">
           </div>
+          <div>
+            <label class="field-label" for="accPaidSecond">Part 2 received</label>
+            <input id="accPaidSecond" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" autocomplete="off">
+          </div>
+        </div>
+        <div class="field-hint">Only for sold accounts. Record what the buyer has actually sent in each part.</div>
+        <div id="accBalanceHint" class="pay-balance" role="status"></div>
+      </div>
         </div>
 
         <!-- Sale record. Kept editable so a mistyped buyer can be corrected
@@ -497,8 +512,23 @@
         <div class="form-field">
           <label class="field-label" for="soldPrice">Sale price</label>
           <input id="soldPrice" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required autocomplete="off">
-          <div class="field-hint">Enter what you sold this account for. Shown in the summary revenue and profit totals.</div>
+        <div class="field-hint">Enter what you sold this account for. Shown in the summary revenue and profit totals.</div>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Payment split <span class="muted-text">(optional)</span></label>
+        <div class="pay-split">
+          <div>
+            <label class="field-label" for="soldPaidFirst">Part 1 received</label>
+            <input id="soldPaidFirst" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" autocomplete="off">
+          </div>
+          <div>
+            <label class="field-label" for="soldPaidSecond">Part 2 received</label>
+            <input id="soldPaidSecond" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" autocomplete="off">
+          </div>
         </div>
+        <div class="field-hint">Leave both at 0 if the buyer pays in one go. The second instalment and the balance are worked out for you.</div>
+        <div id="soldBalanceHint" class="pay-balance" role="status"></div>
+      </div>
         <div class="form-field">
           <label class="field-label" for="soldBuyerName">Buyer name <span class="muted-text">(optional)</span></label>
           <input id="soldBuyerName" class="input" type="text" placeholder="(optional)" autocomplete="off">
@@ -585,7 +615,7 @@
 
   <script src="/js/badge-icons.js?v=5"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=11"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=12"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {
