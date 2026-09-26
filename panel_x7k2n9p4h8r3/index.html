@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=10">
+  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=11">
 </head>
 <body>
   <div id="loginView" class="view login-view">
@@ -191,9 +191,15 @@
             <div id="accStatNet" class="stat-num">$0.00</div>
             <div class="stat-label">Profit</div>
           </div>
+          <!-- Outstanding balance. A card rather than a banner so it lines up with
+               the others, and hidden while there is nothing owed so the row stays
+               four across in the normal case. -->
+          <div class="stat stat-owed" id="accStatOwedCard" hidden>
+            <div class="stat-icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+            <div id="accStatOwed" class="stat-num">$0.00</div>
+            <div id="accStatOwedLabel" class="stat-label">Owed</div>
+          </div>
         </div>
-
-        <p id="accOwedStrip" class="owed-strip" role="status" hidden></p>
 
         <div class="section-block">
           <div class="toolbar">
@@ -639,7 +645,7 @@
 
   <script src="/js/badge-icons.js?v=8"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=16"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=17"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {

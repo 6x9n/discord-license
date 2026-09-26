@@ -41,7 +41,9 @@
       accStatSpent: g('accStatSpent'),
       accStatRevenue: g('accStatRevenue'),
       accStatNet: g('accStatNet'),
-    accOwedStrip: g('accOwedStrip'),
+    accStatOwedCard: g('accStatOwedCard'),
+    accStatOwed: g('accStatOwed'),
+    accStatOwedLabel: g('accStatOwedLabel'),
       accModal: g('accModal'),
       accModalTitle: g('accModalTitle'),
       accForm: g('accForm'),
@@ -1253,13 +1255,14 @@
       el.accStatNet.classList.toggle('net-negative', net < 0);
       el.accStatNet.classList.toggle('net-positive', net >= 0);
     }
-    // One line, and only when there is something to chase. A tile for this would
-    // sit at zero most of the time and still pull the eye away from the totals.
-    if (el.accOwedStrip) {
-      el.accOwedStrip.hidden = owed <= 0;
-      el.accOwedStrip.textContent = owed > 0
-        ? accMoney(owed) + ' still owed from ' + unpaid + (unpaid === 1 ? ' account' : ' accounts')
-        : '';
+    // A tile, not a banner, and only while there is something to chase. It would
+    // otherwise sit at zero and pull the eye off the totals that matter.
+    if (el.accStatOwedCard) el.accStatOwedCard.hidden = owed <= 0;
+    if (el.accStatOwed) el.accStatOwed.textContent = accMoney(owed);
+    if (el.accStatOwedLabel) {
+      el.accStatOwedLabel.textContent = unpaid > 1
+        ? 'Owed · ' + unpaid + ' accounts'
+        : 'Owed';
     }
   }
 
