@@ -5,8 +5,9 @@ var state = {
   filter: 'all',
   mode: 'autofill',
   toastTimer: null,
-  sellingId: null
-};
+    sellingId: null,
+    detailId: null
+  };
 
 function $(id) { return document.getElementById(id); }
 
@@ -448,14 +449,12 @@ function rowHtml(row) {
     net = money(profit);
     netClass = profit < 0 ? 'net-negative' : 'net-positive';
   }
-  var actions;
-  if (row.status === 'AVAILABLE') {
-    actions = '<button class="btn btn-sm btn-secondary" data-act="sold" data-id="' + esc(row.id) + '">Mark Sold</button>'
-      + '<button class="btn btn-sm btn-danger" data-act="del" data-id="' + esc(row.id) + '">Delete</button>';
-  } else {
-    actions = '<button class="btn btn-sm btn-danger" data-act="del" data-id="' + esc(row.id) + '">Delete</button>';
-  }
-  return '<tr>'
+  // The whole row is the target that opens the details panel, so the per-row
+  // buttons moved into that panel rather than sitting in a column of their own.
+  // Kept reachable by keyboard: tabindex plus Enter/Space, and aria-haspopup so
+  // it is announced as opening something.
+  return '<tr class="row-open" data-id="' + esc(row.id) + '" tabindex="0" aria-haspopup="dialog"'
+    + ' aria-label="Show details for ' + esc(row.discord_id || 'account') + '">'
     + '<td><strong>' + (id || '—') + '</strong>'
     + (username ? '<div class="cell-user-sub">' + username + '</div>' : '')
     + (row.notes ? '<div class="cell-micro">' + esc(row.notes) + '</div>' : '')
@@ -472,8 +471,67 @@ function rowHtml(row) {
     + '</td>'
     + '<td class="num">' + (row.status === 'SOLD' ? money(row.sell_price) : '—') + '</td>'
     + '<td class="num ' + netClass + '">' + net + '</td>'
-    + '<td><div class="row-actions">' + actions + '</div></td>'
     + '</tr>';
+}
+
+/* ================= Details panel ================= */
+// Passwords are deliberately absent. The API sends them to this page, but the
+// table has never shown them and a panel is exactly the place someone would
+// expect to find them, so they stay out until that is a deliberate decision.
+function detailField(label, valueHtml) {
+  if (valueHtml === null || valueHtml === undefined || valueHtml === '') return '';
+  return '<div class="detail-field"><dt>' + esc(label) + '</dt><dd>' + valueHtml + '</dd></div>';
+}
+
+function detailText(v) {
+  if (v === null || v === undefined || v === '') return '';
+  return esc(String(v));
+}
+
+function detailHtml(row) {
+  var out = [];
+  out.push(detailField('Status',
+    '<span class="status-badge status-' + esc(row.status) + '">' + esc(row.status) + '</span>'));
+  // A plain ampersand: detailField escapes the label, so an entity here would
+  // be escaped again and show up as literal "&amp;" in the panel.
+  out.push(detailField('Badges & Nitro', badgesHtml(row)));
+  out.push(detailField('Email', detailText(row.email)));
+  out.push(detailField('Phone', detailText(row.phone)));
+  out.push(detailField('Account created', detailText(fmtDate(row.creation_date))));
+  out.push(detailField('Added to tracker', detailText(shortDate(row.created_at))));
+  out.push(detailField('Notes', detailText(row.notes)));
+  out.push(detailField('Buy price', money(row.buy_price)));
+  if (row.status === 'SOLD') {
+    var profit = (Number(row.sell_price) || 0) - (Number(row.buy_price) || 0);
+    out.push(detailField('Sell price', money(row.sell_price)));
+    out.push(detailField('Sold on', detailText(shortDate(row.sold_at))));
+    out.push(detailField('Buyer', detailText(row.buyer_name)));
+    out.push(detailField('Telegram', row.buyer_telegram ? telegramHtml(row.buyer_telegram) : ''));
+    out.push(detailField('Net',
+      '<span class="' + (profit < 0 ? 'net-negative' : 'net-positive') + '">' + money(profit) + '</span>'));
+  }
+  return '<dl class="detail-grid">' + out.join('') + '</dl>';
+}
+
+function openDetails(id) {
+  var row = state.accounts.filter(function (r) { return r.id === id; })[0];
+  if (!row) return;
+  state.detailId = id;
+  $('detailTitle').textContent = row.discord_id || 'Account';
+  $('detailSub').textContent = row.username ? '@' + row.username : '';
+  $('detailBody').innerHTML = detailHtml(row);
+  // Mark Sold only makes sense on something not already sold, and the label
+  // says so, but hiding it avoids a no-op path that silently re-saves the row.
+  var sold = $('detailSold');
+  sold.hidden = row.status !== 'AVAILABLE';
+  $('detailDel').textContent = 'Delete';
+  $('detailModal').classList.remove('hidden');
+  $('detailClose').focus();
+}
+
+function closeDetails() {
+  $('detailModal').classList.add('hidden');
+  state.detailId = null;
 }
 
 /* ================= Modal ================= */
@@ -716,6 +774,10 @@ function saveAccount(e) {
 /* ================= Sold modal ================= */
 function openSold(id) {
   state.sellingId = id;
+  // Both dialogs are z-50 and the details panel comes later in the document, so
+  // leaving it open would paint it over this one. Close it rather than raise
+  // the stacking, so there is never more than one dialog on screen.
+  closeDetails();
   var name = '';
   var found = state.accounts.filter(function (r) { return r.id === id; })[0];
   if (found && found.username) name = ' "' + found.username + '"';
@@ -786,6 +848,8 @@ function deleteAccount(id) {
       return;
     }
     showToast('Account deleted.', 'ok');
+    // The row is gone after this, so the panel would be left describing nothing.
+    closeDetails();
     loadAccounts();
   }).catch(function () {
     showToast('Network error while deleting account.', 'err');
@@ -879,12 +943,29 @@ function bindUI() {
   }
 
   $('accountsBody').addEventListener('click', function (e) {
+    var tr = e.target.closest('tr[data-id]');
+    if (tr) openDetails(tr.getAttribute('data-id'));
+  });
+
+  // Rows are focusable, so Enter and Space have to open the panel too. Space
+  // scrolls the page by default, which is why it is prevented.
+  $('accountsBody').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    var tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    e.preventDefault();
+    openDetails(tr.getAttribute('data-id'));
+  });
+
+  $('detailClose').addEventListener('click', closeDetails);
+  $('detailCancel').addEventListener('click', closeDetails);
+  $('detailModal').addEventListener('click', function (e) {
+    if (e.target === this) { closeDetails(); return; }
     var btn = e.target.closest('button[data-act]');
     if (!btn) return;
-    var id = btn.getAttribute('data-id');
     var act = btn.getAttribute('data-act');
-    if (act === 'sold') openSold(id);
-    else if (act === 'del') deleteAccount(id);
+    if (act === 'sold') openSold(state.detailId);
+    else if (act === 'del') deleteAccount(state.detailId);
   });
 
   $('addModal').addEventListener('click', function (e) {
@@ -895,6 +976,8 @@ function bindUI() {
     if (e.key === 'Escape') {
       if (!$('addModal').classList.contains('hidden')) closeModal();
       if (!$('soldModal').classList.contains('hidden')) closeSoldModal();
+      // Last, so it only closes the panel once the modals above it are gone.
+      if (!$('detailModal').classList.contains('hidden')) closeDetails();
     }
   });
 }

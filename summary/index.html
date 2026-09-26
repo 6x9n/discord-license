@@ -129,9 +129,8 @@
               <th class="num">Buy</th>
               <th>Status</th>
               <th class="num">Sell</th>
-              <th class="num">Net</th>
-              <th class="num">Actions</th>
-            </tr>
+      <th class="num">Net</th>
+    </tr>
           </thead>
           <tbody id="accountsBody"></tbody>
         </table>
@@ -264,10 +263,30 @@
     </div>
   </div>
 
+  <div id="detailModal" class="hidden fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
+    <div class="my-auto w-full max-w-2xl rounded-2xl border border-slate-700/60 bg-slate-900 p-5 shadow-2xl">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <h2 id="detailTitle" class="text-lg font-bold text-white">Account</h2>
+          <p id="detailSub" class="cell-micro mt-0"></p>
+        </div>
+        <button id="detailClose" class="btn btn-ghost" aria-label="Close details">&times;</button>
+      </div>
+
+      <dl id="detailBody" class="detail-grid"></dl>
+
+      <div class="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-slate-800 pt-4">
+        <button type="button" id="detailCancel" class="btn btn-ghost">Close</button>
+        <button type="button" id="detailSold" class="btn btn-secondary" data-act="sold">Mark Sold</button>
+        <button type="button" id="detailDel" class="btn btn-danger" data-act="del">Delete</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast hidden" role="status"></div>
 
   <script src="/js/badge-icons.js?v=8"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/summary/app.js?v=15"></script>
+  <script src="/summary/app.js?v=16"></script>
 </body>
 </html>

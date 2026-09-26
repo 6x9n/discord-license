@@ -35,3 +35,20 @@ img.badge-icon{object-fit:contain;vertical-align:-.1875rem;opacity:1}
 .chip-tag.nitro-chip-soon{border-color:rgba(249,115,22,.85);color:rgb(254 215 170/var(--tw-text-opacity,1))}
 .chip-tag.nitro-chip-expired{border-color:rgba(239,68,68,.9);color:rgb(252 165 165/var(--tw-text-opacity,1))}
 .toast.warn{border-color:rgba(245,158,11,.7);--tw-text-opacity:1;color:rgb(252 211 77/var(--tw-text-opacity,1))}
+
+/* Clickable account rows. The table already has a hover tint, so only the
+   pointer and the keyboard focus ring are added here; without the ring a
+   focused row gives no indication that Enter or Space will do anything. */
+.row-open{cursor:pointer}
+.row-open:focus{outline:none}
+.row-open:focus-visible{outline:2px solid rgb(99 102 242/.7);outline-offset:-2px}
+
+/* Details panel. Two columns on a wide screen, one when it narrows, so long
+   values such as an email or a telegram handle wrap instead of stretching the
+   dialog. Written out rather than composed from utility classes because this
+   file is the compiled Tailwind output and only ships the classes it uses. */
+.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.875rem 1.5rem;margin:.875rem 0 0}
+.detail-field dt{font-size:.75rem;line-height:1rem;font-weight:600;color:rgb(148 163 184/var(--tw-text-opacity,1))}
+.detail-field dd{margin:0;margin-top:.125rem;font-size:.875rem;line-height:1.25rem;color:rgb(241 245 249/var(--tw-text-opacity,1));overflow-wrap:anywhere}
+@media (max-width:560px){.detail-grid{grid-template-columns:minmax(0,1fr)}}
+
