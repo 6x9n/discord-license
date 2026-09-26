@@ -1680,8 +1680,14 @@ img.badge-icon {
 
 /* Nitro expiry, on its own line below the badges rather than in the run of
    chips, so the date is never mistaken for a badge. The colour carries how
-   close it is: amber inside the month, orange inside the week, red once gone. */
+   close it is: amber inside the month, orange inside the week, red once gone.
+
+   The chips sit in .tag-row, which is a flex container, so without the 100%
+   basis this element is laid out as one more flex item and ends up beside the
+   badges instead of under them. Claiming a whole line is what forces the break
+   no matter how many badges the row has. */
 .nitro-end {
+  flex: 0 0 100%;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
