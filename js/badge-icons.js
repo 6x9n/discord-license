@@ -329,9 +329,88 @@
     });
   }
 
+  // The order a profile displays badges in, and the order every saved account
+  // should render them in: account badges in Discord flag order, then Nitro,
+  // then Server Boost, then the gift tier, then the rest. Badge values are
+  // stored as free text in whatever order they were ticked, so a saved row has
+  // to be put back into this order before it is drawn, otherwise two accounts
+  // with the same badges show them in a different sequence.
+  //
+  // A badge we do not recognise is a custom one, so it keeps its place at the
+  // end rather than being dropped or sorted somewhere arbitrary.
+  var PROFILE_ORDER = [
+    'Discord Staff', 'Partner', 'HypeSquad Events', 'Bug Hunter Level 1',
+    'HypeSquad Bravery', 'HypeSquad Brilliance', 'HypeSquad Balance',
+    'Early Supporter', 'Bug Hunter Level 2', 'Discord Certified Moderator',
+    'Active Developer',
+    'Nitro', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond',
+    'Boost Level 1', 'Boost Level 2', 'Boost Level 3', 'Boost Level 4', 'Boost Level 5',
+    'Boost Level 6', 'Boost Level 7', 'Boost Level 8', 'Boost Level 9',
+    'Patron', 'Champion', 'Luminary', 'Icon', 'Hero', 'Legend',
+    'Completed a Quest', 'Orb', 'Leaf'
+  ];
+
+  var ORDER_INDEX = {};
+  PROFILE_ORDER.forEach(function (label, i) { ORDER_INDEX[normalise(label)] = i; });
+
+  // Sort badges into display order. Input order decides between two badges that
+  // are equally unknown, so this is stable and never loses a badge.
+  function orderBadges(list) {
+    var items = (list || []).map(function (label, i) {
+      return { label: label, i: i, at: ORDER_INDEX[normalise(canonical(label))] };
+    });
+    items.sort(function (a, b) {
+      var aa = a.at === undefined ? PROFILE_ORDER.length : a.at;
+      var bb = b.at === undefined ? PROFILE_ORDER.length : b.at;
+      return aa - bb || a.i - b.i;
+    });
+    return items.map(function (x) { return x.label; });
+  }
+
+  // How close a Nitro expiry is, so the row can be coloured and the dashboard
+  // can warn once instead of on every repaint. Days are counted to midnight so
+  // the number does not drift during the day and then flip back at midnight.
+  //
+  // soon is the window worth interrupting someone over; warn is a month out and
+  // is colour only, because a month is not urgent.
+  var NITRO_SOON_DAYS = 7;
+  var NITRO_WARN_DAYS = 30;
+
+  function nitroEndInfo(iso, now) {
+    if (!iso) return null;
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    var today = new Date(now === undefined ? Date.now() : now);
+    today.setHours(0, 0, 0, 0);
+    var end = new Date(d.getTime());
+    end.setHours(0, 0, 0, 0);
+    var days = Math.round((end - today) / 86400000);
+    var state = 'ok';
+    if (days < 0) state = 'expired';
+    else if (days <= NITRO_SOON_DAYS) state = 'soon';
+    else if (days <= NITRO_WARN_DAYS) state = 'warn';
+    return {
+      date: d,
+      days: days,
+      state: state,
+      // Class for the row so one stylesheet can colour every urgency level.
+      cls: 'nitro-end nitro-end-' + state,
+      // Short relative phrasing, so an expiring Nitro reads at a glance
+      // instead of needing the date worked out.
+      when: days < 0 ? 'expired ' + Math.abs(days) + 'd ago'
+        : days === 0 ? 'ends today'
+          : days === 1 ? 'ends tomorrow'
+            : days <= NITRO_WARN_DAYS ? 'ends in ' + days + 'd'
+              : ''
+    };
+  }
+
   global.BadgeIcons = {
     svg: svg, media: media, chip: chip, has: has, resolve: resolve,
     asset: asset, canonical: canonical, labels: Object.keys(GLYPHS),
-    assets: ASSETS, assetBase: ASSET_BASE
+    assets: ASSETS, assetBase: ASSET_BASE,
+    profileOrder: PROFILE_ORDER, orderBadges: orderBadges,
+    nitroEndInfo: nitroEndInfo,
+    nitroSoonDays: NITRO_SOON_DAYS, nitroWarnDays: NITRO_WARN_DAYS
   };
 })(typeof window !== 'undefined' ? window : globalThis);

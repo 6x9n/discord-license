@@ -1658,3 +1658,55 @@ img.badge-icon {
     gap: 8px;
   }
 }
+
+/* Nitro expiry, on its own line below the badges rather than in the run of
+   chips, so the date is never mistaken for a badge. The colour carries how
+   close it is: amber inside the month, orange inside the week, red once gone. */
+.nitro-end {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 3px 6px;
+  border-left: 2px solid;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nitro-end .badge-icon {
+  width: 13px;
+  height: 13px;
+  margin-right: 0;
+  flex: 0 0 auto;
+}
+
+.nitro-end-when {
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+.nitro-end-ok {
+  border-left-color: var(--muted);
+  color: var(--muted);
+}
+
+.nitro-end-warn {
+  border-left-color: var(--warn);
+  background: rgba(240, 178, 50, 0.1);
+  color: var(--warn);
+}
+
+.nitro-end-soon {
+  border-left-color: #f97316;
+  background: rgba(249, 115, 22, 0.14);
+  color: #fdba74;
+}
+
+.nitro-end-expired {
+  border-left-color: var(--error);
+  background: var(--error-soft);
+  color: #fca5a5;
+}

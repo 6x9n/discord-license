@@ -20,3 +20,18 @@ img.badge-icon{object-fit:contain;vertical-align:-.1875rem;opacity:1}
 .chip-art .badge-icon{width:1.25rem;height:1.25rem;margin-right:0;vertical-align:0}
 /* account table badges: bare artwork, no chip fill */
 .chip-art{padding:.125rem;border-color:transparent;background-color:transparent;border-radius:.5rem}
+/* Nitro expiry, on its own line under the badges rather than in the chip run,
+   so the date is never mistaken for a badge. Colour carries the urgency so a
+   lapsing account is visible without reading the date. */
+.nitro-end{display:flex;align-items:center;flex-wrap:wrap;gap:.25rem;margin-top:.375rem;padding:.1875rem .375rem;border-left:2px solid;border-radius:.25rem;font-size:.6875rem;line-height:1rem;font-weight:600;white-space:nowrap}
+.nitro-end .badge-icon{width:.8125rem;height:.8125rem;margin-right:0;flex:0 0 auto}
+.nitro-end-when{opacity:.75;font-weight:500}
+.nitro-end-ok{border-left-color:rgba(100,116,139,.6);color:rgb(100 116 139/var(--tw-text-opacity,1))}
+.nitro-end-warn{border-left-color:rgba(245,158,11,.7);background-color:rgba(245,158,11,.08);color:rgb(252 211 77/var(--tw-text-opacity,1))}
+.nitro-end-soon{border-left-color:rgba(249,115,22,.85);background-color:rgba(249,115,22,.12);color:rgb(254 215 170/var(--tw-text-opacity,1))}
+.nitro-end-expired{border-left-color:rgba(239,68,68,.9);background-color:rgba(239,68,68,.12);color:rgb(252 165 165/var(--tw-text-opacity,1))}
+/* the Nitro badge itself takes the urgency colour while it is not ok */
+.chip-tag.nitro-chip-warn{border-color:rgba(245,158,11,.7);color:rgb(252 211 77/var(--tw-text-opacity,1))}
+.chip-tag.nitro-chip-soon{border-color:rgba(249,115,22,.85);color:rgb(254 215 170/var(--tw-text-opacity,1))}
+.chip-tag.nitro-chip-expired{border-color:rgba(239,68,68,.9);color:rgb(252 165 165/var(--tw-text-opacity,1))}
+.toast.warn{border-color:rgba(245,158,11,.7);--tw-text-opacity:1;color:rgb(252 211 77/var(--tw-text-opacity,1))}

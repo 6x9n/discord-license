@@ -184,9 +184,48 @@ function addCustomBadge() {
 function showToast(msg, type) {
   var el = $('toast');
   el.textContent = msg;
-  el.className = 'toast ' + (type === 'err' ? 'err' : 'ok');
+  el.className = 'toast ' + (type === 'err' ? 'err' : (type === 'warn' ? 'warn' : 'ok'));
   clearTimeout(state.toastTimer);
   state.toastTimer = setTimeout(function () { el.className = 'toast hidden'; }, 3800);
+}
+
+/* Warn once per load about Nitro that is about to lapse. One toast naming the
+   accounts rather than a toast per account, because a toast per account would
+   push the earlier ones off screen and the last one seen is the only one read.
+   The rows are coloured too, so this is a nudge rather than the only signal.
+
+   The key is what makes it once: the filter buttons and every save re-render
+   the table, and warning again on each of those would be noise. */
+var warnedNitroKey = null;
+function warnExpiringNitro(rows) {
+  var soon = [];
+  var expired = 0;
+  rows.forEach(function (row) {
+    var end = nitroEnd(row.nitro_ends);
+    if (!end) return;
+    if (end.state === 'expired') { expired++; soon.push(row); }
+    else if (end.state === 'soon') { soon.push(row); }
+  });
+  if (!soon.length) return;
+  // Keyed on the accounts themselves, so a later reload with real changes warns
+  // again while re-rendering the same list stays quiet.
+  var key = soon.map(function (r) { return r.id + ':' + r.nitro_ends; }).sort().join('|');
+  if (key === warnedNitroKey) return;
+  warnedNitroKey = key;
+
+  var names = soon.map(function (r) {
+    return (r.username || r.discord_id || r.email || 'account') + ' ' + nitroEnd(r.nitro_ends).when;
+  });
+  var shown = names.slice(0, 3).join(', ');
+  if (names.length > 3) shown += ' and ' + (names.length - 3) + ' more';
+  var days = (window.BadgeIcons && window.BadgeIcons.nitroSoonDays) || 7;
+  showToast(
+    (expired
+      ? expired + ' account' + (expired === 1 ? ' has' : 's have') + ' Nitro already expired, '
+      + soon.length + ' ending within ' + days + ' days: '
+      : soon.length + ' account' + (soon.length === 1 ? '' : 's') + ' ending Nitro within '
+      + days + ' days: ') + shown,
+    expired ? 'err' : 'warn');
 }
 
 function showLogin() {
@@ -291,7 +330,7 @@ function filterRows() {
   return state.accounts.filter(function (row) { return row.status === state.filter; });
 }
 
-function renderAll() { renderKPIs(); renderTable(); }
+function renderAll() { renderKPIs(); renderTable(); warnExpiringNitro(state.accounts); }
 
 function renderKPIs() {
   var now = new Date();
@@ -338,8 +377,11 @@ function badgesHtml(row) {
     return '<span class="' + (cls || 'chip-tag') + ' chip-art" title="' + esc(label) + '">' + art
       + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(label) + '</span></span>';
   }
+  // Colour the Nitro badge itself when the subscription is close to or past its
+  // end, so the urgency is visible on the row without having to read the date.
+  var end = nitroEnd(row.nitro_ends);
   if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
-    out.push(tag(row.nitro_tier, 'chip-tag nitro'));
+    out.push(tag(row.nitro_tier, 'chip-tag nitro' + (end && end.state !== 'ok' ? ' nitro-chip-' + end.state : '')));
   }
   if (row.two_factor_enabled) out.push('<span class="chip-tag mfa">2FA</span>');
   if (row.verified) {
@@ -347,9 +389,35 @@ function badgesHtml(row) {
   } else if (row.email) {
     out.push('<span class="chip-tag unv">Unverified</span>');
   }
-  (row.badges || []).forEach(function (b) { out.push(tag(badgeName(b))); });
+  // Saved badges come back in whatever order they were ticked, so put them back
+  // into profile order here or the same set of badges reads differently on
+  // every account.
+  orderBadges(row.badges || []).forEach(function (b) { out.push(tag(badgeName(b))); });
   (row.decorations || []).slice(0, 2).forEach(function (d) { out.push(tag(d)); });
-  return out.join('') || '<span class="cell-micro">—</span>';
+  var html = out.join('') || '<span class="cell-micro">—</span>';
+  // Nitro expiry sits on its own line under the badges rather than in the run of
+  // chips, so it cannot be mistaken for one and the date has room to breathe.
+  if (end) {
+    html += '<div class="' + end.cls + '">' + badgeIcon('Nitro')
+      + '<span>Nitro ends ' + esc(fmtDate(row.nitro_ends)) + '</span>'
+      + (end.when ? '<span class="nitro-end-when">' + esc(end.when) + '</span>' : '')
+      + '</div>';
+  }
+  return html;
+}
+
+/* Nitro expiry, or null when the account has no usable date. Shared with the
+   toast below so the row colour and the warning always agree. */
+function nitroEnd(iso) {
+  if (!window.BadgeIcons || typeof window.BadgeIcons.nitroEndInfo !== 'function') return null;
+  return window.BadgeIcons.nitroEndInfo(iso);
+}
+
+function orderBadges(list) {
+  if (window.BadgeIcons && typeof window.BadgeIcons.orderBadges === 'function') {
+    return window.BadgeIcons.orderBadges(list);
+  }
+  return list || [];
 }
 
 function telegramHtml(raw) {

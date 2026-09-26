@@ -1396,19 +1396,42 @@
       return '<span class="badge badge-art" title="' + esc(name) + '">' + art
         + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(name) + '</span></span>';
     }
+    var end = nitroEnd(row.nitro_ends);
     if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
       out.push(chip(row.nitro_tier));
     }
-    (row.badges || []).forEach(function (b) {
+    // Saved badges come back in whatever order they were ticked, so put them
+    // back into profile order or the same set reads differently per account.
+    orderBadges(row.badges || []).forEach(function (b) {
       // Show the current badge name so rows saved before the rename read the
       // same as newly added ones.
       out.push(chip(badgeName(b)));
     });
-    if (row.nitro_ends) {
-      out.push('<span class="badge badge-warn">' + badgeIcon('Nitro')
-        + '<span class="badge-label">ends ' + esc(fmtDate(row.nitro_ends)) + '</span></span>');
+    var html = out.join('') || '<span class="muted-text">—</span>';
+    // Nitro expiry goes on its own line below the badges rather than in the
+    // run of chips, so it cannot be read as one, and its colour shows how close
+    // it is without anyone having to work the date out.
+    if (end) {
+      html += '<div class="' + end.cls + '" title="Nitro ' + esc(fmtDate(row.nitro_ends)) + '">'
+        + badgeIcon('Nitro')
+        + '<span>Nitro ends ' + esc(fmtDate(row.nitro_ends)) + '</span>'
+        + (end.when ? '<span class="nitro-end-when">' + esc(end.when) + '</span>' : '')
+        + '</div>';
     }
-    return out.join('') || '<span class="muted-text">—</span>';
+    return html;
+  }
+
+  // Nitro expiry detail, or null when there is no usable date.
+  function nitroEnd(iso) {
+    if (!window.BadgeIcons || typeof window.BadgeIcons.nitroEndInfo !== 'function') return null;
+    return window.BadgeIcons.nitroEndInfo(iso);
+  }
+
+  function orderBadges(list) {
+    if (window.BadgeIcons && typeof window.BadgeIcons.orderBadges === 'function') {
+      return window.BadgeIcons.orderBadges(list);
+    }
+    return list || [];
   }
 
   function accSourceHtml(raw) {
