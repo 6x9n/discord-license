@@ -448,13 +448,13 @@
           <span class="field-label">Badges</span>
           <input id="accBadges" type="hidden">
           <div id="accBadgeGroups" class="badge-groups">
-            <div class="badge-group" data-group="boost">
-              <button type="button" class="badge-group-head" aria-expanded="false" aria-controls="accGroupBoost">
-                <span class="badge-group-name">Boost</span>
-                <span class="badge-group-count" data-count="boost">0</span>
+            <div class="badge-group" data-group="profile">
+              <button type="button" class="badge-group-head" aria-expanded="false" aria-controls="accGroupProfile">
+                <span class="badge-group-name">Profile</span>
+                <span class="badge-group-count" data-count="profile">0</span>
                 <svg class="badge-group-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
               </button>
-              <div id="accGroupBoost" class="badge-group-body" hidden>
+              <div id="accGroupProfile" class="badge-group-body" hidden>
                 <div class="badge-opts"></div>
               </div>
             </div>
@@ -466,6 +466,28 @@
                 <svg class="badge-group-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
               </button>
               <div id="accGroupNitro" class="badge-group-body" hidden>
+                <div class="badge-opts"></div>
+              </div>
+            </div>
+
+            <div class="badge-group" data-group="boost">
+              <button type="button" class="badge-group-head" aria-expanded="false" aria-controls="accGroupBoost">
+                <span class="badge-group-name">Boost</span>
+                <span class="badge-group-count" data-count="boost">0</span>
+                <svg class="badge-group-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div id="accGroupBoost" class="badge-group-body" hidden>
+                <div class="badge-opts"></div>
+              </div>
+            </div>
+
+            <div class="badge-group" data-group="gift">
+              <button type="button" class="badge-group-head" aria-expanded="false" aria-controls="accGroupGift">
+                <span class="badge-group-name">Gift Tier</span>
+                <span class="badge-group-count" data-count="gift">0</span>
+                <svg class="badge-group-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div id="accGroupGift" class="badge-group-body" hidden>
                 <div class="badge-opts"></div>
               </div>
             </div>
@@ -613,9 +635,9 @@
 
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="/js/badge-icons.js?v=6"></script>
+  <script src="/js/badge-icons.js?v=7"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=13"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=14"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {

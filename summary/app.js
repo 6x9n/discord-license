@@ -82,7 +82,10 @@ var BADGE_OPTIONS = [
   'Luminary',
   'Icon',
   'Hero',
-  'Legend'
+  'Legend',
+  'Completed a Quest',
+  'Orb',
+  'Leaf'
 ];
 
 /* Badge labels are stored as free text, so rows saved before the rename still

@@ -65,7 +65,15 @@
     'Luminary': 'gift_badges/giftlvl3.png',
     'Icon': 'gift_badges/giftlvl4.png',
     'Hero': 'gift_badges/giftlvl5.png',
-    'Legend': 'gift_badges/giftlvl6.png'
+    'Legend': 'gift_badges/giftlvl6.png',
+
+    // Neither a flag bit nor a tier. The main profile tool reads the quest one
+    // off the profile badge list; orb and leaf are artwork the repo already
+    // shipped unused. leaf.png is the real art here: leaf.svg is a 24x24
+    // hand-drawn file, the same size and shape as the glyphs drawn below.
+    'Completed a Quest': 'quest.png',
+    'Orb': 'orb.svg',
+    'Leaf': 'leaf.png'
   };
 
   // The asset for a badge, or '' when there is none and the glyph is used.
@@ -135,7 +143,12 @@
     'Luminary': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M8.7 20.6h.01M12 20.6h.01M15.3 20.6h.01"/>',
     'Icon': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M8 20.6h.01M10.7 20.6h.01M13.3 20.6h.01M16 20.6h.01"/>',
     'Hero': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M7.4 20.6h.01M9.7 20.6h.01M12 20.6h.01M14.3 20.6h.01M16.6 20.6h.01"/>',
-    'Legend': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M6.8 20.6h.01M9 20.6h.01M11.2 20.6h.01M13.4 20.6h.01M15.6 20.6h.01M17.2 20.6h.01"/>'
+    'Legend': '<path d="M4.6 9.8h14.8v6.4a1.4 1.4 0 01-1.4 1.4H6a1.4 1.4 0 01-1.4-1.4z"/><path d="M3.8 7h16.4v2.8H3.8z"/><path d="M10.6 7h2.8v12.6h-2.8z"/><path d="M12 7C10.4 3 6 3.8 7.2 6.4c.6 1.3 2.6 1.5 4.8.6zM12 7c1.6-4 6-3.2 4.8-.6-.6 1.3-2.6 1.5-4.8.6z"/><path d="M6.8 20.6h.01M9 20.6h.01M11.2 20.6h.01M13.4 20.6h.01M15.6 20.6h.01M17.2 20.6h.01"/>',
+
+    // Quest, orb and leaf fallbacks
+    'Completed a Quest': '<path d="M6.6 3.6h10.8v6.2l-2.2 2.2h-2.2v8.4H9.2V12H7l-2.2-2.2V5.8a2.2 2.2 0 012.2-2.2z"/><path d="M6.6 9.8h4.4"/><path d="M18.4 4.2l.4 1.1 1.1.4-1.1.4-.4 1.1-.4-1.1-1.1-.4 1.1-.4z"/>',
+    'Orb': '<circle cx="12" cy="12" r="8.4"/><path d="M12 3.6a13 13 0 000 16.8 13 13 0 000-16.8z"/>',
+    'Leaf': '<path d="M20 4C10.4 4 4 8.6 4 15.2c0 2 .6 3.4.6 3.4s1.6-5.4 7-8.6c0 0-3.6 3-4.6 8.4C9.8 18 12 20 12 20s6.4-2.4 7.4-8C20.2 8.4 20 4 20 4z"/>'
   };
 
   // Loose matching so minor naming differences still resolve to an icon.
@@ -193,7 +206,14 @@
     'gift4': 'Icon',
     'gift5': 'Hero',
     'gift6': 'Legend',
-    'giftbadge': 'Patron'
+    'giftbadge': 'Patron',
+    // Quest is keyed several ways off the Discord profile response.
+    'quest': 'Completed a Quest',
+    'questbadge': 'Completed a Quest',
+    'questcompleted': 'Completed a Quest',
+    'questbadgecompleted': 'Completed a Quest',
+    'orbs': 'Orb',
+    'leaves': 'Leaf'
   };
 
   // Badge labels are stored as free text in the database, so rows saved before

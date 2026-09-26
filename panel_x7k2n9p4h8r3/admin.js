@@ -1032,6 +1032,15 @@
       key: 'gift',
       label: 'Gift Tier',
       options: ['Patron', 'Champion', 'Luminary', 'Icon', 'Hero', 'Legend']
+    },
+    {
+      // Not public_flags bits and not tiers, so they have no place in the
+      // flag-ordered Profile group above. Quest is the one the main profile
+      // tool reads off the profile badge list; orb and leaf are artwork this
+      // repo already ships.
+      key: 'other',
+      label: 'Other',
+      options: ['Completed a Quest', 'Orb', 'Leaf']
     }
   ];
 
