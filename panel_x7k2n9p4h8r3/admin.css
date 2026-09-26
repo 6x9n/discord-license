@@ -15,6 +15,7 @@
   --error: #f23f43;
   --error-soft: rgba(242, 63, 67, 0.16);
   --warn: #f0b232;
+  --warn-soft: rgba(240, 178, 50, 0.16);
   --text: #eef1f7;
   --text-2: #c3c9d6;
   --muted: #7f89a0;
@@ -1651,6 +1652,26 @@ img.badge-icon {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* Outstanding balance callout. Sits under the stat tiles and stays hidden until
+   something is genuinely owed, so the totals read clean in the normal case.
+   Tinted the same --warn as the per-row .pay-due so the two read as one idea. */
+.owed-strip {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--warn);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.owed-strip[hidden] {
+  display: none;
+}
+
 
 @media (max-width: 480px) {
   .pay-split {

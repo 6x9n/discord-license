@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=9">
+  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=10">
 </head>
 <body>
   <div id="loginView" class="view login-view">
@@ -179,19 +179,21 @@
           <div class="stat">
             <div class="stat-icon accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/></svg></div>
             <div id="accStatSpent" class="stat-num">$0.00</div>
-            <div class="stat-label">Total Paid</div>
+            <div class="stat-label">Spent</div>
           </div>
           <div class="stat">
             <div class="stat-icon ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></div>
             <div id="accStatRevenue" class="stat-num">$0.00</div>
-            <div class="stat-label">Revenue</div>
+            <div class="stat-label">Collected</div>
           </div>
           <div class="stat">
             <div class="stat-icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/></svg></div>
             <div id="accStatNet" class="stat-num">$0.00</div>
-            <div class="stat-label">Net Profit</div>
+            <div class="stat-label">Profit</div>
           </div>
         </div>
+
+        <p id="accOwedStrip" class="owed-strip" role="status" hidden></p>
 
         <div class="section-block">
           <div class="toolbar">
@@ -637,7 +639,7 @@
 
   <script src="/js/badge-icons.js?v=8"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=15"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=16"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {

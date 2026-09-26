@@ -41,6 +41,7 @@
       accStatSpent: g('accStatSpent'),
       accStatRevenue: g('accStatRevenue'),
       accStatNet: g('accStatNet'),
+    accOwedStrip: g('accOwedStrip'),
       accModal: g('accModal'),
       accModalTitle: g('accModalTitle'),
       accForm: g('accForm'),
@@ -1228,19 +1229,37 @@
   }
 
   function renderAccKPIs() {
-    var spent = 0, revenue = 0;
+    var spent = 0, collected = 0, owed = 0, unpaid = 0;
     acc.rows.forEach(function (row) {
       spent += Number(row.buy_price) || 0;
-      if (row.status === 'SOLD') revenue += Number(row.sell_price) || 0;
+      if (row.status !== 'SOLD') return;
+      // Count money that has actually arrived, not the price the account was
+      // agreed at. Booking the full price here showed profit as settled green
+      // while instalments were still outstanding, which is the number you least
+      // want overstated.
+      var split = paySplit(row);
+      collected += split.first + split.second;
+      if (split.remaining > 0) {
+        owed += split.remaining;
+        unpaid++;
+      }
     });
-    var net = revenue - spent;
+    var net = collected - spent;
     if (el.accStatCount) el.accStatCount.textContent = String(acc.rows.length);
     if (el.accStatSpent) el.accStatSpent.textContent = accMoney(spent);
-    if (el.accStatRevenue) el.accStatRevenue.textContent = accMoney(revenue);
+    if (el.accStatRevenue) el.accStatRevenue.textContent = accMoney(collected);
     if (el.accStatNet) {
       el.accStatNet.textContent = accMoney(net);
       el.accStatNet.classList.toggle('net-negative', net < 0);
       el.accStatNet.classList.toggle('net-positive', net >= 0);
+    }
+    // One line, and only when there is something to chase. A tile for this would
+    // sit at zero most of the time and still pull the eye away from the totals.
+    if (el.accOwedStrip) {
+      el.accOwedStrip.hidden = owed <= 0;
+      el.accOwedStrip.textContent = owed > 0
+        ? accMoney(owed) + ' still owed from ' + unpaid + (unpaid === 1 ? ' account' : ' accounts')
+        : '';
     }
   }
 
