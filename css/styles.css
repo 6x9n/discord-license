@@ -3508,9 +3508,13 @@ html[data-theme="light"] .density-option span {
 .calc-grid,
 .ops-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 16px;
+}
+
+.calc-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .current-operation-bar {
@@ -3566,9 +3570,18 @@ html[data-theme="light"] .density-option span {
 }
 
 #allInOneBtn {
-  grid-column: 1 / -1;
   justify-content: center;
   text-align: center;
+}
+
+/* The six dashboard operations tile into a clean 3x2 block. The previous
+   auto-fit sizing and full-width All-in-One span were tuned for eleven
+   buttons; at six a spanning last item always leaves a hole, because five
+   does not divide evenly into three columns. */
+@media (max-width: 900px) {
+  .ops-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .calc-panel {

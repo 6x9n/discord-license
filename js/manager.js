@@ -1790,13 +1790,20 @@ window.manager = {
   }
 
   function updateDmButtonState(isClosed) {
-    const btn = byId('closeDMsBtn');
+    const btn = byId('deleteDmCloseDmsBtn');
     if (!btn) {
       return;
     }
-    btn.setAttribute('data-dm-state', 'open');
-    btn.title = 'Close active DM conversations and hide them from the sidebar.';
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 15v3"/></svg><span>Close DMs</span>';
+    // Reflect the real state. This used to hardcode "open", so the amber
+    // "already closed" styling in styles.css could never appear.
+    const closed = !!isClosed;
+    btn.setAttribute('data-dm-state', closed ? 'closed' : 'open');
+    btn.title = closed
+      ? 'DMs are currently closed. Run again to reopen them.'
+      : 'Close active DM conversations and hide them from the sidebar.';
+    btn.innerHTML = closed
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M9.5 15v1.5M14.5 15v1.5"/></svg><span>Reopen DMs</span>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 15v3"/></svg><span>Close DMs</span>';
   }
 
   function syncDmButton() {
@@ -1818,7 +1825,7 @@ window.manager = {
       toast('An operation is already running.', 'error');
       return;
     }
-    openOperationConfirmModal('Close DMs', buildCleanDMsItems, byId('closeDMsBtn'), 'Close active DM conversations and hide them from the sidebar.');
+    openOperationConfirmModal('Close DMs', buildCleanDMsItems, byId('deleteDmCloseDmsBtn'), 'Close active DM conversations and hide them from the sidebar.');
   }
 
   function loadAccountData() {
@@ -3786,12 +3793,7 @@ window.manager = {
     'leaveServersBtn',
     'removeFriendsBtn',
     'badgeActionBtn',
-    'closeDMsBtn',
     'deleteUserDMsBtn',
-    'deleteAllDmsBtn',
-    'deleteAllMyMsgsBtn',
-    'deleteAttachmentsBtn',
-    'deleteTextWalkBtn',
     'allInOneBtn',
     'accountDetailsBtn'
   ];
@@ -4237,31 +4239,6 @@ window.manager = {
     }
   }
 
-  function openDeleteTextWalkModal() {
-    const modal = byId('deleteTextWalkModal');
-    const input = byId('deleteTextWalkInput');
-    const error = byId('deleteTextWalkError');
-    if (input) {
-      input.value = '';
-    }
-    if (error) {
-      error.textContent = '';
-    }
-    if (modal) {
-      modal.classList.add('active');
-    }
-    if (input) {
-      input.focus();
-    }
-  }
-
-  function closeDeleteTextWalkModal() {
-    const modal = byId('deleteTextWalkModal');
-    if (modal) {
-      modal.classList.remove('active');
-    }
-  }
-
   // Runs the deterministic DM-by-DM channel walk for a text query. Unlike the
   // Discord search-index flow this never queries the search API, so it is immune
   // to index lag and tokenization gaps. Every non-whitelisted DM conversation is
@@ -4271,7 +4248,7 @@ window.manager = {
     showView('operation', { persist: true });
     resetTerminal('Delete Messages Containing "' + text + '"');
     if (opPill) opPill.textContent = 'scanning';
-    const btn = byId('deleteTextWalkBtn');
+    const btn = byId('deleteUserDMsBtn');
     emitLine('Scanning every DM conversation for messages containing "' + text + '"...');
     loadAccountData()
       .then(function () {
@@ -5397,9 +5374,6 @@ window.manager = {
       removeFriendsBtn: function () {
         openRemoveFriendsConfirmModal();
       },
-      closeDMsBtn: function () {
-        toggleDMs();
-      },
       deleteUserDMsBtn: function () {
         if (!hasAccount()) {
           toast('Please log in first.', 'error');
@@ -5407,51 +5381,7 @@ window.manager = {
         }
         openDeleteDmModal();
       },
-      deleteAllDmsBtn: function () {
-        if (state.running) {
-          toast('An operation is already running.', 'error');
-          return;
-        }
-        if (!hasAccount()) {
-          toast('Please log in first.', 'error');
-          return;
-        }
-        const btn = byId('deleteAllDmsBtn');
-        openOperationConfirmModal('Delete All DM Messages', function () {
-          return buildDeleteAllDMsMessagesItems(true);
-        }, btn, 'Delete your messages from all non-whitelisted DM conversations (entire history). Only your own messages can be deleted. This can be slow on accounts with long conversations.');
-      },
-      deleteAllMyMsgsBtn: function () {
-        if (state.running) {
-          toast('An operation is already running.', 'error');
-          return;
-        }
-        if (!hasAccount()) {
-          toast('Please log in first.', 'error');
-          return;
-        }
-        const btn = byId('deleteAllMyMsgsBtn');
-        openOperationConfirmModal('Delete All My Messages (Search)', buildSearchDeleteItems, btn, 'Search your entire message history - every DM and every server you are in - then delete each message you sent. Whitelisted DMs and servers are skipped. This can take a very long time on big accounts. If search fails, it falls back to per-conversation fetch.');
-      },
-      deleteAttachmentsBtn: function () {
-        if (!hasAccount()) {
-          toast('Please log in first.', 'error');
-          return;
-        }
-        const btn = byId('deleteAttachmentsBtn');
-        openOperationConfirmModal('Delete Attachment Messages', buildDeleteAttachmentItems, btn, 'Scan the entire message history of every non-whitelisted DM, then delete each message you sent that contains an attachment file. Deleting a message also removes its uploaded files. This can be slow on accounts with long conversations.');
-      },
-      deleteTextWalkBtn: function () {
-        if (state.running) {
-          toast('An operation is already running.', 'error');
-          return;
-        }
-        if (!hasAccount()) {
-          toast('Please log in first.', 'error');
-          return;
-        }
-        openDeleteTextWalkModal();
-      },
+
       allInOneBtn: function () {
         const btn = byId('allInOneBtn');
         openOperationConfirmModal('All-in-One Cleanup', buildAllInOneItems, btn, 'Choose the operations and cooldown, then run them sequentially.');
@@ -5472,9 +5402,6 @@ window.manager = {
       accountDetailsBtn: function () {
         showView('details');
       },
-      badgeEvolutionBtn: function () {
-        showView('evolution');
-      },
     };
     Object.keys(handlers).forEach(function (id) {
       const btn = byId(id);
@@ -5490,6 +5417,30 @@ window.manager = {
         }
       }
     });
+
+    const attachmentsBtn = byId('deleteDmAttachmentsBtn');
+    if (attachmentsBtn) {
+      attachmentsBtn.addEventListener('click', function () {
+        if (state.running) {
+          toast('An operation is already running.', 'error');
+          return;
+        }
+        if (!hasAccount()) {
+          toast('Please log in first.', 'error');
+          return;
+        }
+        closeDeleteDmModal();
+        openOperationConfirmModal('Delete Attachment Messages', buildDeleteAttachmentItems, byId('deleteUserDMsBtn'), 'Scan the entire message history of every non-whitelisted DM, then delete each message you sent that contains an attachment file. Deleting a message also removes its uploaded files. This can be slow on accounts with long conversations.');
+      });
+    }
+
+    const closeDmsBtn = byId('deleteDmCloseDmsBtn');
+    if (closeDmsBtn) {
+      closeDmsBtn.addEventListener('click', function () {
+        closeDeleteDmModal();
+        toggleDMs();
+      });
+    }
 
     const specificBtn = byId('deleteDmSpecificBtn');
     const targetInput = byId('deleteDmTargetInput');
@@ -5545,117 +5496,11 @@ window.manager = {
         }
         if (textError) textError.textContent = '';
         closeDeleteDmModal();
-        showView('operation', { persist: true });
-        resetTerminal('Delete Messages Containing Text');
-        if (opPill) opPill.textContent = 'searching';
-        const btn = byId('deleteUserDMsBtn');
-        emitLine('Searching all DMs for messages containing "' + text + '"...');
-        loadAccountData()
-          .then(function () {
-            if (state.stopped) {
-              return [];
-            }
-            return searchOwnDMMessages(text);
-          })
-          .then(function (found) {
-            if (state.stopped) {
-              return;
-            }
-            const foundList = Array.isArray(found) ? found : [];
-            const hasDms = (state.channels || []).some(function (c) {
-              return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
-            });
-            if (foundList.length === 0 && hasDms) {
-              emitLine('Discord search returned nothing - checking every DM conversation instead to find messages containing "' + text + '".');
-              return buildTextSearchChannelWalkItems(text).then(function (walkGroups) {
-                if (state.stopped) {
-                  return;
-                }
-                const groups = (Array.isArray(walkGroups) ? walkGroups : []).filter(function (group) {
-                  if (!group.channel) {
-                    return true;
-                  }
-                  return !dmWhitelisted(group.channel);
-                });
-                const totalMessages = groups.reduce(function (sum, group) {
-                  return sum + (group.messages ? group.messages.length : 0);
-                }, 0);
-                if (groups.length === 0) {
-                  emitLine('Found no messages containing "' + text + '" - nothing to delete.');
-                  if (opPill) opPill.textContent = 'done';
-                  emitLine('Operation stopped.');
-                  toast('No messages found containing "' + text + '".', 'info');
-                  return;
-                }
-                emitLine('Search complete: ' + totalMessages + ' of your message(s) found in ' + groups.length + ' conversation(s).');
-                const walkItems = groups.map(function (group) {
-                  const walkChannel = group.channel;
-                  const walkChannelId = group.channelId || (walkChannel && walkChannel.id);
-                  const walkChannelName = group.channelName || (walkChannel && walkChannel.name) || walkChannelId;
-                  return {
-                    label: 'Delete ' + group.messages.length + ' message(s) in: ' + walkChannelName + ' (' + walkChannelId + ')',
-                    name: walkChannelName + ' (' + walkChannelId + ')',
-                    messageCount: group.messages.length,
-                    action: group.action || function () {
-                      return deleteOwnMessagesInChannel(walkChannelId, walkChannelName, group.messages);
-                    }
-                  };
-                });
-                openOperationConfirmModal('Delete Messages Containing "' + text + '"', function () {
-                  return walkItems;
-                }, btn, 'Search complete - ' + totalMessages + ' message(s) found in ' + groups.length + ' conversation(s). Whitelisted DMs are skipped. Only your own messages can be deleted.', {
-                  preload: false,
-                  overrides: function (countEl, skippedEl, estimateEl) {
-                    if (countEl) countEl.textContent = String(totalMessages) + ' found';
-                    if (skippedEl) skippedEl.textContent = '• ' + groups.length + ' conversation(s) ready';
-                    if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((totalMessages * Math.max(150, currentDelay())) / 1000)) + 's';
-                  }
-                });
-              });
-            }
-            const groups = groupOwnMessagesByChannel(foundList).filter(function (group) {
-              if (!group.channel) {
-                return true;
-              }
-              return !dmWhitelisted(group.channel);
-            });
-            const totalMessages = groups.reduce(function (sum, group) {
-              return sum + (group.messages ? group.messages.length : 0);
-            }, 0);
-            if (groups.length === 0) {
-              emitLine('Found no messages containing "' + text + '" - nothing to delete.');
-              if (opPill) opPill.textContent = 'done';
-              emitLine('Operation stopped.');
-              toast('No messages found containing "' + text + '".', 'info');
-              return;
-            }
-            const items = groups.map(function (group) {
-              return {
-                label: 'Delete ' + group.messages.length + ' message(s) in: ' + group.channelName + ' (' + group.channelId + ')',
-                messageCount: group.messages.length,
-                action: function () {
-                  return deleteOwnMessagesInChannel(group.channelId, group.channelName, group.messages);
-                }
-              };
-            });
-            emitLine('Search complete: ' + totalMessages + ' of your message(s) found in ' + groups.length + ' conversation(s).');
-            openOperationConfirmModal('Delete Messages Containing "' + text + '"', function () {
-              return items;
-            }, btn, 'Search complete - ' + totalMessages + ' message(s) found in ' + groups.length + ' conversation(s). Delete each match? Whitelisted DMs are already skipped. Only your own messages can be deleted.', {
-              preload: false,
-              overrides: function (countEl, skippedEl, estimateEl) {
-                if (countEl) countEl.textContent = String(totalMessages) + ' found';
-                if (skippedEl) skippedEl.textContent = '• ' + groups.length + ' conversation(s) ready';
-                if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((totalMessages * Math.max(150, currentDelay())) / 1000)) + 's';
-              }
-            });
-          })
-          .catch(function (err) {
-            emitLine('Search failed: ' + ((err && err.message) || 'unknown error'));
-            if (opPill) opPill.textContent = 'failed';
-            emitLine('Operation stopped.');
-            toast('Search failed. Check the terminal log.', 'error');
-          });
+        // The deterministic walk, not the search index. Search is faster while
+        // its index is healthy, but it silently misses messages that have not
+        // been indexed or that tokenize differently, which is exactly the case
+        // where a bulk delete must not be wrong.
+        runTextWalkOperation(text);
       });
     }
 
@@ -5711,50 +5556,6 @@ window.manager = {
       });
     }
 
-    const walkInput = byId('deleteTextWalkInput');
-    const walkError = byId('deleteTextWalkError');
-    const walkSearchBtn = byId('deleteTextWalkSearchBtn');
-    const walkCloseBtn = byId('deleteTextWalkClose');
-    const walkModal = byId('deleteTextWalkModal');
-    if (walkSearchBtn) {
-      walkSearchBtn.addEventListener('click', function () {
-        if (state.running) {
-          toast('An operation is already running.', 'error');
-          return;
-        }
-        const text = walkInput ? walkInput.value.trim() : '';
-        if (!text) {
-          if (walkError) walkError.textContent = 'Enter the text to search for first.';
-          if (walkInput) walkInput.focus();
-          return;
-        }
-        if (walkError) walkError.textContent = '';
-        closeDeleteTextWalkModal();
-        runTextWalkOperation(text);
-      });
-    }
-    if (walkInput && walkSearchBtn) {
-      walkInput.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          walkSearchBtn.click();
-        }
-      });
-    }
-    if (walkCloseBtn) {
-      walkCloseBtn.addEventListener('click', function () {
-        closeDeleteTextWalkModal();
-        if (walkInput) walkInput.value = '';
-        if (walkError) walkError.textContent = '';
-      });
-    }
-    if (walkModal) {
-      walkModal.addEventListener('click', function (e) {
-        if (e.target === walkModal) {
-          closeDeleteTextWalkModal();
-        }
-      });
-    }
   }
 
   function initBadges() {
@@ -6206,7 +6007,7 @@ window.manager = {
           opPill.textContent = 'preparing';
         }
         emitLine('Preparing Close DMs...');
-        prepareOperation('Close DMs', buildDmItems, byId('closeDMsBtn'));
+        prepareOperation('Close DMs', buildDmItems, byId('deleteDmCloseDmsBtn'));
       });
     }
     if (closeDmsCancelBtn) {
