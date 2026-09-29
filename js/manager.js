@@ -586,7 +586,7 @@ window.manager = {
     });
   }
 
-  function makeRequest(method, path, body, token) {
+  function makeRequest(method, path, body, token, timeoutMs) {
     const authToken = token || state.token;
     const headers = {
       'Authorization': authToken,
@@ -611,9 +611,39 @@ window.manager = {
     if (inFlightController && !inFlightController.signal.aborted) {
       options.signal = inFlightController.signal;
     }
+    // A caller can ask for a deadline. Without one a request that stalls
+    // behind a proxy or a dropped connection never settles, so a Save button
+    // stays spinning forever and is indistinguishable from a slow one. The
+    // deadline is opt-in so the operation pipeline keeps its existing timings.
+    let timer = null;
+    if (timeoutMs > 0 && typeof AbortController === 'function') {
+      const guard = new AbortController();
+      const cancel = function () {
+        try {
+          guard.abort();
+        } catch (e) { }
+      };
+      const outer = (inFlightController && !inFlightController.signal.aborted) ? inFlightController.signal : null;
+      if (outer) {
+        if (outer.aborted) {
+          cancel();
+        } else if (outer.addEventListener) {
+          outer.addEventListener('abort', cancel);
+        }
+      }
+      options.signal = guard.signal;
+      timer = setTimeout(cancel, timeoutMs);
+    }
     const single = function () {
       const requestUrl = /^https?:\/\//i.test(path) ? path : DISCORD_API + path;
-      return fetch(requestUrl, options).then(function (res) {
+      const settle = function (result) {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        return result;
+      };
+      const sent = fetch(requestUrl, options).then(function (res) {
         let retryAfter = null;
         if (res.status === 429) {
           try {
@@ -630,6 +660,22 @@ window.manager = {
           return { status: res.status, data: null, retryAfter: retryAfter };
         });
       });
+      // Only the deadline path converts a transport failure into a result, so
+      // every other caller keeps the reject it already handles.
+      return timeoutMs > 0
+        ? sent.catch(function (err) {
+          const aborted = err && (err.name === 'AbortError');
+          return settle({
+            status: 0,
+            data: {
+              message: aborted
+                ? 'Discord did not respond in time. Check your connection and try again.'
+                : ((err && err.message) || 'Could not reach Discord.')
+            },
+            retryAfter: null
+          });
+        })
+        : sent;
     };
     let attempts = 0;
     const run = function () {
@@ -646,8 +692,8 @@ window.manager = {
     return run();
   }
 
-  function apiCall(method, path, body) {
-    return makeRequest(method, path, body, state.token);
+  function apiCall(method, path, body, timeoutMs) {
+    return makeRequest(method, path, body, state.token, timeoutMs);
   }
 
   function abortInFlight() {
@@ -4949,6 +4995,34 @@ window.manager = {
     editStatus.classList.toggle('err', kind === 'err');
   }
 
+  // Avatar progress. pct === null hides the bar, a number drives it, and -1
+  // marks the phase where the real byte count is simply not available.
+  function setAvatarProgress(pct, text) {
+    const wrap = byId('editProfileAvatarProgress');
+    const fill = byId('editProfileAvatarProgressFill');
+    const label = byId('editProfileAvatarProgressText');
+    if (!wrap || !fill) {
+      return;
+    }
+    if (pct === null || pct === undefined) {
+      wrap.hidden = true;
+      if (label) {
+        label.textContent = '';
+      }
+      return;
+    }
+    wrap.hidden = false;
+    if (pct < 0) {
+      fill.classList.add('is-indeterminate');
+    } else {
+      fill.classList.remove('is-indeterminate');
+      fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    }
+    if (label) {
+      label.textContent = text || '';
+    }
+  }
+
   function reloadActiveProfile() {
     return makeRequest('GET', '/users/@me').then(function (res) {
       if (!res || res.status < 200 || res.status >= 300 || !res.data || !res.data.id) {
@@ -6599,6 +6673,7 @@ window.manager = {
       file.value = '';
     }
     profileAvatarData = null;
+    setAvatarProgress(null, '');
     setProfileStatus('');
   }
 
@@ -6665,6 +6740,13 @@ window.manager = {
           return;
         }
         const reader = new FileReader();
+        reader.onprogress = function (e) {
+          if (!e.lengthComputable || !e.total) {
+            return;
+          }
+          const pct = Math.round((e.loaded / e.total) * 100);
+          setAvatarProgress(pct, 'Reading ' + pct + '%');
+        };
         reader.onload = function () {
           profileAvatarData = String(reader.result || '');
           if (editAvatarPreview) {
@@ -6674,10 +6756,15 @@ window.manager = {
             editAvatarName.textContent = file.name;
           }
           selectHistoryAvatar('');
+          setAvatarProgress(null, '');
           setProfileStatus('');
         };
         reader.onerror = function () {
+          setAvatarProgress(null, '');
           setProfileStatus('Could not read the image file.', 'err');
+        };
+        reader.onabort = function () {
+          setAvatarProgress(null, '');
         };
         reader.readAsDataURL(file);
       });
@@ -6685,7 +6772,12 @@ window.manager = {
 
     if (editSave) {
       editSave.addEventListener('click', function () {
-        if (profileEditing || !hasAccount()) {
+        if (profileEditing) {
+          return;
+        }
+        if (!hasAccount()) {
+          setProfileStatus('Log in to edit this account.', 'err');
+          toast('Log in to your Discord account first.', 'error');
           return;
         }
         const statusInput = byId('editProfileStatusInput');
@@ -6719,9 +6811,18 @@ window.manager = {
         profileEditing = true;
         setBusy(editSave, true);
         setProfileStatus('Updating profile...');
+        // An avatar rides along as base64 in the same JSON body, so a large
+        // file makes this the slowest call in the app and the one most likely
+        // to stall. It gets a deadline, and the bar slides because the PATCH
+        // reports no bytes to count.
+        const sendingAvatar = !!profileAvatarData;
+        if (sendingAvatar) {
+          setAvatarProgress(-1, 'Sending avatar...');
+        }
+        const deadline = 45000;
         const jobs = [];
         if (profileAvatarData || nameChanged || bioChanged) {
-          jobs.push(apiCall('PATCH', '/users/@me', body));
+          jobs.push(apiCall('PATCH', '/users/@me', body, deadline));
         }
         if (statusChanged) {
           const existing = (state.userSettings && state.userSettings.custom_status) || {};
@@ -6734,7 +6835,7 @@ window.manager = {
                   expires_at: existing.expires_at || null
                 }
               : null
-          }));
+          }, deadline));
         }
         Promise.all(jobs).then(function (results) {
           const bad = (results || []).find(function (res) {
@@ -6763,6 +6864,11 @@ window.manager = {
         }).finally(function () {
           profileEditing = false;
           setBusy(editSave, false);
+          // Only a failure needs the bar left visible, so the reason it stopped
+          // is still on screen next to the error.
+          if (!sendingAvatar) {
+            setAvatarProgress(null, '');
+          }
         });
       });
     }
