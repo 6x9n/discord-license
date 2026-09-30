@@ -655,9 +655,9 @@ window.manager = {
           if (retryAfter === null && data && typeof data.retry_after === 'number') {
             retryAfter = data.retry_after;
           }
-          return { status: res.status, data: data, retryAfter: retryAfter };
+          return settle({ status: res.status, data: data, retryAfter: retryAfter });
         }).catch(function () {
-          return { status: res.status, data: null, retryAfter: retryAfter };
+          return settle({ status: res.status, data: null, retryAfter: retryAfter });
         });
       });
       // Only the deadline path converts a transport failure into a result, so
@@ -6589,19 +6589,34 @@ window.manager = {
         const statusText = statusInput ? String(statusInput.value || '').trim() : '';
         const bio = bioInput ? String(bioInput.value || '').trim() : '';
         const currentStatusText = currentCustomStatusText();
-        const currentBio = currentBio();
+        // Cannot be named currentBio: that shadows the currentBio() helper
+        // declared above, so `const currentBio = currentBio()` throws a
+        // temporal-dead-zone ReferenceError and kills the whole save handler
+        // before it reaches the network.
+        const existingBio = currentBio();
         const nameChanged = name !== currentName;
-        const bioChanged = bio !== currentBio;
+        const bioChanged = bio !== existingBio;
         const statusChanged = statusText !== currentStatusText;
-        if (!profileAvatarData && !nameChanged && !bioChanged && !statusChanged) {
+        // Clearing a styled display name is a change in its own right. The reset
+        // used to be built into the body but left out of this check, so ticking
+        // the box and pressing Save with nothing else edited did nothing at all
+        // while the note under the field promised "saving clears it".
+        const styleChanged = plainStyle && !!describeDisplayNameStyle(state.user);
+        if (!profileAvatarData && !nameChanged && !bioChanged && !statusChanged && !styleChanged) {
           toast('Nothing to update - the profile fields are unchanged.', 'info');
           return;
         }
-        const body = { global_name: name || null };
+        const body = {};
+        // Only send the name when it really changed. Sending it unconditionally
+        // handed accounts that had no display name a brand new one matching
+        // their username, purely as a side effect of editing the bio.
+        if (nameChanged) {
+          body.global_name = name || null;
+        }
         if (profileAvatarData) {
           body.avatar = profileAvatarData;
         }
-        if (plainStyle && state.user && state.user.premium_type > 0) {
+        if (styleChanged) {
           body.display_name_font_id = 1;
           body.display_name_effect_id = null;
           body.display_name_colors = [];
@@ -6622,7 +6637,7 @@ window.manager = {
         }
         const deadline = 45000;
         const jobs = [];
-        if (profileAvatarData || nameChanged || bioChanged) {
+        if (profileAvatarData || nameChanged || bioChanged || styleChanged) {
           jobs.push(apiCall('PATCH', '/users/@me', body, deadline));
         }
         if (statusChanged) {
