@@ -562,6 +562,23 @@ window.manager = {
   };
 
   const MAX_RATE_RETRIES = 3;
+
+  // Discord binds some session sensitive endpoints, including PATCH /users/@me,
+  // to the client build a token was issued against. The header used to carry a
+  // made up 9999, which matches no Discord release and can come back as
+  // "Unknown Session". 625378 is the current stable web build. When a profile
+  // save starts failing this way again, refresh it from Discord rather than
+  // guessing: fetch https://discord.com/app, pull assets/sentry.*.js out of the
+  // markup, then read buildNumber from that asset.
+  const CLIENT_BUILD_NUMBER = 625378;
+
+  // Discord also answers a profile write with 10020 while it decides whether a
+  // session is allowed to make one, which happens right after another change on
+  // the same account. It clears on its own, so the same bounded backoff used for
+  // rate limits applies rather than surfacing a raw code to the user.
+  const UNKNOWN_SESSION_CODE = 10020;
+  const MAX_SESSION_RETRIES = 2;
+
   let inFlightController = null;
   let accountDataRequest = null;
 
@@ -596,7 +613,7 @@ window.manager = {
         browser_version: '', os_version: '10',
         referrer: '', referring_domain: '',
         referrer_current: '', referring_domain_current: '',
-        release_channel: 'stable', client_build_number: 9999,
+        release_channel: 'stable', client_build_number: CLIENT_BUILD_NUMBER,
         client_event_source: null
       })),
       'X-Discord-Locale': 'en-US',
@@ -678,13 +695,28 @@ window.manager = {
         : sent;
     };
     let attempts = 0;
+    let sessionAttempts = 0;
+    const stopped = function () {
+      return !!(inFlightController && inFlightController.signal.aborted);
+    };
+    // 10020 is not a failure the user can act on, it is Discord briefly
+    // refusing a write it will accept a moment later. Retrying it on the same
+    // bounded backoff as a rate limit saves the save without a second click.
+    const isUnknownSession = function (res) {
+      return !!(res && res.data && res.data.code === UNKNOWN_SESSION_CODE);
+    };
     const run = function () {
       return single().then(function (res) {
-        if (res.status === 429 && attempts < MAX_RATE_RETRIES && !(inFlightController && inFlightController.signal.aborted)) {
+        if (res.status === 429 && attempts < MAX_RATE_RETRIES && !stopped()) {
           attempts += 1;
           const secs = Math.min(Math.max(Math.ceil(Number(res.retryAfter) || 5), 1), 30);
           toast('Rate Limited - retrying in ' + secs + 's...', 'warning');
           return delay(secs * 1000).then(run);
+        }
+        if (isUnknownSession(res) && sessionAttempts < MAX_SESSION_RETRIES && !stopped()) {
+          sessionAttempts += 1;
+          toast('Discord held the profile change - retrying...', 'warning');
+          return delay(1500 * sessionAttempts).then(run);
         }
         return res;
       });
@@ -1619,6 +1651,26 @@ window.manager = {
       return res.message;
     }
     return 'Authentication failed.';
+  }
+
+  // Discord's own message for 10020 is the bare words "Unknown Session", which
+  // tells the reader nothing about what to do. makeRequest already retried it,
+  // so reaching here means the hold did not lift and the useful next step is to
+  // wait rather than to keep pressing Save.
+  function describeProfileWriteError(res) {
+    if (res && res.code === UNKNOWN_SESSION_CODE) {
+      return 'Discord is not accepting profile changes on this account right now. Wait a minute and save again.';
+    }
+    if (res && res.code === 50035) {
+      return 'Discord rejected that change as invalid. Try again in a moment.';
+    }
+    if (res && res.code === 50013) {
+      return 'Discord is rate limiting this account. Wait a minute and save again.';
+    }
+    if (res && res.code === 4006) {
+      return 'That image is too large or not a supported format.';
+    }
+    return (res && res.message) || handleAuthError(res || {});
   }
 
   function normalizeToken(raw) {
@@ -6658,7 +6710,7 @@ window.manager = {
             return !res || res.status < 200 || res.status >= 300;
           });
           if (bad) {
-            const reason = (bad.data && bad.data.message) || handleAuthError((bad && bad.data) || {});
+            const reason = describeProfileWriteError(bad.data || {});
             throw new Error(reason || 'Profile update failed.');
           }
           return reloadActiveProfile();
