@@ -1699,17 +1699,22 @@
         : '')
       + '<button class="btn btn-danger mini-btn" data-acc-act="del" data-id="' + esc(row.id) + '">Del</button>';
 
+    // data-label drives the stacked card layout on narrow screens, where the
+    // header row is hidden and each cell prints its own column name. Every
+    // value is wrapped in .acc-val so the cell keeps exactly two flex children,
+    // the label and the value, which is what lets the label sit left and the
+    // value sit right without a multi line value being split across the row.
     return '<tr>'
-      + '<td>' + identity + '</td>'
-      + '<td><span class="muted-text">' + esc(row.email || '—') + '</span></td>'
-      + '<td>' + pws + '</td>'
-      + '<td><div class="tag-row">' + accBadgesHtml(row) + '</div></td>'
-      + '<td>' + statusCell + '</td>'
-      + '<td class="num">' + accMoney(row.buy_price) + '</td>'
-      + '<td class="num">' + payCell + '</td>'
-      + '<td class="num">' + netHtml + '</td>'
-      + '<td>' + accSourceHtml(row.source) + '</td>'
-      + '<td class="acc-actions"><div class="row-actions">' + actions + '</div></td>'
+      + '<td data-label="Account"><div class="acc-val">' + identity + '</div></td>'
+      + '<td data-label="Email"><div class="acc-val"><span class="muted-text">' + esc(row.email || '—') + '</span></div></td>'
+      + '<td data-label="Passwords"><div class="acc-val">' + pws + '</div></td>'
+      + '<td data-label="Badges &amp; Nitro"><div class="acc-val"><div class="tag-row">' + accBadgesHtml(row) + '</div></div></td>'
+      + '<td data-label="Status"><div class="acc-val">' + statusCell + '</div></td>'
+      + '<td class="num" data-label="Paid"><div class="acc-val">' + accMoney(row.buy_price) + '</div></td>'
+      + '<td class="num" data-label="Sold"><div class="acc-val">' + payCell + '</div></td>'
+      + '<td class="num" data-label="Net"><div class="acc-val">' + netHtml + '</div></td>'
+      + '<td data-label="Source"><div class="acc-val">' + accSourceHtml(row.source) + '</div></td>'
+      + '<td class="acc-actions" data-label=""><div class="row-actions">' + actions + '</div></td>'
       + '</tr>';
   }
 

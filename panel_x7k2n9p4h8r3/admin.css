@@ -1094,15 +1094,10 @@ button {
   min-width: 116px;
 }
 
-@media (max-width: 760px) {
-  /* Full width buttons in a single column, so the pinned cell never grows wide
-     enough to swallow the data columns. */
-  .acc-table td.acc-actions .row-actions {
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: flex-start;
-  }
-}
+/* Below 760px the table stops being a table. Ten columns plus a pinned
+   Actions cell cannot fit a phone, and horizontal scrolling meant reading a
+   single account meant dragging across the whole row. The full stacked-card
+   rules live with the other responsive overrides further down. */
 
 
 .cell-id {
@@ -1505,17 +1500,154 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .tag-row {
-    max-width: 180px;
-  }
-
-  .pw-mask {
-    max-width: 84px;
-  }
-
   .toolbar .acc-search,
   #accSearch {
     width: 100%;
+  }
+}
+
+/* ---------- Accounts as stacked cards (phone) ----------
+   Ten columns cannot share a phone screen. Rather than force a sideways drag
+   across every row, each row becomes a self contained card and every cell
+   prints its own column name from data-label. The header row is dropped and
+   the pinned Actions cell is unpinned, so nothing floats over the data and
+   nothing is pushed off the right edge. */
+
+@media (max-width: 760px) {
+  .table-wrap {
+    overflow-x: visible;
+  }
+
+  .acc-table,
+  .acc-table tbody,
+  .acc-table tr,
+  .acc-table td {
+    display: block;
+    width: auto;
+  }
+
+  .acc-table thead {
+    display: none;
+  }
+
+  .acc-table tbody tr {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin: 0 0 10px;
+    padding: 2px 0;
+  }
+
+  .acc-table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .acc-table tbody tr:hover td {
+    background: transparent;
+  }
+
+  .acc-table td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 13px;
+    white-space: normal;
+    word-break: normal;
+  }
+
+  .acc-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.7;
+  }
+
+  /* The wrapped value takes whatever the label does not, and keeps a multi
+     line value (sold plus owed, status plus buyer) together on the right. */
+  .acc-table td .acc-val {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Figures read best flush right, opposite the label. */
+  .acc-table td.num .acc-val {
+    text-align: right;
+  }
+
+  /* The first cell is the account itself, so it leads the card. */
+  .acc-table td[data-label="Account"] {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding-bottom: 11px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .acc-table td[data-label="Account"] .acc-val {
+    width: 100%;
+  }
+
+  .acc-table td[data-label="Account"]::before {
+    color: var(--accent);
+  }
+
+  /* Actions become a full width button row along the bottom of the card. The
+     label is suppressed because the buttons explain themselves. */
+  .acc-table th.acc-actions,
+  .acc-table td.acc-actions {
+    position: static;
+    right: auto;
+    background: transparent;
+    box-shadow: none;
+    z-index: auto;
+  }
+
+  .acc-table td.acc-actions {
+    border-bottom: none;
+    padding-top: 11px;
+  }
+
+  .acc-table td.acc-actions::before {
+    display: none;
+  }
+
+  .acc-table td.acc-actions .row-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* Comfortable touch targets. Equal flex basis lets the buttons share the
+     card width and wrap onto a second line when a row has all four. */
+  .acc-table td.acc-actions .mini-btn {
+    flex: 1 1 auto;
+    min-width: 74px;
+    min-height: 40px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  /* These were capped to keep the horizontal table narrow. A card has a whole
+     line to itself, so let them use it. */
+  .acc-table td .tag-row {
+    max-width: none;
+  }
+
+  .acc-table td .pw-mask {
+    max-width: none;
+  }
+
+  .acc-table td .cell-id {
+    word-break: break-all;
   }
 }
 
