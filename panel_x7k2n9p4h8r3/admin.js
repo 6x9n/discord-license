@@ -1225,14 +1225,28 @@
     renderAccounts();
   }
 
+  // Unsold stock leads the table. It is what you act on next, and with the "All"
+  // chip active a sold row sitting above an available one buries it. Anything
+  // that is not SOLD counts as unsold, so a row with a missing status still shows
+  // up where it can be checked instead of trailing. The index tiebreak keeps the
+  // server's own ordering inside each group instead of imposing a second one.
   function accFiltered() {
     var q = acc.query.trim().toLowerCase();
-    return acc.rows.filter(function (row) {
+    var rows = acc.rows.filter(function (row) {
       if (acc.filter !== 'all' && row.status !== acc.filter) return false;
       if (!q) return true;
       return [row.email, row.discord_id, row.username, row.source, row.status_label, row.notes]
         .some(function (v) { return String(v || '').toLowerCase().indexOf(q) !== -1; });
     });
+    return rows
+      .map(function (row, i) { return { row: row, i: i }; })
+      .sort(function (a, b) {
+        var sa = a.row.status === 'SOLD' ? 1 : 0;
+        var sb = b.row.status === 'SOLD' ? 1 : 0;
+        if (sa !== sb) return sa - sb;
+        return a.i - b.i;
+      })
+      .map(function (wrapped) { return wrapped.row; });
   }
 
   function renderAccKPIs() {
