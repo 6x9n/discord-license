@@ -576,8 +576,12 @@ window.manager = {
   // session is allowed to make one, which happens right after another change on
   // the same account. It clears on its own, so the same bounded backoff used for
   // rate limits applies rather than surfacing a raw code to the user.
+  // The hold lasts up to about a minute, so the schedule has to span that long.
+  // The previous 1.5s/3s pair gave up after 4.5s and reported "wait a minute"
+  // while the change would still have gone through a few seconds later.
   const UNKNOWN_SESSION_CODE = 10020;
-  const MAX_SESSION_RETRIES = 2;
+  const MAX_SESSION_RETRIES = 3;
+  const SESSION_BACKOFF = [8000, 15000, 30000];
 
   let inFlightController = null;
   let accountDataRequest = null;
@@ -714,9 +718,10 @@ window.manager = {
           return delay(secs * 1000).then(run);
         }
         if (isUnknownSession(res) && sessionAttempts < MAX_SESSION_RETRIES && !stopped()) {
+          const wait = SESSION_BACKOFF[sessionAttempts] || SESSION_BACKOFF[SESSION_BACKOFF.length - 1];
           sessionAttempts += 1;
-          toast('Discord held the profile change - retrying...', 'warning');
-          return delay(1500 * sessionAttempts).then(run);
+          toast('Discord is holding this change - still working, retrying in ' + Math.round(wait / 1000) + 's (attempt ' + sessionAttempts + '/' + MAX_SESSION_RETRIES + ')...', 'warning');
+          return delay(wait).then(run);
         }
         return res;
       });
@@ -1027,6 +1032,15 @@ window.manager = {
     { level: 6, gifts: 20, name: 'Legend', image: 'assets/images/badges/gift_badges/giftlvl6.png' }
   ];
 
+  // Matches Discord's own gifting badge. Matched on id and description rather
+  // than a hardcoded badge id so it keeps working if Discord renames the id.
+  function isGiftBadge(idStr, desc) {
+    const a = String(idStr || '').toLowerCase();
+    const b = String(desc || '').toLowerCase();
+    return a.indexOf('gift') !== -1 || a.indexOf('gifter') !== -1
+      || b.indexOf('gift') !== -1 || b.indexOf('gifter') !== -1;
+  }
+
   const FLAG_BADGES = [
     { bit: 1 << 0, key: 'staff', hash: '57440232efd66a218520202720d3f233', path: 'assets/images/badges/discordstaff.svg', title: 'Discord Staff' },
     { bit: 1 << 1, key: 'partner', hash: '3f9748e53446a137a052f3454e2de41e', path: 'assets/images/badges/discordpartner.svg', title: 'Partnered Server Owner' },
@@ -1293,6 +1307,22 @@ window.manager = {
           path: 'assets/images/badges/quest.png',
           title: desc || 'Completed a Quest'
         });
+      } else if (isGiftBadge(idStr, desc)) {
+        // Discord ships its own gifting badge. Key it as 'gift' so it registers in
+        // `seen` and the tenure fallback further below does not add a second one.
+        let level = 1;
+        const gm = (idStr + ' ' + String(desc || '')).match(/(?:level|lvl)[_ -]?([1-6])/i);
+        if (gm) level = Math.max(1, Math.min(6, Number(gm[1])));
+        const gtier = GIFT_LEVELS.filter(function (g) {
+          return g.level === level;
+        })[0] || GIFT_LEVELS[0];
+        add({
+          key: 'gift',
+          id: rawId,
+          hash: iconHash || '',
+          path: gtier.image,
+          title: gtier.name
+        });
       } else if (iconHash) {
         add({
           key: 'custom_' + (rawId || iconHash),
@@ -1357,7 +1387,7 @@ window.manager = {
           }
         });
         if (gift) {
-          add({ key: 'gift', path: gift.image, title: 'Gift Badge \u2014 ' + gift.name });
+          add({ key: 'gift', path: gift.image, title: gift.name });
         }
       }
     }
@@ -1654,12 +1684,13 @@ window.manager = {
   }
 
   // Discord's own message for 10020 is the bare words "Unknown Session", which
-  // tells the reader nothing about what to do. makeRequest already retried it,
-  // so reaching here means the hold did not lift and the useful next step is to
-  // wait rather than to keep pressing Save.
+  // tells the reader nothing about what to do. makeRequest already retried it
+  // for about a minute first, so reaching here means the hold genuinely did not
+  // lift. Saving again is safe and usually succeeds, so say that rather than
+  // sending them looking for a button that does not exist.
   function describeProfileWriteError(res) {
     if (res && res.code === UNKNOWN_SESSION_CODE) {
-      return 'Discord is not accepting profile changes on this account right now. Wait a minute and save again.';
+      return 'Discord held this change for about a minute and still has not accepted it. Press Save once more - it usually goes through.';
     }
     if (res && res.code === 50035) {
       return 'Discord rejected that change as invalid. Try again in a moment.';
