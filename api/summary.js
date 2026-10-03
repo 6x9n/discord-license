@@ -15,6 +15,7 @@
 
 const crypto = require('crypto');
 const { rest, readBody, json, handleOptions } = require('./_lib/supabase.js');
+const { syncAccountMoney } = require('./_lib/money-sync.js');
 const {
   secretMatches,
   cookieConfigured,
@@ -439,7 +440,15 @@ async function opCreate(req, res) {
     const friendly = friendlyDbError(err, 'Failed to save account.');
     return json(res, friendly.status || 500, { success: false, error: friendly.message });
   }
-  return json(res, 200, { success: true, data: (inserted && inserted[0]) || row });
+  const saved = (inserted && inserted[0]) || row;
+  // Buying an account is money leaving a bucket, so it posts itself. Idempotent,
+  // and a ledger problem never blocks the account from being saved.
+  const money = await syncAccountMoney(saved, {});
+  return json(res, 200, {
+    success: true,
+    data: saved,
+    money: { synced: !!money.ok, reason: money.reason || null }
+  });
 }
 
 async function opUpdate(req, res, id) {
@@ -458,12 +467,20 @@ async function opUpdate(req, res, id) {
   if (!rows || !rows.length) return json(res, 404, { success: false, error: 'Account not found.' });
   let updated;
   try {
-    updated = await rest('discord_accounts?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: patch });
+    // select=* so the saved row comes back whole: the money ledger is reconciled
+    // from it immediately below, and a partial row would post a stale figure.
+    updated = await rest('discord_accounts?id=eq.' + encodeURIComponent(id) + '&select=*', { method: 'PATCH', body: patch });
   } catch (err) {
     const friendly = friendlyDbError(err, 'Update failed.');
     return json(res, friendly.status || 500, { success: false, error: friendly.message });
   }
-  return json(res, 200, { success: true, data: (updated && updated[0]) || null });
+  const saved = (updated && updated[0]) || null;
+  // An account moving money - bought, sold, or a corrected price - re-derives its
+  // ledger entries. Idempotent by source_key, so this is safe on every save and
+  // never doubles up. Never allowed to fail the save: the account row is already
+  // written and correct without it.
+  const money = saved ? await syncAccountMoney(saved, {}) : { ok: false, reason: 'No saved row.' };
+  return json(res, 200, { success: true, data: saved, money: { synced: !!money.ok, reason: money.reason || null } });
 }
 
 async function opDelete(req, res, id) {

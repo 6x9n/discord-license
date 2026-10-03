@@ -1970,3 +1970,433 @@ img.badge-icon {
   background: var(--error-soft);
   color: #fca5a5;
 }
+
+/* ======================================================================
+   Money page
+   ======================================================================
+   A balance you cannot trust at a glance is not worth keeping, so each
+   bucket shows its own figure rather than only contributing to a total.
+   The colour carries direction: green for money in, red for out, and the
+   plain accent for a balance that can be either. */
+
+.bucket-grid {
+  display: grid;
+  /* auto-fit with a floor rather than a fixed column count, so two, three or
+     six buckets all fill the row instead of leaving a gap at the end. */
+  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
+  gap: 14px;
+}
+
+.bucket-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* An archived bucket keeps its history but is out of the totals, so it is
+   dimmed rather than hidden: you can still see what happened to it. */
+.bucket-archived {
+  opacity: 0.55;
+}
+
+.bucket-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bucket-card-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bucket-kind {
+  font-weight: 600;
+}
+
+.bucket-balance {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.bucket-detail {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.bucket-flow {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bucket-flow-in {
+  color: var(--success);
+}
+
+.bucket-flow-out {
+  color: var(--muted);
+}
+
+.bucket-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.bucket-actions .mini-btn {
+  min-height: 32px;
+  padding: 6px 11px;
+  font-size: 12px;
+}
+
+/* Destructive on the money page too, so a stray click reads as deliberate. */
+.money-actions .danger-btn,
+.bucket-actions .danger-btn {
+  color: var(--error);
+  border-color: var(--error-soft);
+}
+
+.money-actions .danger-btn:hover,
+.bucket-actions .danger-btn:hover {
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.money-table td.money-actions,
+.money-table th.money-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.money-table .acc-actions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+/* Marks an entry the accounts table owns, so it is obvious why it cannot be
+   edited here. */
+.money-derived {
+  margin-left: 7px;
+  font-weight: 600;
+}
+
+.money-month-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.money-stats .stat[data-money-kpi] {
+  cursor: pointer;
+}
+
+.empty code {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* The month table turns into cards on a phone for the same reason the accounts
+   table does: a seven column grid of figures is unreadable at 380px. Scoped to
+   .money-month-table so the ledger table, which has a natural reading order,
+   is unaffected. */
+@media (max-width: 760px) {
+  .money-month-table thead {
+    display: none;
+  }
+
+  .money-month-table,
+  .money-month-table tbody,
+  .money-month-table tr,
+  .money-month-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .money-month-table tr {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: var(--card);
+  }
+
+  .money-month-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: none;
+    padding: 5px 0;
+  }
+
+  .money-month-table td[data-label]::before {
+    content: attr(data-label);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  .money-month-table td.num {
+    text-align: left;
+  }
+
+  /* The month name is the card's heading, so it leads rather than sitting in
+     a label/value pair like the figures under it. */
+  .money-month-table td:first-child {
+    font-size: 15px;
+    font-weight: 800;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 4px;
+  }
+
+  .money-month-table td:first-child::before {
+    display: none;
+  }
+
+  .bucket-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .money-table .acc-actions {
+    justify-content: flex-start;
+  }
+
+  .money-table td.money-actions .mini-btn {
+    min-height: 40px;
+    padding: 10px 14px;
+  }
+}
+
+/* =====================================================================
+   Bucket of Money: roles, currencies, and the four headline tiles
+   =====================================================================
+
+   A bucket now has a role and a currency instead of a "kind", and the tiles
+   hold one line per currency rather than one number. The styling below exists
+   to make that split readable rather than to decorate it: the currency code is
+   always adjacent to its figure, because a bare number next to a bare number
+   invites the reader to add them together. */
+
+.money-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.money-quick-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.money-quick-actions .btn svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+/* --- per-currency lines inside a tile --- */
+
+.money-cur-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  /* Tiles are equal height by default; letting the block align to the top keeps
+     two currencies from sitting lower than one and looking like a different
+     kind of figure. */
+  align-items: flex-start;
+}
+
+.money-cur-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  line-height: 1.25;
+}
+
+.money-cur-code {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+  min-width: 34px;
+}
+
+.money-cur-amt {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.money-cur-sub {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.money-cur-none {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Safe-to-spend states. Red once the envelope is empty, amber while it is
+   nearly gone, and plain when there is no limit to run out of. */
+.money-cur-empty .money-cur-amt {
+  color: var(--error);
+}
+
+.money-cur-low .money-cur-amt {
+  color: var(--warn);
+}
+
+.money-cur-low .money-cur-code {
+  color: var(--warn);
+}
+
+/* --- bucket groups by role --- */
+
+.bucket-group {
+  margin-bottom: 22px;
+}
+
+.bucket-group:last-child {
+  margin-bottom: 0;
+}
+
+.bucket-group-head {
+  margin-bottom: 10px;
+}
+
+.bucket-group-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.bucket-group-blurb {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bucket-cur {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.bucket-cap {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- set balance modal --- */
+
+.current-balance-box {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-raised);
+}
+
+.current-balance-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.current-balance-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.preset-btn {
+  min-width: 58px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- safe-to-spend breakdown inside the shared KPI dialog --- */
+
+.kpi-list-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kpi-list-group-head:first-child {
+  margin-top: 0;
+}
+
+.kpi-list-group-note {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-list-group-head.kpi-over {
+  color: var(--error);
+}
+
+.kpi-list-group-head.kpi-over .kpi-list-group-note {
+  color: var(--error);
+}
+
+@media (max-width: 640px) {
+  .bucket-group-title {
+    font-size: 12px;
+  }
+
+  .money-cur-code {
+    min-width: 30px;
+  }
+}

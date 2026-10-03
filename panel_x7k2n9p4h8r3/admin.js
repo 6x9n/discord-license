@@ -33,6 +33,87 @@
       accountsView: g('accountsView'),
       accountsRefreshBtn: g('accountsRefreshBtn'),
       addAccountBtn: g('addAccountBtn'),
+      moneyView: g('moneyView'),
+      moneyRefreshBtn: g('moneyRefreshBtn'),
+      addBucketBtn: g('addBucketBtn'),
+      addEntryBtn: g('addEntryBtn'),
+      moneyStatLiquid: g('moneyStatLiquid'),
+      moneyStatTrading: g('moneyStatTrading'),
+      moneyStatPersonal: g('moneyStatPersonal'),
+      moneyStatSafe: g('moneyStatSafe'),
+      moneyBucketGrid: g('moneyBucketGrid'),
+      moneyBucketEmpty: g('moneyBucketEmpty'),
+      moneyMonthBody: g('moneyMonthBody'),
+      moneyMonthEmpty: g('moneyMonthEmpty'),
+      moneySearch: g('moneySearch'),
+      moneyResultCount: g('moneyResultCount'),
+      moneyBody: g('moneyBody'),
+      moneyEmptyMsg: g('moneyEmptyMsg'),
+      bucketModal: g('bucketModal'),
+      bucketModalTitle: g('bucketModalTitle'),
+      bucketForm: g('bucketForm'),
+      bucketEditId: g('bucketEditId'),
+      bucketName: g('bucketName'),
+      bucketRole: g('bucketRole'),
+      bucketAssetTag: g('bucketAssetTag'),
+      bucketAssetTagField: g('bucketAssetTagField'),
+      bucketCurrency: g('bucketCurrency'),
+      bucketMonthlyLimit: g('bucketMonthlyLimit'),
+      bucketLimitField: g('bucketLimitField'),
+      bucketMethod: g('bucketMethod'),
+      bucketIdentifier: g('bucketIdentifier'),
+      bucketLast4: g('bucketLast4'),
+      bucketNotes: g('bucketNotes'),
+      bucketFormMsg: g('bucketFormMsg'),
+      bucketCancelBtn: g('bucketCancelBtn'),
+      bucketSubmitBtn: g('bucketSubmitBtn'),
+      moneyModal: g('moneyModal'),
+      moneyModalTitle: g('moneyModalTitle'),
+      moneyForm: g('moneyForm'),
+      moneyEditId: g('moneyEditId'),
+      moneyDirection: g('moneyDirection'),
+      moneyAmount: g('moneyAmount'),
+      moneyBucket: g('moneyBucket'),
+      moneyScope: g('moneyScope'),
+      moneyCategory: g('moneyCategory'),
+      moneyDate: g('moneyDate'),
+      moneyNote: g('moneyNote'),
+      moneyFormMsg: g('moneyFormMsg'),
+      moneyCancelBtn: g('moneyCancelBtn'),
+      moneySubmitBtn: g('moneySubmitBtn'),
+      openTransferBtn: g('openTransferBtn'),
+      openConvertBtn: g('openConvertBtn'),
+      balanceModal: g('balanceModal'),
+      balanceModalTitle: g('balanceModalTitle'),
+      balanceForm: g('balanceForm'),
+      balanceBucketId: g('balanceBucketId'),
+      balanceCurrent: g('balanceCurrent'),
+      balanceAmount: g('balanceAmount'),
+      balanceFormMsg: g('balanceFormMsg'),
+      balanceCancelBtn: g('balanceCancelBtn'),
+      balanceSubmitBtn: g('balanceSubmitBtn'),
+      transferModal: g('transferModal'),
+      transferForm: g('transferForm'),
+      transferFrom: g('transferFrom'),
+      transferTo: g('transferTo'),
+      transferAmount: g('transferAmount'),
+      transferNote: g('transferNote'),
+      transferFormMsg: g('transferFormMsg'),
+      transferCancelBtn: g('transferCancelBtn'),
+      transferSubmitBtn: g('transferSubmitBtn'),
+      convertModal: g('convertModal'),
+      convertForm: g('convertForm'),
+      convertFrom: g('convertFrom'),
+      convertTo: g('convertTo'),
+      convertSold: g('convertSold'),
+      convertReceived: g('convertReceived'),
+      convertRate: g('convertRate'),
+      convertFee: g('convertFee'),
+      convertDate: g('convertDate'),
+      convertNote: g('convertNote'),
+      convertFormMsg: g('convertFormMsg'),
+      convertCancelBtn: g('convertCancelBtn'),
+      convertSubmitBtn: g('convertSubmitBtn'),
       accSearch: g('accSearch'),
       accResultCount: g('accResultCount'),
       accBody: g('accBody'),
@@ -210,7 +291,14 @@
       data = await res.json();
     } catch (e) {}
     if (!res.ok) {
-      throw new Error((data && (data.error || data.message)) || 'Request failed.');
+      const err = new Error((data && (data.error || data.message)) || 'Request failed.');
+      // The rest of the body is kept because some refusals carry the numbers
+      // behind them. The safe-to-spend cap answers 409 with the limit, what has
+      // been spent, and what the entry would push it to, which is what lets the
+      // form offer "record it anyway" instead of only saying no.
+      err.status = res.status;
+      err.detail = data;
+      throw err;
     }
     return data;
   }
@@ -812,6 +900,9 @@
     if (el.accountsView) {
       el.accountsView.hidden = name !== 'accounts';
     }
+    if (el.moneyView) {
+      el.moneyView.hidden = name !== 'money';
+    }
     if (el.settingsView) {
       el.settingsView.hidden = name !== 'settings';
     }
@@ -823,6 +914,9 @@
     }
     if (name === 'accounts') {
       loadAccounts();
+    }
+    if (name === 'money') {
+      loadMoney();
     }
   }
 
@@ -1005,6 +1099,910 @@
     ready: false
   };
 
+  /* =======================================================================
+     Money (buckets + ledger)
+     ======================================================================= */
+
+  var money = {
+    buckets: [],
+    months: [],
+    entries: [],
+    // The four headline figures, each already split by currency by the server.
+    // Kept as lists because there is no correct way to add two currencies.
+    summary: null,
+    filter: 'all',
+    query: '',
+    ready: false,
+    // Set when the server reports the money tables are missing. Kept so the page
+    // can explain itself instead of showing a permanently empty ledger.
+    missing: false
+  };
+
+  // Role labels, in the order buckets should be grouped on the page. Trading
+  // first because that is the money the business runs on, personal last because
+  // it is the part being spent.
+  var MONEY_ROLES = [
+    { key: 'TRADING_CAPITAL', label: 'Trading capital', blurb: 'Money bought and sold through accounts.' },
+    { key: 'LIQUID_ASSETS', label: 'Liquid assets', blurb: 'Things you hold that could become cash.' },
+    { key: 'PERSONAL_SPENDING', label: 'Personal spending', blurb: 'Your envelope for living costs.' }
+  ];
+
+  function moneyRoleLabel(role) {
+    var found = '';
+    MONEY_ROLES.forEach(function (r) { if (r.key === role) found = r.label; });
+    return found || String(role || '');
+  }
+
+  function moneyLiveBuckets() {
+    return money.buckets.filter(function (b) { return !b.archived; });
+  }
+
+  function moneyAssetLabel(tag) {
+    if (tag === 'CRYPTO') return 'Crypto';
+    if (tag === 'LOCAL_CASH') return 'Local cash';
+    return '';
+  }
+
+  function moneyAmount(n) {
+    return accMoney(n);
+  }
+
+  // "2026-02" -> "Feb 2026". Falls back to the raw string rather than an
+  // "Invalid Date", because a month key we cannot parse is still worth showing.
+  function moneyMonthLabel(key) {
+    var m = /^(\d{4})-(\d{2})$/.exec(String(key || ''));
+    if (!m) return String(key || '');
+    var d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
+    if (isNaN(d.getTime())) return String(key);
+    return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  function moneyDateLabel(iso) {
+    if (!iso) return '—';
+    var d = new Date(String(iso).slice(0, 10) + 'T00:00:00Z');
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+
+  // Which month an entry belongs to for display purposes. Read from the stored
+  // date rather than parsed from a timestamp: the column is a plain date
+  // precisely so it cannot drift across a month boundary.
+  function moneyMonthOf(iso) {
+    return String(iso || '').slice(0, 7);
+  }
+
+  async function loadMoney() {
+    try {
+      const data = await api('/api/money');
+      money.buckets = data.data.buckets || [];
+      money.months = data.data.months || [];
+      money.entries = data.data.entries || [];
+      money.summary = data.data.summary || null;
+      money.ready = true;
+      money.missing = false;
+    } catch (err) {
+      money.buckets = [];
+      money.months = [];
+      money.entries = [];
+      money.summary = null;
+      money.ready = false;
+      // A 503 means the migration has not been run. That is a setup step, not a
+      // failure, so it is held as state and explained on the page rather than
+      // thrown away with an error toast the operator cannot act on.
+      money.missing = /sql\/money_buckets\.sql/i.test(err.message || '');
+      toast(err.message || 'Could not load money.', 'error');
+    }
+    setMoneyBucketOptions();
+    renderMoney();
+  }
+
+  function renderMoney() {
+    renderMoneyKPIs();
+    renderMoneyBuckets();
+    renderMoneyMonths();
+    renderMoneyEntries();
+  }
+
+  function renderMoneyKPIs() {
+    var s = money.summary;
+    if (!s) {
+      // Nothing loaded yet, or the tables are missing. Saying nothing is more
+      // honest than showing a zero that reads as "you have no money".
+      if (el.moneyStatLiquid) el.moneyStatLiquid.innerHTML = moneyCurLines([], 'Not loaded');
+      if (el.moneyStatTrading) el.moneyStatTrading.innerHTML = moneyCurLines([], 'Not loaded');
+      if (el.moneyStatPersonal) el.moneyStatPersonal.innerHTML = moneyCurLines([], 'Not loaded');
+      if (el.moneyStatSafe) el.moneyStatSafe.innerHTML = moneyCurLines([], 'Not loaded');
+      return;
+    }
+    if (el.moneyStatLiquid) el.moneyStatLiquid.innerHTML = moneyCurLines(s.liquid, 'No liquid assets');
+    if (el.moneyStatTrading) el.moneyStatTrading.innerHTML = moneyCurLines(s.trading, 'No trading bucket');
+    if (el.moneyStatPersonal) el.moneyStatPersonal.innerHTML = moneyCurLines(s.personal, 'No personal bucket');
+    if (el.moneyStatSafe) {
+      // Safe to spend is the personal envelope, and it carries the cap and the
+      // state with it, because "you have 400 left" means little next to
+      // "you have 400 left of a 1000 budget".
+      var safe = s.safeToSpend || [];
+      el.moneyStatSafe.innerHTML = safe.length
+        ? safe.map(function (r) {
+            var cls = 'money-cur-line money-cur-' + (r.state || 'ok');
+            var sub = '';
+            if (r.limited) {
+              sub = '<span class="money-cur-sub">of ' + esc(r.limit.toFixed(2)) + ' · spent ' + esc(r.spentThisMonth.toFixed(2)) + '</span>';
+            }
+            return '<div class="' + cls + '">'
+              + '<span class="money-cur-code">' + esc(r.currency) + '</span>'
+              + '<span class="money-cur-amt' + (r.amount < 0 ? ' net-negative' : '') + '">' + esc(money2(r.amount).toFixed(2)) + '</span>'
+              + sub + '</div>';
+          }).join('')
+        : moneyCurLines([], 'No personal bucket');
+    }
+  }
+
+  // A missing migration gets its own explanation, with the exact file to run.
+  // Without it the page would look like an empty ledger and read as "you have no
+  // money", which is the opposite of the truth.
+  function moneyMissingNotice() {
+    return '<div class="empty">The money tables are not set up yet. Open the Supabase SQL editor, run '
+      + '<code>sql/money_buckets.sql</code>, then press Refresh.</div>';
+  }
+
+  function bucketCardHtml(b) {
+    var bits = [];
+    if (b.currency) bits.push(esc(b.currency));
+    var asset = moneyAssetLabel(b.assetTag);
+    if (asset) bits.push(esc(asset));
+    if (b.method) bits.push(esc(b.method));
+    if (b.identifier) bits.push(esc(b.identifier));
+    if (b.last4) bits.push('ending ' + esc(b.last4));
+    var detail = bits.join(' · ');
+    var cap = '';
+    if (b.role === 'PERSONAL_SPENDING' && money2(b.monthlyLimit) > 0) {
+      cap = '<div class="bucket-cap">Monthly limit ' + esc(moneyCur(b.currency, b.monthlyLimit)) + '</div>';
+    }
+    return '<div class="bucket-card' + (b.archived ? ' bucket-archived' : '') + '">'
+      + '<div class="bucket-card-head">'
+      + '<div class="bucket-card-name">' + esc(b.name)
+      + '<span class="badge badge-muted bucket-kind">' + esc(moneyRoleLabel(b.role)) + '</span>'
+      + (b.archived ? '<span class="badge badge-warn">Archived</span>' : '')
+      + '</div>'
+      // The currency code sits with the figure on every card, not just in a
+      // header, because a bucket's currency is part of what the number means.
+      + '<div class="bucket-balance' + (b.balance < 0 ? ' net-negative' : '') + '">'
+      + (b.currency ? '<span class="bucket-cur">' + esc(b.currency) + '</span> ' : '')
+      + esc(money2(b.balance).toFixed(2)) + '</div>'
+      + '</div>'
+      + (detail ? '<div class="bucket-detail">' + detail + '</div>' : '')
+      + cap
+      + '<div class="bucket-flow">'
+      + '<span class="bucket-flow-in">+' + esc(money2(b.totalIn).toFixed(2)) + ' in</span>'
+      + '<span class="bucket-flow-out">-' + esc(money2(b.totalOut).toFixed(2)) + ' out</span>'
+      + '</div>'
+      + (b.notes ? '<div class="bucket-detail">' + esc(b.notes) + '</div>' : '')
+      + '<div class="bucket-actions">'
+      + '<button class="btn btn-ghost mini-btn" data-money-act="set-balance" data-id="' + esc(b.id) + '" title="Correct this balance to the figure you actually have">Set balance</button>'
+      + '<button class="btn btn-ghost mini-btn" data-money-act="edit-bucket" data-id="' + esc(b.id) + '">Edit</button>'
+      + '<button class="btn btn-ghost mini-btn" data-money-act="archive-bucket" data-id="' + esc(b.id) + '">'
+      + (b.archived ? 'Unarchive' : 'Archive') + '</button>'
+      + '<button class="btn btn-ghost mini-btn danger-btn" data-money-act="delete-bucket" data-id="' + esc(b.id) + '">Delete</button>'
+      + '</div>'
+      + '</div>';
+  }
+
+  // Grouped by role because the role is what decides how a bucket behaves:
+  // trading receives account money, liquid assets can be converted, personal is
+  // the one with a spending limit. A flat grid hides that.
+  function renderMoneyBuckets() {
+    var grid = el.moneyBucketGrid;
+    if (!grid) return;
+    if (money.missing) {
+      grid.innerHTML = moneyMissingNotice();
+      if (el.moneyBucketEmpty) el.moneyBucketEmpty.hidden = true;
+      return;
+    }
+    var live = moneyLiveBuckets();
+    var archived = money.buckets.filter(function (b) { return b.archived; });
+    var html = '';
+    MONEY_ROLES.forEach(function (role) {
+      var group = live.filter(function (b) { return b.role === role.key; });
+      if (!group.length) return;
+      html += '<div class="bucket-group">'
+        + '<div class="bucket-group-head"><h4 class="bucket-group-title">' + esc(role.label) + '</h4>'
+        + '<p class="bucket-group-blurb">' + esc(role.blurb) + '</p></div>'
+        + '<div class="bucket-grid">' + group.map(bucketCardHtml).join('') + '</div>'
+        + '</div>';
+    });
+    // A bucket with a role this build does not recognise still has to be
+    // visible, or it would silently hold money nobody can see.
+    var known = MONEY_ROLES.map(function (r) { return r.key; });
+    var odd = live.filter(function (b) { return known.indexOf(b.role) === -1; });
+    if (odd.length) {
+      html += '<div class="bucket-group"><div class="bucket-group-head">'
+        + '<h4 class="bucket-group-title">Other</h4>'
+        + '<p class="bucket-group-blurb">Buckets with a role this page does not recognise.</p></div>'
+        + '<div class="bucket-grid">' + odd.map(bucketCardHtml).join('') + '</div></div>';
+    }
+    if (archived.length) {
+      html += '<div class="bucket-group"><div class="bucket-group-head">'
+        + '<h4 class="bucket-group-title">Archived</h4>'
+        + '<p class="bucket-group-blurb">Not counted in any total, but kept so past months still read correctly.</p></div>'
+        + '<div class="bucket-grid">' + archived.map(bucketCardHtml).join('') + '</div></div>';
+    }
+    grid.innerHTML = html;
+    if (el.moneyBucketEmpty) el.moneyBucketEmpty.hidden = money.buckets.length > 0;
+  }
+
+  function renderMoneyMonths() {
+    var body = el.moneyMonthBody;
+    if (!body) return;
+    if (money.missing) {
+      body.innerHTML = '';
+      if (el.moneyMonthEmpty) {
+        el.moneyMonthEmpty.hidden = false;
+        el.moneyMonthEmpty.innerHTML = 'The money tables are not set up yet.';
+      }
+      return;
+    }
+    body.innerHTML = money.months.map(function (m) {
+      var savedCls = m.saved < 0 ? ' net-negative' : ' net-positive';
+      var realLife = m.personalOut;
+      return '<tr>'
+        + '<td data-label="Month"><div class="acc-val">' + esc(moneyMonthLabel(m.month)) + '</div></td>'
+        // One row per month per currency, so the currency has to be on the row.
+        // "Saved" only means anything within a single currency.
+        + '<td data-label="Currency"><div class="acc-val">' + esc(m.currency || '—') + '</div></td>'
+        + '<td data-label="From trading" class="num"><div class="acc-val">' + esc(moneyCur(m.currency, m.businessIn)) + '</div></td>'
+        + '<td data-label="Trading cost" class="num"><div class="acc-val">' + esc(moneyCur(m.currency, -m.businessOut)) + '</div></td>'
+        + '<td data-label="Spent in real life" class="num"><div class="acc-val">' + esc(moneyCur(m.currency, realLife)) + '</div></td>'
+        + '<td data-label="Moved between buckets" class="num"><div class="acc-val">' + (m.transferred ? esc(moneyCur(m.currency, m.transferred)) : '<span class="muted-text">—</span>') + '</div></td>'
+        + '<td data-label="Gained" class="num"><div class="acc-val">' + esc(moneyCur(m.currency, m.gained)) + '</div></td>'
+        + '<td data-label="Saved" class="num"><div class="acc-val' + savedCls + '">' + esc(moneyCur(m.currency, m.saved)) + '</div></td>'
+        + '</tr>';
+    }).join('');
+    if (el.moneyMonthEmpty) {
+      var none = !money.months.length;
+      el.moneyMonthEmpty.hidden = !none;
+      if (none) {
+        el.moneyMonthEmpty.textContent = 'Nothing recorded yet. Add money, or save an account, and the month fills in here.';
+      }
+    }
+  }
+
+  function moneyFiltered() {
+    var q = money.query.trim().toLowerCase();
+    return money.entries.filter(function (row) {
+      if (money.filter === 'in' && row.direction !== 'IN') return false;
+      if (money.filter === 'out' && row.direction !== 'OUT') return false;
+      if (money.filter === 'personal' && row.scope !== 'PERSONAL') return false;
+      if (money.filter === 'business' && row.scope !== 'BUSINESS') return false;
+      // Transfers live in their own neutral scope, so they need their own chip.
+      // Without it there is no way to see the movements a month excluded from
+      // both the trading and the personal figures.
+      if (money.filter === 'transfer' && row.scope !== 'TRANSFER') return false;
+      if (!q) return true;
+      return [row.note, row.category, row.bucketName, row.bucketCurrency, row.occurredOn]
+        .some(function (v) { return String(v || '').toLowerCase().indexOf(q) !== -1; });
+    });
+  }
+
+  function moneyRowHtml(row) {
+    var isIn = row.direction === 'IN';
+    // Three different reasons a row cannot be hand-edited, so three different
+    // labels. Collapsing them into one "locked" badge would hide the reason,
+    // which is the part that tells the operator where to actually go.
+    var tag = '';
+    if (row.accountDerived) tag = '<span class="badge badge-muted money-derived">from account</span>';
+    else if (row.adjustment) tag = '<span class="badge badge-muted money-derived">balance correction</span>';
+    else if (row.scope === 'TRANSFER') tag = '<span class="badge badge-muted money-derived">moved</span>';
+    return '<tr>'
+      + '<td data-label="Date"><div class="acc-val">' + esc(moneyDateLabel(row.occurredOn)) + '</div></td>'
+      + '<td data-label="Bucket"><div class="acc-val">' + esc(row.bucketName)
+      + (row.bucketCurrency ? ' <span class="cell-micro">' + esc(row.bucketCurrency) + '</span>' : '') + '</div></td>'
+      + '<td data-label="Category"><div class="acc-val">' + esc(row.category) + '</div></td>'
+      + '<td data-label="Note"><div class="acc-val">' + (row.note ? esc(row.note) : '<span class="muted-text">—</span>')
+      + tag + '</div></td>'
+      + '<td data-label="In" class="num"><div class="acc-val">' + (isIn ? esc(moneyCur(row.bucketCurrency, row.amount)) : '<span class="muted-text">—</span>') + '</div></td>'
+      + '<td data-label="Out" class="num"><div class="acc-val">' + (!isIn ? esc(moneyCur(row.bucketCurrency, row.amount)) : '<span class="muted-text">—</span>') + '</div></td>'
+      + '<td class="money-actions"><div class="acc-actions">'
+      // Only a manual entry may be edited here. An account row is owned by the
+      // accounts table and a correction is recomputed by "Set balance", so an
+      // edit to either would be silently undone by the next save.
+      + (row.locked ? '' : '<button class="btn btn-ghost mini-btn" data-money-act="edit-entry" data-id="' + esc(row.id) + '">Edit</button>')
+      + '<button class="btn btn-ghost mini-btn danger-btn" data-money-act="delete-entry" data-id="' + esc(row.id) + '">Delete</button>'
+      + '</div></td>'
+      + '</tr>';
+  }
+
+  function renderMoneyEntries() {
+    var body = el.moneyBody;
+    if (!body) return;
+    if (money.missing) {
+      body.innerHTML = '';
+      if (el.moneyEmptyMsg) {
+        el.moneyEmptyMsg.hidden = false;
+        el.moneyEmptyMsg.innerHTML = 'The money tables are not set up yet.';
+      }
+      if (el.moneyResultCount) el.moneyResultCount.textContent = '';
+      return;
+    }
+    var rows = moneyFiltered();
+    body.innerHTML = rows.map(moneyRowHtml).join('');
+    if (el.moneyEmptyMsg) {
+      el.moneyEmptyMsg.hidden = rows.length > 0;
+      if (!rows.length) el.moneyEmptyMsg.textContent = 'No entries match.';
+    }
+    if (el.moneyResultCount) {
+      el.moneyResultCount.textContent = rows.length === money.entries.length
+        ? (rows.length + (rows.length === 1 ? ' entry' : ' entries'))
+        : (rows.length + ' of ' + money.entries.length);
+    }
+  }
+
+  // Tile drill-down for the money page. Same modal as the accounts tiles, same
+  // row shape, so a figure on either page can be explained the same way.
+  function moneyKpiBreakdown(kind) {
+    var out = { title: '', sub: '', rows: [], groups: [] };
+    var live = moneyLiveBuckets();
+    var s = money.summary || {};
+
+    // A tile is always explained as "these buckets, in these currencies". There
+    // is deliberately no combined total row, because adding EGP to USDT is the
+    // one thing this page must never do.
+    function byRole(role) {
+      return live.filter(function (b) { return b.role === role; })
+        .map(function (b) {
+          return {
+            raw: b.name,
+            label: esc(b.name),
+            handle: b.currency || '',
+            amount: money2(b.balance)
+          };
+        })
+        .filter(function (i) { return i.amount !== 0; })
+        .sort(function (a, b) { return Math.abs(b.amount) - Math.abs(a.amount); });
+    }
+
+    if (kind === 'liquid') {
+      out.title = 'Liquid assets';
+      out.sub = 'Buckets marked as things you hold that could become cash. Each currency is listed on its own.';
+      out.rows = byRole('LIQUID_ASSETS');
+      return out;
+    }
+    if (kind === 'trading') {
+      out.title = 'Trading capital';
+      out.sub = 'Where money sits while it is being used to buy and sell accounts.';
+      out.rows = byRole('TRADING_CAPITAL');
+      return out;
+    }
+    if (kind === 'personal') {
+      out.title = 'Personal money';
+      out.sub = 'Your envelope for living costs. Spending comes out of here.';
+      out.rows = byRole('PERSONAL_SPENDING');
+      return out;
+    }
+    if (kind === 'safe') {
+      out.title = 'Safe to spend';
+      out.sub = 'What is left in the personal buckets, against the limit you set for each currency. Spending draws this down on its own.';
+      (s.safeToSpend || []).forEach(function (r) {
+        out.groups.push({
+          label: r.currency,
+          rows: byRole('PERSONAL_SPENDING').filter(function (b) {
+            return b.handle === r.currency;
+          }),
+          note: r.limited
+            ? ('Limit ' + money2(r.limit).toFixed(2) + ' · already spent ' + money2(r.spentThisMonth).toFixed(2)
+              + ' this month' + (r.over ? ' · over budget' : ''))
+            : 'No limit set',
+          state: r.state,
+          over: r.over
+        });
+      });
+      if (!out.groups.length) {
+        out.rows = [];
+      }
+      return out;
+    }
+
+    return out;
+  }
+
+  function openMoneyKpiModal(kind) {
+    if (!el.kpiModal) return;
+    var data = moneyKpiBreakdown(kind);
+    el.kpiTitle.textContent = data.title;
+    el.kpiSub.textContent = data.sub;
+    el.kpiSub.hidden = !data.sub;
+    var html = '';
+    if (data.groups.length) {
+      // Safe to spend is broken out per currency, each with its own limit, so the
+      // figures cannot be read as one combined pot.
+      data.groups.forEach(function (grp) {
+        html += '<div class="kpi-list-group-head' + (grp.over ? ' kpi-over' : '') + '">'
+          + esc(grp.label) + '<span class="kpi-list-group-note">' + esc(grp.note) + '</span></div>';
+        html += grp.rows.length
+          ? grp.rows.map(kpiRowHtml).join('')
+          : '<p class="kpi-list-empty">Nothing in this currency.</p>';
+      });
+    } else if (data.rows.length) {
+      html = data.rows.map(kpiRowHtml).join('');
+    } else {
+      html = '<p class="kpi-list-empty">Nothing to show here yet.</p>';
+    }
+    el.kpiList.innerHTML = html;
+    el.kpiModal.hidden = false;
+    el.kpiClose.focus();
+  }
+
+  /* ---------------- money modals ---------------- */
+
+  function setMoneyBucketOptions(selected) {
+    var select = el.moneyBucket;
+    if (!select) return;
+    var live = money.buckets.filter(function (b) { return !b.archived; });
+    var current = selected || select.value || '';
+    select.innerHTML = live.map(function (b) {
+      return '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>';
+    }).join('');
+    if (current) select.value = current;
+  }
+
+  function setBucketFormMsg(text, kind) {
+    if (!el.bucketFormMsg) return;
+    el.bucketFormMsg.textContent = text || '';
+    el.bucketFormMsg.className = 'msg' + (text ? (kind === 'error' ? ' err' : ' ok') : '');
+  }
+
+  // The asset tag and the spending limit only mean anything for their own roles,
+// so they are hidden rather than shown disabled: a greyed-out field still looks
+// like something you should be filling in.
+function syncBucketRoleFields() {
+    var role = el.bucketRole ? el.bucketRole.value : '';
+    if (el.bucketAssetTagField) el.bucketAssetTagField.hidden = role !== 'LIQUID_ASSETS';
+    if (el.bucketLimitField) el.bucketLimitField.hidden = role !== 'PERSONAL_SPENDING';
+  }
+
+  function openBucketModal(bucket) {
+    if (!el.bucketModal) return;
+    el.bucketEditId.value = bucket ? bucket.id : '';
+    el.bucketModalTitle.textContent = bucket ? 'Edit Bucket' : 'Add Bucket';
+    el.bucketName.value = bucket ? bucket.name : '';
+    el.bucketRole.value = bucket ? bucket.role : 'LIQUID_ASSETS';
+    el.bucketAssetTag.value = bucket ? (bucket.assetTag || '') : '';
+    el.bucketCurrency.value = bucket ? (bucket.currency || '') : '';
+    el.bucketMonthlyLimit.value = bucket && money2(bucket.monthlyLimit) > 0 ? String(bucket.monthlyLimit) : '';
+    el.bucketMethod.value = bucket ? bucket.method : '';
+    el.bucketIdentifier.value = bucket ? bucket.identifier : '';
+    el.bucketLast4.value = bucket ? bucket.last4 : '';
+    el.bucketNotes.value = bucket ? bucket.notes : '';
+    syncBucketRoleFields();
+    setBucketFormMsg('');
+    el.bucketModal.hidden = false;
+    el.bucketName.focus();
+  }
+
+  function closeBucketModal() {
+    if (el.bucketModal) el.bucketModal.hidden = true;
+  }
+
+  function setMoneyFormMsg(text, kind) {
+    if (!el.moneyFormMsg) return;
+    el.moneyFormMsg.textContent = text || '';
+    el.moneyFormMsg.className = 'msg' + (text ? (kind === 'error' ? ' err' : ' ok') : '');
+  }
+
+  function openMoneyModal(entry) {
+    if (!el.moneyModal) return;
+    if (!money.buckets.filter(function (b) { return !b.archived; }).length) {
+      toast('Add a bucket first, then record money against it.', 'warning');
+      return;
+    }
+    el.moneyEditId.value = entry ? entry.id : '';
+    el.moneyModalTitle.textContent = entry ? 'Edit Money' : 'Add Money';
+    el.moneyDirection.value = entry ? entry.direction : 'OUT';
+    el.moneyAmount.value = entry ? String(entry.amount) : '';
+    setMoneyBucketOptions(entry ? entry.bucketId : null);
+    el.moneyScope.value = entry ? entry.scope : 'PERSONAL';
+    el.moneyCategory.value = entry ? entry.category : '';
+    el.moneyDate.value = entry ? entry.occurredOn : new Date().toISOString().slice(0, 10);
+    el.moneyNote.value = entry ? entry.note : '';
+    setMoneyFormMsg('');
+    el.moneyModal.hidden = false;
+    el.moneyAmount.focus();
+  }
+
+  function closeMoneyModal() {
+    if (el.moneyModal) el.moneyModal.hidden = true;
+  }
+
+  function findMoneyEntry(id) {
+    var found = null;
+    money.entries.forEach(function (row) {
+      if (row.id === id) found = row;
+    });
+    return found;
+  }
+
+  function findBucket(id) {
+    var found = null;
+    money.buckets.forEach(function (b) {
+      if (b.id === id) found = b;
+    });
+    return found;
+  }
+
+  async function submitBucketForm(e) {
+    e.preventDefault();
+    var editing = el.bucketEditId.value;
+    var body = {
+      name: el.bucketName.value.trim(),
+      role: el.bucketRole.value,
+      asset_tag: el.bucketRole.value === 'LIQUID_ASSETS' ? el.bucketAssetTag.value : '',
+      currency: el.bucketCurrency.value.trim().toUpperCase(),
+      monthly_limit: el.bucketRole.value === 'PERSONAL_SPENDING' ? el.bucketMonthlyLimit.value.trim() : '0',
+      method: el.bucketMethod.value.trim(),
+      identifier: el.bucketIdentifier.value.trim(),
+      last4: el.bucketLast4.value.trim(),
+      notes: el.bucketNotes.value.trim()
+    };
+    if (!body.name) {
+      setBucketFormMsg('Give the bucket a name.', 'error');
+      return;
+    }
+    el.bucketSubmitBtn.disabled = true;
+    try {
+      await api('/api/money?op=bucket' + (editing ? '&id=' + encodeURIComponent(editing) : ''), {
+        method: editing ? 'PATCH' : 'POST',
+        body: body
+      });
+      closeBucketModal();
+      toast(editing ? 'Bucket updated.' : 'Bucket added.', 'success');
+      await loadMoney();
+    } catch (err) {
+      setBucketFormMsg(err.message || 'Could not save the bucket.', 'error');
+    } finally {
+      el.bucketSubmitBtn.disabled = false;
+    }
+  }
+
+  async function submitMoneyForm(e) {
+    e.preventDefault();
+    var editing = el.moneyEditId.value;
+    var body = {
+      direction: el.moneyDirection.value,
+      amount: el.moneyAmount.value,
+      bucketId: el.moneyBucket.value,
+      scope: el.moneyScope.value,
+      category: el.moneyCategory.value.trim(),
+      occurredOn: el.moneyDate.value,
+      note: el.moneyNote.value.trim()
+    };
+    if (!(money2(body.amount) > 0)) {
+      setMoneyFormMsg('Enter an amount greater than zero.', 'error');
+      return;
+    }
+    if (!body.bucketId) {
+      setMoneyFormMsg('Choose which bucket this went through.', 'error');
+      return;
+    }
+    // The bucket's role decides the scope, so a personal bucket cannot end up
+    // with BUSINESS money in it and quietly corrupt the month report.
+    var chosen = findBucket(body.bucketId);
+    if (chosen && chosen.role === 'PERSONAL_SPENDING' && body.scope !== 'PERSONAL') {
+      body.scope = 'PERSONAL';
+      el.moneyScope.value = 'PERSONAL';
+      setMoneyFormMsg('That is a personal bucket, so this was recorded as personal spending.', 'error');
+    } else if (chosen && chosen.role === 'TRADING_CAPITAL' && body.scope !== 'BUSINESS') {
+      body.scope = 'BUSINESS';
+      el.moneyScope.value = 'BUSINESS';
+      setMoneyFormMsg('That is the trading bucket, so this was recorded as trading money.', 'error');
+    }
+    el.moneySubmitBtn.disabled = true;
+    try {
+      await api('/api/money?op=entry' + (editing ? '&id=' + encodeURIComponent(editing) : ''), {
+        method: editing ? 'PATCH' : 'POST',
+        body: body
+      });
+      closeMoneyModal();
+      toast(editing ? 'Entry updated.' : 'Money recorded.', 'success');
+      await loadMoney();
+    } catch (err) {
+      var lim = err.detail && err.detail.limit;
+      if (err.status === 409 && lim && lim.over) {
+        // The cap asks, it does not forbid. Someone who has already paid for
+        // something must always be able to record it, so the offer to go ahead
+        // is right there instead of behind a re-read of the rules.
+        var msg = 'That takes you to ' + money2(lim.after).toFixed(2) + ' ' + (lim.currency || '')
+          + ' of ' + money2(lim.limit).toFixed(2) + ' this month. ';
+        if (confirm(msg + 'Record it anyway?')) {
+          try {
+            await api('/api/money?op=entry', { method: 'POST', body: Object.assign({}, body, { allowOver: true }) });
+            closeMoneyModal();
+            toast('Recorded, over the limit.', 'success');
+            await loadMoney();
+            return;
+          } catch (err2) {
+            setMoneyFormMsg(err2.message || 'Could not save the entry.', 'error');
+            return;
+          }
+        }
+        setMoneyFormMsg(msg + 'Not saved.', 'error');
+        return;
+      }
+      setMoneyFormMsg(err.message || 'Could not save the entry.', 'error');
+    } finally {
+      el.moneySubmitBtn.disabled = false;
+    }
+  }
+
+  /* ---------------- set balance, move money, sell crypto ---------------- */
+
+  function setBalanceMsg(text, kind) {
+    if (!el.balanceFormMsg) return;
+    el.balanceFormMsg.textContent = text || '';
+    el.balanceFormMsg.className = 'msg' + (text ? (kind === 'error' ? ' err' : ' ok') : '');
+  }
+
+  function openBalanceModal(bucket) {
+    if (!el.balanceModal || !bucket) return;
+    el.balanceBucketId.value = bucket.id;
+    if (el.balanceCurrent) el.balanceCurrent.textContent = moneyCur(bucket.currency, bucket.balance);
+    el.balanceAmount.value = '';
+    setBalanceMsg('');
+    el.balanceModal.hidden = false;
+    el.balanceAmount.focus();
+  }
+
+  function closeBalanceModal() {
+    if (el.balanceModal) el.balanceModal.hidden = true;
+  }
+
+  async function submitBalanceForm(e) {
+    e.preventDefault();
+    var bucketId = el.balanceBucketId.value;
+    var bucket = findBucket(bucketId);
+    if (!bucket) {
+      setBalanceMsg('That bucket is no longer here. Refresh and try again.', 'error');
+      return;
+    }
+    var value = el.balanceAmount.value.trim();
+    if (value === '') {
+      setBalanceMsg('Enter the balance you actually have.', 'error');
+      return;
+    }
+    if (!isFinite(Number(value))) {
+      setBalanceMsg('Enter the balance as a number, for example 123.45.', 'error');
+      return;
+    }
+    el.balanceSubmitBtn.disabled = true;
+    try {
+      var res = await api('/api/money?op=adjust', {
+        method: 'POST',
+        body: { bucket_id: bucketId, balance: value, scope: bucket.role === 'TRADING_CAPITAL' ? 'BUSINESS' : 'PERSONAL' }
+      });
+      closeBalanceModal();
+      var d = res.data || {};
+      toast(d.changed
+        ? ('Balance corrected by ' + moneyCur(bucket.currency, Math.abs(d.delta || 0)) + '.')
+        : 'That already matched, so nothing was changed.', 'success');
+      await loadMoney();
+    } catch (err) {
+      setBalanceMsg(err.message || 'Could not set the balance.', 'error');
+    } finally {
+      el.balanceSubmitBtn.disabled = false;
+    }
+  }
+
+  // Populate a picker with buckets, optionally restricted to one currency. Used
+  // so the transfer form cannot offer a pairing the server will reject.
+  function fillBucketSelect(select, list, selected, placeholder) {
+    if (!select) return;
+    var html = placeholder ? '<option value="">' + esc(placeholder) + '</option>' : '';
+    html += (list || []).map(function (b) {
+      return '<option value="' + esc(b.id) + '">' + esc(b.name) + ' (' + esc(b.currency || '—') + ')</option>';
+    }).join('');
+    select.innerHTML = html;
+    if (selected) select.value = selected;
+  }
+
+  function transferCurrency() {
+    var from = findBucket(el.transferFrom ? el.transferFrom.value : '');
+    return from ? from.currency : null;
+  }
+
+  // Keep both ends of a transfer on one currency. Changing "from" re-filters
+  // "to" rather than leaving an impossible pair selected.
+  function syncTransferTargets() {
+    var live = moneyLiveBuckets();
+    var cur = transferCurrency();
+    var fromId = el.transferFrom ? el.transferFrom.value : '';
+    fillBucketSelect(el.transferFrom, live, fromId, null);
+    var same = live.filter(function (b) { return b.currency === cur && b.id !== fromId; });
+    fillBucketSelect(el.transferTo, same, null, same.length ? null : 'No other bucket in ' + (cur || 'this currency'));
+    if (el.transferTo) el.transferTo.disabled = same.length === 0;
+  }
+
+  function openTransferModal() {
+    if (!el.transferModal) return;
+    var live = moneyLiveBuckets();
+    if (live.length < 2) {
+      toast('You need at least two buckets to move money between them.', 'warning');
+      return;
+    }
+    el.transferAmount.value = '';
+    el.transferNote.value = '';
+    setTransferMsg('');
+    el.transferModal.hidden = false;
+    syncTransferTargets();
+    el.transferFrom.focus();
+  }
+
+  function closeTransferModal() {
+    if (el.transferModal) el.transferModal.hidden = true;
+  }
+
+  function setTransferMsg(text, kind) {
+    if (!el.transferFormMsg) return;
+    el.transferFormMsg.textContent = text || '';
+    el.transferFormMsg.className = 'msg' + (text ? (kind === 'error' ? ' err' : ' ok') : '');
+  }
+
+  async function submitTransferForm(e) {
+    e.preventDefault();
+    var body = {
+      from_bucket_id: el.transferFrom.value,
+      to_bucket_id: el.transferTo.value,
+      amount: el.transferAmount.value,
+      note: el.transferNote.value.trim()
+    };
+    if (!body.from_bucket_id || !body.to_bucket_id) {
+      setTransferMsg('Choose where the money is coming from and going to.', 'error');
+      return;
+    }
+    if (!(money2(body.amount) > 0)) {
+      setTransferMsg('Enter an amount greater than zero.', 'error');
+      return;
+    }
+    el.transferSubmitBtn.disabled = true;
+    try {
+      var res = await api('/api/money?op=transfer', { method: 'POST', body: body });
+      closeTransferModal();
+      toast((res.data && res.data.message) || 'Money moved.', 'success');
+      await loadMoney();
+    } catch (err) {
+      setTransferMsg(err.message || 'Could not move the money.', 'error');
+    } finally {
+      el.transferSubmitBtn.disabled = false;
+    }
+  }
+
+  function openConvertModal() {
+    if (!el.convertModal) return;
+    var live = moneyLiveBuckets();
+    var crypto = live.filter(function (b) { return b.assetTag === 'CRYPTO'; });
+    var cash = live.filter(function (b) { return b.assetTag === 'LOCAL_CASH'; });
+    if (!crypto.length || !cash.length) {
+      toast('Mark one bucket Crypto and another Local cash to sell between them.', 'warning');
+      return;
+    }
+    fillBucketSelect(el.convertFrom, crypto, null, null);
+    fillBucketSelect(el.convertTo, cash, null, null);
+    el.convertSold.value = '';
+    el.convertReceived.value = '';
+    el.convertRate.value = '';
+    el.convertFee.value = '';
+    el.convertDate.value = new Date().toISOString().slice(0, 10);
+    el.convertNote.value = '';
+    setConvertMsg('');
+    el.convertModal.hidden = false;
+    el.convertSold.focus();
+  }
+
+  function closeConvertModal() {
+    if (el.convertModal) el.convertModal.hidden = true;
+  }
+
+  function setConvertMsg(text, kind) {
+    if (!el.convertFormMsg) return;
+    el.convertFormMsg.textContent = text || '';
+    el.convertFormMsg.className = 'msg' + (text ? (kind === 'error' ? ' err' : ' ok') : '');
+  }
+
+  async function submitConvertForm(e) {
+    e.preventDefault();
+    var body = {
+      from_bucket_id: el.convertFrom.value,
+      to_bucket_id: el.convertTo.value,
+      crypto_amount_sold: el.convertSold.value,
+      local_currency_received: el.convertReceived.value,
+      exchange_rate: el.convertRate.value.trim(),
+      fee: el.convertFee.value.trim(),
+      occurredOn: el.convertDate.value,
+      note: el.convertNote.value.trim()
+    };
+    if (!(money2(body.crypto_amount_sold) > 0)) {
+      setConvertMsg('Enter how much crypto you sold.', 'error');
+      return;
+    }
+    if (!(money2(body.local_currency_received) > 0)) {
+      setConvertMsg('Enter how much cash you got for it.', 'error');
+      return;
+    }
+    el.convertSubmitBtn.disabled = true;
+    try {
+      var res = await api('/api/money?op=crypto_convert', { method: 'POST', body: body });
+      closeConvertModal();
+      var d = res.data || {};
+      // A rate that disagrees with the money is reported, not corrected: the gap
+      // is the fee that was really paid, and hiding it would lose that.
+      toast((d.message || 'Recorded.') + (d.mismatch ? ' That rate does not match what you received, so it was recorded as it happened.' : ''), d.mismatch ? 'warning' : 'success');
+      await loadMoney();
+    } catch (err) {
+      setConvertMsg(err.message || 'Could not record the sale.', 'error');
+    } finally {
+      el.convertSubmitBtn.disabled = false;
+    }
+  }
+
+  async function moneyAction(act, id) {
+    if (act === 'set-balance') {
+      var sb = findBucket(id);
+      if (sb) openBalanceModal(sb);
+      return;
+    }
+    if (act === 'edit-bucket') {
+      var b = findBucket(id);
+      if (b) openBucketModal(b);
+      return;
+    }
+    if (act === 'archive-bucket') {
+      var target = findBucket(id);
+      if (!target) return;
+      try {
+        await api('/api/money?op=bucket&id=' + encodeURIComponent(id), {
+          method: 'PATCH',
+          body: { archived: !target.archived }
+        });
+        toast(target.archived ? 'Bucket restored.' : 'Bucket archived.', 'success');
+        await loadMoney();
+      } catch (err) {
+        toast(err.message || 'Could not update the bucket.', 'error');
+      }
+      return;
+    }
+    if (act === 'delete-bucket') {
+      var doomed = findBucket(id);
+      if (!doomed) return;
+      if (!confirm('Delete "' + doomed.name + '"? This cannot be undone.')) return;
+      try {
+        await api('/api/money?op=bucket&id=' + encodeURIComponent(id), { method: 'DELETE' });
+        toast('Bucket deleted.', 'success');
+        await loadMoney();
+      } catch (err) {
+        // The server refuses to delete a bucket that has history, because that
+        // would silently rewrite past months. Point at archiving instead.
+        toast(err.message || 'Could not delete the bucket.', 'error');
+      }
+      return;
+    }
+    if (act === 'edit-entry') {
+      var entry = findMoneyEntry(id);
+      if (entry) openMoneyModal(entry);
+      return;
+    }
+    if (act === 'delete-entry') {
+      var row = findMoneyEntry(id);
+      if (!row) return;
+      var label = row.note || row.category || 'this entry';
+      if (!confirm('Delete ' + label + '?')) return;
+      try {
+        var res = await api('/api/money?op=entry&id=' + encodeURIComponent(id), { method: 'DELETE' });
+        toast((res.data && res.data.note) || 'Entry deleted.', 'success');
+        await loadMoney();
+      } catch (err) {
+        toast(err.message || 'Could not delete the entry.', 'error');
+      }
+    }
+  }
+
   // Badge groups, ordered the way the main profile tool draws a profile: the
   // account badges in Discord flag order first, then Nitro, then Server Boost,
   // then the gift tier last. The same sequence means the picker reads top to
@@ -1071,6 +2069,33 @@
     var v = Number(n);
     if (isNaN(v)) v = 0;
     return '$' + v.toFixed(2);
+  }
+
+  // Money on this page is not all in dollars, so the code is printed instead of
+  // a "$" that would be a lie for anything but USD. A code is unambiguous even
+  // when it is not a real currency, which matters because the bucket form lets
+  // the operator type their own.
+  function moneyCur(currency, n) {
+    var v = Number(n);
+    if (isNaN(v)) v = 0;
+    var code = String(currency || '').trim() || '—';
+    return esc(code) + ' ' + v.toFixed(2);
+  }
+
+  // A per-currency list rendered as one block per currency. Used by the tiles,
+  // where adding two currencies together would be meaningless.
+  function moneyCurLines(list, emptyText) {
+    var rows = (list || []).filter(function (r) { return r; });
+    if (!rows.length) {
+      return '<div class="money-cur-none">' + esc(emptyText || 'Nothing yet') + '</div>';
+    }
+    return rows.map(function (r) {
+      return '<div class="money-cur-line">'
+        + '<span class="money-cur-code">' + esc(r.currency || '—') + '</span>'
+        + '<span class="money-cur-amt' + (r.balance < 0 ? ' net-negative' : '') + '">'
+        + esc(money2(r.balance).toFixed(2)) + '</span>'
+        + '</div>';
+    }).join('');
   }
 
   // Backed by a comma-joined hidden input. Dedupe here as well so a legacy
@@ -2063,6 +3088,132 @@
     if (el.soldForm) {
       el.soldForm.addEventListener('submit', submitSoldForm);
     }
+
+    /* -------- money page -------- */
+    if (el.moneyRefreshBtn) {
+      el.moneyRefreshBtn.addEventListener('click', loadMoney);
+    }
+    if (el.addBucketBtn) {
+      el.addBucketBtn.addEventListener('click', function () { openBucketModal(null); });
+    }
+    if (el.addEntryBtn) {
+      el.addEntryBtn.addEventListener('click', function () { openMoneyModal(null); });
+    }
+    if (el.bucketForm) {
+      el.bucketForm.addEventListener('submit', submitBucketForm);
+    }
+    if (el.moneyForm) {
+      el.moneyForm.addEventListener('submit', submitMoneyForm);
+    }
+    if (el.bucketCancelBtn) {
+      el.bucketCancelBtn.addEventListener('click', closeBucketModal);
+    }
+    if (el.moneyCancelBtn) {
+      el.moneyCancelBtn.addEventListener('click', closeMoneyModal);
+    }
+    if (el.bucketModal) {
+      el.bucketModal.addEventListener('click', function (e) {
+        if (e.target === el.bucketModal) closeBucketModal();
+      });
+    }
+    if (el.moneyModal) {
+      el.moneyModal.addEventListener('click', function (e) {
+        if (e.target === el.moneyModal) closeMoneyModal();
+      });
+    }
+    // --- set balance ---
+    if (el.openTransferBtn) {
+      el.openTransferBtn.addEventListener('click', openTransferModal);
+    }
+    if (el.openConvertBtn) {
+      el.openConvertBtn.addEventListener('click', openConvertModal);
+    }
+    if (el.balanceForm) el.balanceForm.addEventListener('submit', submitBalanceForm);
+    if (el.balanceCancelBtn) el.balanceCancelBtn.addEventListener('click', closeBalanceModal);
+    if (el.balanceModal) {
+      el.balanceModal.addEventListener('click', function (e) {
+        if (e.target === el.balanceModal) closeBalanceModal();
+      });
+    }
+    // Presets fill the field but never submit, so a stray tap cannot write a
+    // balance the operator did not mean to set.
+    if (el.balanceForm) {
+      el.balanceForm.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-balance-preset]');
+        if (!btn) return;
+        var preset = btn.getAttribute('data-balance-preset');
+        var bucket = findBucket(el.balanceBucketId.value);
+        if (preset === 'current') {
+          el.balanceAmount.value = bucket ? String(money2(bucket.balance)) : '';
+        } else {
+          el.balanceAmount.value = preset;
+        }
+        el.balanceAmount.focus();
+      });
+    }
+    // --- transfer ---
+    if (el.transferForm) el.transferForm.addEventListener('submit', submitTransferForm);
+    if (el.transferCancelBtn) el.transferCancelBtn.addEventListener('click', closeTransferModal);
+    if (el.transferFrom) el.transferFrom.addEventListener('change', syncTransferTargets);
+    if (el.transferModal) {
+      el.transferModal.addEventListener('click', function (e) {
+        if (e.target === el.transferModal) closeTransferModal();
+      });
+    }
+    // --- convert ---
+    if (el.convertForm) el.convertForm.addEventListener('submit', submitConvertForm);
+    if (el.convertCancelBtn) el.convertCancelBtn.addEventListener('click', closeConvertModal);
+    if (el.convertModal) {
+      el.convertModal.addEventListener('click', function (e) {
+        if (e.target === el.convertModal) closeConvertModal();
+      });
+    }
+    // Showing or hiding the asset tag and the limit with the role keeps the form
+    // from asking for a field that would be ignored.
+    if (el.bucketRole) el.bucketRole.addEventListener('change', syncBucketRoleFields);
+    // Delegated, because both the bucket grid and the entry table are re-rendered
+    // wholesale on every load.
+    if (el.moneyBucketGrid) {
+      el.moneyBucketGrid.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-money-act]');
+        if (btn) moneyAction(btn.getAttribute('data-money-act'), btn.getAttribute('data-id'));
+      });
+    }
+    if (el.moneyBody) {
+      el.moneyBody.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-money-act]');
+        if (btn) moneyAction(btn.getAttribute('data-money-act'), btn.getAttribute('data-id'));
+      });
+    }
+    if (el.moneySearch) {
+      el.moneySearch.addEventListener('input', function () {
+        money.query = el.moneySearch.value || '';
+        renderMoneyEntries();
+      });
+    }
+    document.querySelectorAll('[data-money-filter]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        money.filter = chip.getAttribute('data-money-filter');
+        document.querySelectorAll('[data-money-filter]').forEach(function (c) {
+          var on = c === chip;
+          c.classList.toggle('chip-active', on);
+          c.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        renderMoneyEntries();
+      });
+    });
+    // Keyboard parity with the accounts tiles, since these are real buttons.
+    document.querySelectorAll('.money-stats [data-money-kpi]').forEach(function (card) {
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openMoneyKpiModal(card.getAttribute('data-money-kpi'));
+        }
+      });
+      card.addEventListener('click', function () {
+        openMoneyKpiModal(card.getAttribute('data-money-kpi'));
+      });
+    });
     // Keep the outstanding balance visible while the operator types, in both
     // the sold dialog and the account editor.
     wireBalanceHint(el.soldPrice, el.soldPaidFirst, el.soldPaidSecond, el.soldBalanceHint);
@@ -2175,6 +3326,25 @@
       }
       if (e.key === 'Escape' && el.kpiModal && !el.kpiModal.hidden) {
         closeKpiModal();
+      }
+      // Money dialogs are on their own page, so they cannot collide with the
+      // account or sold dialogs above. Checked last so Escape stays unambiguous.
+      if (e.key === 'Escape' && el.bucketModal && !el.bucketModal.hidden) {
+        closeBucketModal();
+      }
+      if (e.key === 'Escape' && el.moneyModal && !el.moneyModal.hidden) {
+        closeMoneyModal();
+      }
+      // The three money dialogs are mutually exclusive by construction, so they
+      // can share one Escape branch. Only the open one is closed.
+      if (e.key === 'Escape' && el.balanceModal && !el.balanceModal.hidden) {
+        closeBalanceModal();
+      }
+      if (e.key === 'Escape' && el.transferModal && !el.transferModal.hidden) {
+        closeTransferModal();
+      }
+      if (e.key === 'Escape' && el.convertModal && !el.convertModal.hidden) {
+        closeConvertModal();
       }
     });
   }
