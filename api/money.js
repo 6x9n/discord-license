@@ -106,12 +106,11 @@ function assetTag(raw) {
 // balance and a stray paste should not be able to fill the table.
 function currencyCode(raw) {
   const code = String(raw == null ? '' : raw).trim().toUpperCase();
-  if (!code) return '';
-  if (code.length > 8) throw badRequest('Currency is too long (max 8 characters), e.g. USDT or EGP.');
-  if (!/^[A-Z0-9._-]+$/.test(code)) {
-    throw badRequest('Currency may only use letters, numbers, dot, dash or underscore.');
-  }
-  return code;
+  if (!code) return 'USDT';
+  // Only USDT and EGP. Simpler, fewer mistakes, and the sales sync always lands in USDT.
+  if (code === 'USDT') return 'USDT';
+  if (code === 'EGP') return 'EGP';
+  throw badRequest('Currency must be USDT or EGP.');
 }
 
 // Accepts the loose truthy spellings a checkbox or query string produces.

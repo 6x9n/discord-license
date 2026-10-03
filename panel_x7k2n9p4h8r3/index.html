@@ -264,25 +264,25 @@
         </header>
 
         <div class="stats acc-stats money-stats">
-          <div class="stat stat-open" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Show what liquid assets are made of" data-money-kpi="liquid">
+          <div class="stat stat-open" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Total USDT Wallet" data-money-kpi="usdt">
             <div class="stat-icon dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M16 12h.01"/></svg></div>
-            <div id="moneyStatLiquid" class="stat-num money-cur-block"></div>
-            <div class="stat-label">Liquid assets</div>
+            <div id="moneyStatUSDT" class="stat-num">$0.00</div>
+            <div class="stat-label">Total USDT Wallet</div>
           </div>
-          <div class="stat stat-open" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Show trading capital" data-money-kpi="trading">
+          <div class="stat stat-open" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Local Cash EGP" data-money-kpi="egp">
             <div class="stat-icon ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-            <div id="moneyStatTrading" class="stat-num money-cur-block"></div>
-            <div class="stat-label">Trading capital</div>
+            <div id="moneyStatEGP" class="stat-num">EGP 0.00</div>
+            <div class="stat-label">Local Cash (EGP)</div>
           </div>
-          <div class="stat stat-open" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Show personal money" data-money-kpi="personal">
+          <div class="stat stat-open" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Personal money" data-money-kpi="personal">
             <div class="stat-icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
-            <div id="moneyStatPersonal" class="stat-num money-cur-block"></div>
-            <div class="stat-label">Personal</div>
+            <div id="moneyStatSafeSimple" class="stat-num">EGP 0.00</div>
+            <div class="stat-label">Personal Safe-to-Spend</div>
           </div>
-          <div class="stat stat-open" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Show how much is safe to spend" data-money-kpi="safe">
+          <div class="stat stat-open" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Personal Safe-to-Spend" data-money-kpi="safe">
             <div class="stat-icon accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><path d="M16 12h.01"/><path d="M16 7h.01"/></svg></div>
-            <div id="moneyStatSafe" class="stat-num money-cur-block"></div>
-            <div class="stat-label">Safe to spend</div>
+            <div id="moneyStatSafeSimple" class="stat-num">EGP 0.00</div>
+            <div class="stat-label">Personal Safe-to-Spend</div>
           </div>
         </div>
 
@@ -737,12 +737,14 @@
         </div>
         <div class="form-field">
           <label class="field-label" for="bucketCurrency">Currency</label>
-          <input id="bucketCurrency" class="input" type="text" maxlength="8" list="moneyCurrencyList" placeholder="EGP" autocomplete="off">
+          <select id="bucketCurrency" class="input">
+            <option value="USDT">USDT</option>
+            <option value="EGP">EGP</option>
+          </select>
+          <!-- Only show USDT and EGP -->
           <datalist id="moneyCurrencyList">
-            <option value="EGP"></option>
             <option value="USDT"></option>
-            <option value="USD"></option>
-            <option value="EUR"></option>
+            <option value="EGP"></option>
           </datalist>
           <p class="field-hint">Buckets in different currencies are never added together.</p>
         </div>

@@ -37,10 +37,9 @@
       moneyRefreshBtn: g('moneyRefreshBtn'),
       addBucketBtn: g('addBucketBtn'),
       addEntryBtn: g('addEntryBtn'),
-      moneyStatLiquid: g('moneyStatLiquid'),
-      moneyStatTrading: g('moneyStatTrading'),
-      moneyStatPersonal: g('moneyStatPersonal'),
-      moneyStatSafe: g('moneyStatSafe'),
+      moneyStatUSDT: g('moneyStatUSDT'),
+      moneyStatEGP: g('moneyStatEGP'),
+      moneyStatSafeSimple: g('moneyStatSafeSimple'),
       moneyBucketGrid: g('moneyBucketGrid'),
       moneyBucketEmpty: g('moneyBucketEmpty'),
       moneyMonthBody: g('moneyMonthBody'),
@@ -1206,36 +1205,29 @@
   function renderMoneyKPIs() {
     var s = money.summary;
     if (!s) {
-      // Nothing loaded yet, or the tables are missing. Saying nothing is more
-      // honest than showing a zero that reads as "you have no money".
-      if (el.moneyStatLiquid) el.moneyStatLiquid.innerHTML = moneyCurLines([], 'Not loaded');
-      if (el.moneyStatTrading) el.moneyStatTrading.innerHTML = moneyCurLines([], 'Not loaded');
-      if (el.moneyStatPersonal) el.moneyStatPersonal.innerHTML = moneyCurLines([], 'Not loaded');
-      if (el.moneyStatSafe) el.moneyStatSafe.innerHTML = moneyCurLines([], 'Not loaded');
+      if (el.moneyStatUSDT) el.moneyStatUSDT.textContent = '$0.00';
+      if (el.moneyStatEGP) el.moneyStatEGP.textContent = 'EGP 0.00';
+      if (el.moneyStatSafeSimple) el.moneyStatSafeSimple.textContent = 'EGP 0.00';
       return;
     }
-    if (el.moneyStatLiquid) el.moneyStatLiquid.innerHTML = moneyCurLines(s.liquid, 'No liquid assets');
-    if (el.moneyStatTrading) el.moneyStatTrading.innerHTML = moneyCurLines(s.trading, 'No trading bucket');
-    if (el.moneyStatPersonal) el.moneyStatPersonal.innerHTML = moneyCurLines(s.personal, 'No personal bucket');
-    if (el.moneyStatSafe) {
-      // Safe to spend is the personal envelope, and it carries the cap and the
-      // state with it, because "you have 400 left" means little next to
-      // "you have 400 left of a 1000 budget".
-      var safe = s.safeToSpend || [];
-      el.moneyStatSafe.innerHTML = safe.length
-        ? safe.map(function (r) {
-            var cls = 'money-cur-line money-cur-' + (r.state || 'ok');
-            var sub = '';
-            if (r.limited) {
-              sub = '<span class="money-cur-sub">of ' + esc(r.limit.toFixed(2)) + ' · spent ' + esc(r.spentThisMonth.toFixed(2)) + '</span>';
-            }
-            return '<div class="' + cls + '">'
-              + '<span class="money-cur-code">' + esc(r.currency) + '</span>'
-              + '<span class="money-cur-amt' + (r.amount < 0 ? ' net-negative' : '') + '">' + esc(money2(r.amount).toFixed(2)) + '</span>'
-              + sub + '</div>';
-          }).join('')
-        : moneyCurLines([], 'No personal bucket');
-    }
+    // Total USDT: sum all buckets with currency USDT
+    var usdtTotal = 0;
+    (s.liquid || []).forEach(function (r) { if (r.currency === 'USDT') usdtTotal += money2(r.balance); });
+    (s.trading || []).forEach(function (r) { if (r.currency === 'USDT') usdtTotal += money2(r.balance); });
+    (s.personal || []).forEach(function (r) { if (r.currency === 'USDT') usdtTotal += money2(r.balance); });
+    if (el.moneyStatUSDT) el.moneyStatUSDT.textContent = '$' + usdtTotal.toFixed(2);
+
+    // Local Cash (EGP): sum all buckets with currency EGP (liquid/trading/personal)
+    var egpTotal = 0;
+    (s.liquid || []).forEach(function (r) { if (r.currency === 'EGP') egpTotal += money2(r.balance); });
+    (s.trading || []).forEach(function (r) { if (r.currency === 'EGP') egpTotal += money2(r.balance); });
+    (s.personal || []).forEach(function (r) { if (r.currency === 'EGP') egpTotal += money2(r.balance); });
+    if (el.moneyStatEGP) el.moneyStatEGP.textContent = 'EGP ' + egpTotal.toFixed(2);
+
+    // Personal Safe-to-Spend: show EGP safe-to-spend envelope
+    var safeEgp = 0;
+    (s.safeToSpend || []).forEach(function (r) { if (r.currency === 'EGP') safeEgp = money2(r.amount); });
+    if (el.moneyStatSafeSimple) el.moneyStatSafeSimple.textContent = 'EGP ' + safeEgp.toFixed(2);
   }
 
   // A missing migration gets its own explanation, with the exact file to run.
