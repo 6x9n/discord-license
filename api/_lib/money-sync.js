@@ -74,6 +74,23 @@ async function findBucketId() {
   return (any && any[0] && any[0].id) || null;
 }
 
+// Ensure sale revenue lands in the main USDT Wallet bucket. The account ledger
+// credits trading, but sales need to also feed the USDT total. We prefer a
+// bucket named exactly 'USDT Wallet', otherwise any LIQUID_ASSETS bucket in USDT.
+// If neither exists, we fall back to the trading bucket.
+async function findUSDTWalletId() {
+  const named = await rest(
+    "money_buckets?archived=eq.false&name=ilike." + encodeURIComponent('USDT Wallet') + "&select=id&limit=1",
+    {}
+  );
+  if (named && named[0] && named[0].id) return named[0].id;
+  const usdt = await rest(
+    "money_buckets?archived=eq.false&currency=eq.USDT&role=eq.LIQUID_ASSETS&select=id&order=created_at.asc&limit=1",
+    {}
+  );
+  if (usdt && usdt[0] && usdt[0].id) return usdt[0].id;
+  return await findBucketId();
+}
 async function findEntry(sourceKey) {
   const rows = await rest(
     'money_entries?source_key=eq.' + encodeURIComponent(sourceKey) + '&select=id,amount&limit=1',
@@ -189,7 +206,29 @@ async function syncAccountMoney(account, opts) {
         source: 'ACCOUNT_SALE',
         sourceKey: 'sale2:' + key,
         accountId: account.id
-      })
+      }),
+      usdtSaleFirst: await reconcile({
+        bucketId: await findUSDTWalletId(),
+        direction: 'IN',
+        amount: money(account.sell_paid_first),
+        category: CATEGORY_SALE,
+        occurredOn: soldAt || addedOn,
+        note: 'Sale Part 1 from ' + label,
+        source: 'ACCOUNT_SALE',
+        sourceKey: 'usdt:sale1:' + key,
+        accountId: account.id
+      }),
+      usdtSaleSecond: await reconcile({
+        bucketId: await findUSDTWalletId(),
+        direction: 'IN',
+        amount: money(account.sell_paid_second),
+        category: CATEGORY_SALE,
+        occurredOn: soldAt || addedOn,
+        note: 'Sale Part 2 from ' + label,
+        source: 'ACCOUNT_SALE',
+        sourceKey: 'usdt:sale2:' + key,
+        accountId: account.id
+      }),
     };
     return { ok: true, posted: posted, bucketId: bucketId };
   } catch (err) {
