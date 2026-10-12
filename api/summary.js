@@ -199,7 +199,11 @@ function sanitizeCreate(body) {
       return s === null || s < 0 ? 0 : s;
     })(),
     source: String(body.source || '').trim(),
-    notes: String(body.notes || '').trim()
+    notes: String(body.notes || '').trim(),
+    server_member_count: (function(){const m=Number(body.serverMemberCount||body.server_member_count); return isFinite(m)&&m>=0?m:null;})(),
+    server_boosts: (function(){const b=Number(body.serverBoosts||body.server_boosts); const allowed=[0,1,2,3,6,9,12,18,24]; return isFinite(b)&&allowed.includes(Math.trunc(b))?Math.trunc(b):null;})(),
+    server_name: String(body.serverName||body.server_name||'').trim(),
+    server_invite: String(body.serverInvite||body.server_invite||'').trim()
   };
   if (body.creationDate) {
     const ts = Date.parse(String(body.creationDate));
@@ -224,7 +228,11 @@ function sanitizeUpdate(body) {
     email_password: 'emailPassword',
     discord_password: 'discordPassword',
     source: 'source',
-    status_label: 'statusLabel'
+    status_label: 'statusLabel',
+    server_member_count: 'serverMemberCount',
+    server_boosts: 'serverBoosts',
+    server_name: 'serverName',
+    server_invite: 'serverInvite'
   };
   Object.keys(fieldAliases).forEach(function (key) {
     const camel = fieldAliases[key];
@@ -260,6 +268,26 @@ function sanitizeUpdate(body) {
     const n = Number(raw);
     if (isFinite(n) && n >= 0) patch[key === 'sellPaidFirst' ? 'sell_paid_first' : 'sell_paid_second'] = n;
   });
+  if (body.serverMemberCount !== undefined && body.serverMemberCount !== null && body.serverMemberCount !== '') {
+    const n = Number(body.serverMemberCount);
+    if (isFinite(n) && n >= 0) patch.server_member_count = n;
+  }
+  if (body.server_member_count !== undefined && body.server_member_count !== null && body.server_member_count !== '') {
+    const n = Number(body.server_member_count);
+    if (isFinite(n) && n >= 0) patch.server_member_count = n;
+  }
+  if (body.serverBoosts !== undefined && body.serverBoosts !== null && body.serverBoosts !== '') {
+    const n = Number(body.serverBoosts);
+    if (isFinite(n) && n >= 0) patch.server_boosts = n;
+  }
+  if (body.server_boosts !== undefined && body.server_boosts !== null && body.server_boosts !== '') {
+    const n = Number(body.server_boosts);
+    if (isFinite(n) && n >= 0) patch.server_boosts = n;
+  }
+  if (body.serverName !== undefined && body.serverName !== null) patch.server_name = String(body.serverName);
+  if (body.server_name !== undefined && body.server_name !== null) patch.server_name = String(body.server_name);
+  if (body.serverInvite !== undefined && body.serverInvite !== null) patch.server_invite = String(body.serverInvite);
+  if (body.server_invite !== undefined && body.server_invite !== null) patch.server_invite = String(body.server_invite);
   if (body.status) {
     const status = String(body.status).toUpperCase();
     if (status === 'AVAILABLE' || status === 'SOLD') {
