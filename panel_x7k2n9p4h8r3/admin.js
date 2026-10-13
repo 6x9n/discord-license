@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   'use strict';
 
   const SES_KEY = 'dmt.admin.secret';
@@ -152,6 +152,9 @@
       accNotes: g('accNotes'),
       accBadges: g('accBadges'),
       accCustomBadge: g('accCustomBadge'),
+      accServerName: g('accServerName'),
+      accServerInvite: g('accServerInvite'),
+      accServerMembers: g('accServerMembers'),
       accAddBadgeBtn: g('accAddBadgeBtn'),
       accBadgeGroups: g('accBadgeGroups'),
       accSelectedBadges: g('accSelectedBadges'),
@@ -304,10 +307,10 @@
 
   function fmtDate(iso) {
     if (!iso) {
-      return '—';
+      return '�';
     }
     const d = new Date(iso);
-    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    return isNaN(d.getTime()) ? '�' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
   function daysLeft(iso) {
@@ -397,12 +400,12 @@
       const tr = document.createElement('tr');
       const activations = (k.activationCount || 0);
       const maxAccounts = (k.max_activations || 1);
-      const duration = k.expires_at ? (daysLeft(k.expires_at) === null ? '—' : ((k.revoked ? '<span class="muted-text">' : '') + daysLeft(k.expires_at) + 'd' + (k.revoked ? '</span>' : ''))) : '<span class="badge badge-lifetime">Lifetime</span>';
+      const duration = k.expires_at ? (daysLeft(k.expires_at) === null ? '�' : ((k.revoked ? '<span class="muted-text">' : '') + daysLeft(k.expires_at) + 'd' + (k.revoked ? '</span>' : ''))) : '<span class="badge badge-lifetime">Lifetime</span>';
       const usedWidth = Math.min(100, Math.round((activations / maxAccounts) * 100));
       tr.innerHTML =
         '<td class="key-cell">' + esc(k.plain_key || k.key_hash) + '</td>' +
-        '<td>' + (esc(k.owner || '—')) + '</td>' +
-        '<td>' + esc(k.label || '—') + '</td>' +
+        '<td>' + (esc(k.owner || '�')) + '</td>' +
+        '<td>' + esc(k.label || '�') + '</td>' +
         '<td>' + duration + '</td>' +
         '<td>' + deviceText(k) + '</td>' +
         '<td>' + activationBadge(k) + '</td>' +
@@ -411,8 +414,8 @@
           '<span class="acc-count">' + usageText(k) + '</span>' +
         '</td>' +
         '<td>' + statusBadge(k) + '</td>' +
-        '<td>' + esc(k.last_validated_at ? fmtDate(k.last_validated_at) : '—') + '</td>' +
-        '<td>' + esc(k.created_at ? fmtDate(k.created_at) : '—') + '</td>' +
+        '<td>' + esc(k.last_validated_at ? fmtDate(k.last_validated_at) : '�') + '</td>' +
+        '<td>' + esc(k.created_at ? fmtDate(k.created_at) : '�') + '</td>' +
         '<td><div class="row-actions">' +
         '<button class="btn btn-ghost mini-btn" data-act="copy" data-id="' + esc(k.id) + '" title="Copy key">Copy</button>' +
         '<button class="btn btn-ghost mini-btn" data-act="extend" data-id="' + esc(k.id) + '" title="Add 30 days">+30d</button>' +
@@ -763,12 +766,12 @@
     sorted.forEach(function (p) {
       const tr = document.createElement('tr');
       tr.innerHTML =
-        '<td><strong>' + esc(p.name || '—') + '</strong></td>' +
+        '<td><strong>' + esc(p.name || '�') + '</strong></td>' +
         '<td>' + esc(String(p.max_accounts != null ? p.max_accounts : 1)) + '</td>' +
         '<td>' + esc(String(p.max_devices != null ? p.max_devices : 1)) + '</td>' +
         '<td>' + ((p.duration_days > 0) ? esc(String(p.duration_days)) : '<span class="badge badge-lifetime">Lifetime</span>') + '</td>' +
-        '<td class="preview-cell">' + ((p.notes && p.notes.trim()) ? '<button class="btn btn-ghost mini-btn" data-plan="preview" data-name="' + esc(p.name || '') + '">Preview</button>' : '<span class="muted-text">—</span>') + '</td>' +
-        '<td>' + esc(p.created_at ? fmtDate(p.created_at) : '—') + '</td>' +
+        '<td class="preview-cell">' + ((p.notes && p.notes.trim()) ? '<button class="btn btn-ghost mini-btn" data-plan="preview" data-name="' + esc(p.name || '') + '">Preview</button>' : '<span class="muted-text">�</span>') + '</td>' +
+        '<td>' + esc(p.created_at ? fmtDate(p.created_at) : '�') + '</td>' +
         '<td><div class="row-actions">' +
         '<button class="btn btn-ghost mini-btn" data-plan="edit" data-id="' + esc(p.id) + '">Edit</button>' +
         '<button class="btn btn-danger mini-btn" data-plan="delete" data-id="' + esc(p.id) + '">Delete</button>' +
@@ -793,7 +796,7 @@
     }
     el.planPreviewName.textContent = p.name || 'Plan';
     const duration = (p.duration_days > 0) ? (p.duration_days + ' days') : 'Lifetime';
-    el.planPreviewTag.textContent = (p.max_accounts != null ? p.max_accounts : 1) + ' accounts · ' + (p.max_devices != null ? p.max_devices : 1) + ' device' + ((p.max_devices != null ? p.max_devices : 1) === 1 ? '' : 's') + ' · ' + duration;
+    el.planPreviewTag.textContent = (p.max_accounts != null ? p.max_accounts : 1) + ' accounts � ' + (p.max_devices != null ? p.max_devices : 1) + ' device' + ((p.max_devices != null ? p.max_devices : 1) === 1 ? '' : 's') + ' � ' + duration;
     el.planPreviewStats.innerHTML = '' +
       '<div class="pp-stat"><span class="pp-label">Accounts</span><span class="pp-value">' + esc(String(p.max_accounts != null ? p.max_accounts : 1)) + '</span></div>' +
       '<div class="pp-stat"><span class="pp-label">Devices</span><span class="pp-value">' + esc(String(p.max_devices != null ? p.max_devices : 1)) + '</span></div>' +
@@ -1157,7 +1160,7 @@
   }
 
   function moneyDateLabel(iso) {
-    if (!iso) return '—';
+    if (!iso) return '�';
     var d = new Date(String(iso).slice(0, 10) + 'T00:00:00Z');
     if (isNaN(d.getTime())) return String(iso);
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -1246,7 +1249,7 @@
     if (b.method) bits.push(esc(b.method));
     if (b.identifier) bits.push(esc(b.identifier));
     if (b.last4) bits.push('ending ' + esc(b.last4));
-    var detail = bits.join(' · ');
+    var detail = bits.join(' � ');
     var cap = '';
     if (b.role === 'PERSONAL_SPENDING' && money2(b.monthlyLimit) > 0) {
       cap = '<div class="bucket-cap">Monthly limit ' + esc(moneyCur(b.currency, b.monthlyLimit)) + '</div>';
@@ -1341,11 +1344,11 @@
         + '<td data-label="Month"><div class="acc-val">' + esc(moneyMonthLabel(m.month)) + '</div></td>'
         // One row per month per currency, so the currency has to be on the row.
         // "Saved" only means anything within a single currency.
-        + '<td data-label="Currency"><div class="acc-val">' + esc(m.currency || '—') + '</div></td>'
+        + '<td data-label="Currency"><div class="acc-val">' + esc(m.currency || '�') + '</div></td>'
         + '<td data-label="From trading" class="num"><div class="acc-val">' + esc(moneyCur(m.currency, m.businessIn)) + '</div></td>'
         + '<td data-label="Trading cost" class="num"><div class="acc-val">' + esc(moneyCur(m.currency, -m.businessOut)) + '</div></td>'
         + '<td data-label="Spent in real life" class="num"><div class="acc-val">' + esc(moneyCur(m.currency, realLife)) + '</div></td>'
-        + '<td data-label="Moved between buckets" class="num"><div class="acc-val">' + (m.transferred ? esc(moneyCur(m.currency, m.transferred)) : '<span class="muted-text">—</span>') + '</div></td>'
+        + '<td data-label="Moved between buckets" class="num"><div class="acc-val">' + (m.transferred ? esc(moneyCur(m.currency, m.transferred)) : '<span class="muted-text">�</span>') + '</div></td>'
         + '<td data-label="Gained" class="num"><div class="acc-val">' + esc(moneyCur(m.currency, m.gained)) + '</div></td>'
         + '<td data-label="Saved" class="num"><div class="acc-val' + savedCls + '">' + esc(moneyCur(m.currency, m.saved)) + '</div></td>'
         + '</tr>';
@@ -1390,10 +1393,10 @@
       + '<td data-label="Bucket"><div class="acc-val">' + esc(row.bucketName)
       + (row.bucketCurrency ? ' <span class="cell-micro">' + esc(row.bucketCurrency) + '</span>' : '') + '</div></td>'
       + '<td data-label="Category"><div class="acc-val">' + esc(row.category) + '</div></td>'
-      + '<td data-label="Note"><div class="acc-val">' + (row.note ? esc(row.note) : '<span class="muted-text">—</span>')
+      + '<td data-label="Note"><div class="acc-val">' + (row.note ? esc(row.note) : '<span class="muted-text">�</span>')
       + tag + '</div></td>'
-      + '<td data-label="In" class="num"><div class="acc-val">' + (isIn ? esc(moneyCur(row.bucketCurrency, row.amount)) : '<span class="muted-text">—</span>') + '</div></td>'
-      + '<td data-label="Out" class="num"><div class="acc-val">' + (!isIn ? esc(moneyCur(row.bucketCurrency, row.amount)) : '<span class="muted-text">—</span>') + '</div></td>'
+      + '<td data-label="In" class="num"><div class="acc-val">' + (isIn ? esc(moneyCur(row.bucketCurrency, row.amount)) : '<span class="muted-text">�</span>') + '</div></td>'
+      + '<td data-label="Out" class="num"><div class="acc-val">' + (!isIn ? esc(moneyCur(row.bucketCurrency, row.amount)) : '<span class="muted-text">�</span>') + '</div></td>'
       + '<td class="money-actions"><div class="acc-actions">'
       // Only a manual entry may be edited here. An account row is owned by the
       // accounts table and a correction is recomputed by "Set balance", so an
@@ -1481,8 +1484,8 @@
             return b.handle === r.currency;
           }),
           note: r.limited
-            ? ('Limit ' + money2(r.limit).toFixed(2) + ' · already spent ' + money2(r.spentThisMonth).toFixed(2)
-              + ' this month' + (r.over ? ' · over budget' : ''))
+            ? ('Limit ' + money2(r.limit).toFixed(2) + ' � already spent ' + money2(r.spentThisMonth).toFixed(2)
+              + ' this month' + (r.over ? ' � over budget' : ''))
             : 'No limit set',
           state: r.state,
           over: r.over
@@ -1789,7 +1792,7 @@ function syncBucketRoleFields() {
     if (!select) return;
     var html = placeholder ? '<option value="">' + esc(placeholder) + '</option>' : '';
     html += (list || []).map(function (b) {
-      return '<option value="' + esc(b.id) + '">' + esc(b.name) + ' (' + esc(b.currency || '—') + ')</option>';
+      return '<option value="' + esc(b.id) + '">' + esc(b.name) + ' (' + esc(b.currency || '�') + ')</option>';
     }).join('');
     select.innerHTML = html;
     if (selected) select.value = selected;
@@ -2070,7 +2073,7 @@ function syncBucketRoleFields() {
   function moneyCur(currency, n) {
     var v = Number(n);
     if (isNaN(v)) v = 0;
-    var code = String(currency || '').trim() || '—';
+    var code = String(currency || '').trim() || '�';
     return esc(code) + ' ' + v.toFixed(2);
   }
 
@@ -2083,7 +2086,7 @@ function syncBucketRoleFields() {
     }
     return rows.map(function (r) {
       return '<div class="money-cur-line">'
-        + '<span class="money-cur-code">' + esc(r.currency || '—') + '</span>'
+        + '<span class="money-cur-code">' + esc(r.currency || '�') + '</span>'
         + '<span class="money-cur-amt' + (r.balance < 0 ? ' net-negative' : '') + '">'
         + esc(money2(r.balance).toFixed(2)) + '</span>'
         + '</div>';
@@ -2297,7 +2300,7 @@ function syncBucketRoleFields() {
     if (el.accStatOwed) el.accStatOwed.textContent = accMoney(owed);
     if (el.accStatOwedLabel) {
       el.accStatOwedLabel.textContent = unpaid > 1
-        ? 'Owed · ' + unpaid + ' accounts'
+        ? 'Owed � ' + unpaid + ' accounts'
         : 'Owed';
     }
   }
@@ -2348,7 +2351,7 @@ function syncBucketRoleFields() {
         var split = paySplit(r);
         return {
           raw: r.discord_id || '', label: label(r), handle: handle(r),
-          sub: 'of ' + accAmount(split.total) + (split.remaining > 0 ? ' · ' + accAmount(split.remaining) + ' still owed' : ''),
+          sub: 'of ' + accAmount(split.total) + (split.remaining > 0 ? ' � ' + accAmount(split.remaining) + ' still owed' : ''),
           amount: money2(split.first + split.second)
         };
       }).filter(function (i) { return i.amount !== 0; }).sort(byAmount);
@@ -2388,7 +2391,7 @@ function syncBucketRoleFields() {
         var got = money2(split.first + split.second);
         return {
           raw: r.discord_id || '', label: label(r), handle: handle(r),
-          sub: 'sold · received ' + accAmount(got) + ' of ' + accAmount(split.total),
+          sub: 'sold � received ' + accAmount(got) + ' of ' + accAmount(split.total),
           amount: money2(got - buy)
         };
       }).filter(function (i) { return i.amount !== 0; }).sort(byAmount);
@@ -2402,7 +2405,7 @@ function syncBucketRoleFields() {
 
   function kpiRowHtml(item) {
     var amt = item.amount === null
-      ? '<span class="muted-text">—</span>'
+      ? '<span class="muted-text">�</span>'
       : accAmount(item.amount);
     var cls = item.amount !== null && item.amount < 0 ? ' net-negative' : '';
     return '<div class="kpi-list-row">'
@@ -2560,7 +2563,7 @@ function syncBucketRoleFields() {
     var remaining = money2(total - first - second);
     if (remaining > 0) {
       hint.textContent = 'Part 2 agreed: ' + accMoney(money2(total - first))
-        + '  ·  still owed: ' + accMoney(remaining);
+        + '  �  still owed: ' + accMoney(remaining);
       hint.className = 'pay-balance pay-balance-due';
     } else if (remaining < 0) {
       hint.textContent = 'Overpaid by ' + accMoney(money2(-remaining)) + '.';
@@ -2603,7 +2606,7 @@ function syncBucketRoleFields() {
       // same as newly added ones.
       out.push(chip(badgeName(b)));
     });
-    var html = out.join('') || '<span class="muted-text">—</span>';
+    var html = out.join('') || '<span class="muted-text">�</span>';
     // Nitro expiry goes on its own line below the badges rather than in the
     // run of chips, so it cannot be read as one, and its colour shows how close
     // it is without anyone having to work the date out.
@@ -2632,7 +2635,7 @@ function syncBucketRoleFields() {
 
   function accSourceHtml(raw) {
     var v = String(raw || '').trim();
-    if (!v) return '<span class="muted-text">—</span>';
+    if (!v) return '<span class="muted-text">�</span>';
     if (/^https?:\/\//i.test(v)) {
       return '<a class="link" href="' + esc(v) + '" target="_blank" rel="noopener noreferrer">'
         + esc(v.replace(/^https?:\/\//i, '')) + '</a>';
@@ -2649,7 +2652,7 @@ function syncBucketRoleFields() {
   // Passwords are returned by the API in plaintext, so the cell starts masked
   // and only reveals on an explicit per-row click.
   function accPwCell(value, label) {
-    if (!value) return '<span class="muted-text">—</span>';
+    if (!value) return '<span class="muted-text">�</span>';
     return '<span class="pw-cell">'
       + '<span class="pw-mask" data-pw="' + esc(value) + '">' + MASKED_PW + '</span>'
       + '<button type="button" class="pw-reveal" data-reveal aria-label="Reveal ' + esc(label) + '">'
@@ -2680,7 +2683,7 @@ function syncBucketRoleFields() {
     var net = null;
     if (row.status === 'SOLD') net = (Number(row.sell_price) || 0) - (Number(row.buy_price) || 0);
     var netHtml = net === null
-      ? '<span class="muted-text">—</span>'
+      ? '<span class="muted-text">�</span>'
       : '<span class="' + (net < 0 ? 'net-negative' : 'net-positive') + '">' + accMoney(net) + '</span>';
 
     var identity = row.discord_id
@@ -2712,7 +2715,7 @@ function syncBucketRoleFields() {
       + '<div class="pw-row"><span class="pw-kind">Discord</span>' + accPwCell(row.discord_password, 'Discord password') + '</div>'
       + '</div>';
 
-    var payCell = row.status === 'SOLD' ? accMoney(row.sell_price) : '<span class="muted-text">—</span>';
+    var payCell = row.status === 'SOLD' ? accMoney(row.sell_price) : '<span class="muted-text">�</span>';
     var split = paySplit(row);
     // Show an outstanding balance on any sale, split or not, because an
     // unrecorded payment is the thing worth catching. An unsold account never
@@ -2737,7 +2740,7 @@ function syncBucketRoleFields() {
     // value sit right without a multi line value being split across the row.
     return '<tr>'
       + '<td data-label="Account"><div class="acc-val">' + identity + '</div></td>'
-      + '<td data-label="Email"><div class="acc-val"><span class="muted-text">' + esc(row.email || '—') + '</span></div></td>'
+      + '<td data-label="Email"><div class="acc-val"><span class="muted-text">' + esc(row.email || '�') + '</span></div></td>'
       + '<td data-label="Passwords"><div class="acc-val">' + pws + '</div></td>'
       + '<td data-label="Badges &amp; Nitro"><div class="acc-val"><div class="tag-row">' + accBadgesHtml(row) + '</div></div></td>'
       + '<td data-label="Status"><div class="acc-val">' + statusCell + '</div></td>'
@@ -2795,6 +2798,9 @@ function syncBucketRoleFields() {
       if (el.accDiscordId) el.accDiscordId.value = row.discord_id || '';
       if (el.accUsername) el.accUsername.value = row.username || '';
       if (el.accNitroEnds) el.accNitroEnds.value = row.nitro_ends ? String(row.nitro_ends).slice(0, 10) : '';
+      if (el.accServerName) el.accServerName.value = row.server_name || '';
+      if (el.accServerInvite) el.accServerInvite.value = row.server_invite || '';
+      if (el.accServerMembers) el.accServerMembers.value = row.server_member_count != null ? String(row.server_member_count) : '';
       if (el.accStatus) el.accStatus.value = row.status_label || '';
       if (el.accSource) el.accSource.value = row.source || '';
       if (el.accPaid) el.accPaid.value = row.buy_price != null ? Number(row.buy_price) : '';

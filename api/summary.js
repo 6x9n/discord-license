@@ -201,7 +201,7 @@ function sanitizeCreate(body) {
     source: String(body.source || '').trim(),
     notes: String(body.notes || '').trim(),
     server_member_count: (function(){const m=Number(body.serverMemberCount||body.server_member_count); return isFinite(m)&&m>=0?m:null;})(),
-    server_boosts: (function(){const b=Number(body.serverBoosts||body.server_boosts); const allowed=[0,1,2,3,6,9,12,18,24]; return isFinite(b)&&allowed.includes(Math.trunc(b))?Math.trunc(b):null;})(),
+    server_boosts: null,
     server_name: String(body.serverName||body.server_name||'').trim(),
     server_invite: String(body.serverInvite||body.server_invite||'').trim()
   };
