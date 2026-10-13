@@ -1,4 +1,4 @@
-window.CONFIG = {
+﻿window.CONFIG = {
   apiBase: '',
   trialDuration: 10 * 60 * 1000,
   offlineGraceMs: 24 * 60 * 60 * 1000,
@@ -6896,7 +6896,7 @@ window.manager = {
           id: g.id,
           raw: g,
           title: g.name || 'Server',
-          subtitle: 'ID: ' + g.id,
+          subtitle: (function(){var parts=[]; if(g.owner) parts.push('Owned'); if(g.premium_subscription_count || g.premium_tier || g.premiumSubscriptionCount || g.premiumTier) {var b=g.premium_subscription_count||g.premiumSubscriptionCount||0; var t=g.premium_tier||g.premiumTier||''; parts.push('Boost'+(t?': L'+t:'')+(b?(' ('+b+')'):'') ); } var m=g.member_count||g.approximate_member_count||g.members||g.memberCount; if(m!=null) parts.push(m+' members'); parts.push('ID: '+g.id); return parts.join(' \u00b7 ');})(),
           avatar: guildIconUrl(g, 128),
           initials: (g.name || 'S').slice(0, 1).toUpperCase(),
           isServer: true,
@@ -6912,7 +6912,7 @@ window.manager = {
           id: g.id,
           raw: g,
           title: g.name || 'Server',
-          subtitle: 'ID: ' + g.id,
+          subtitle: (function(){var parts=[]; if(g.owner) parts.push('Owned'); if(g.premium_subscription_count || g.premium_tier || g.premiumSubscriptionCount || g.premiumTier) {var b=g.premium_subscription_count||g.premiumSubscriptionCount||0; var t=g.premium_tier||g.premiumTier||''; parts.push('Boost'+(t?': L'+t:'')+(b?(' ('+b+')'):'') ); } var m=g.member_count||g.approximate_member_count||g.members||g.memberCount; if(m!=null) parts.push(m+' members'); parts.push('ID: '+g.id); return parts.join(' \u00b7 ');})(),
           avatar: guildIconUrl(g, 128),
           initials: (g.name || 'S').slice(0, 1).toUpperCase(),
           isServer: true,
