@@ -540,7 +540,6 @@ window.manager = {
     channels: [],
     userSettings: null,
     protobufSettings: null,
-    dmsClosed: false,
     dataLoaded: false,
     lastDataLoad: 0,
     lastLoadError: null,
@@ -1872,45 +1871,6 @@ window.manager = {
     renderProfileBadges();
   }
 
-  function updateDmButtonState(isClosed) {
-    const btn = byId('deleteDmCloseDmsBtn');
-    if (!btn) {
-      return;
-    }
-    // Reflect the real state. This used to hardcode "open", so the amber
-    // "already closed" styling in styles.css could never appear.
-    const closed = !!isClosed;
-    btn.setAttribute('data-dm-state', closed ? 'closed' : 'open');
-    btn.title = closed
-      ? 'DMs are currently closed. Run again to reopen them.'
-      : 'Close active DM conversations and hide them from the sidebar.';
-    btn.innerHTML = closed
-      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M9.5 15v1.5M14.5 15v1.5"/></svg><span>Reopen DMs</span>'
-      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 15v3"/></svg><span>Close DMs</span>';
-  }
-
-  function syncDmButton() {
-    if (state.user && state.user.id) {
-      const savedState = storageGet(localStorage, 'dsc_dms_closed_' + state.user.id);
-      if (savedState !== null) {
-        state.dmsClosed = savedState === 'true';
-      }
-    }
-    updateDmButtonState(state.dmsClosed);
-  }
-
-  function toggleDMs() {
-    if (!hasAccount()) {
-      toast('Please log in first.', 'error');
-      return;
-    }
-    if (state.running) {
-      toast('An operation is already running.', 'error');
-      return;
-    }
-    openOperationConfirmModal('Close DMs', buildCleanDMsItems, byId('deleteDmCloseDmsBtn'), 'Close active DM conversations and hide them from the sidebar.');
-  }
-
   function loadAccountData() {
     if (accountDataRequest) {
       return accountDataRequest;
@@ -1950,17 +1910,12 @@ window.manager = {
       state.guilds = guilds;
       state.rel = rel;
       state.channels = channels;
+      autoWhitelistBoostedServers();
       state.protobufSettings = protoSettingsRes && protoSettingsRes.status < 400 && protoSettingsRes.data
         ? protoSettingsRes.data
         : null;
       if (settingsRes && settingsRes.status < 400 && settingsRes.data) {
         state.userSettings = settingsRes.data;
-        const isRestricted = !!(settingsRes.data.default_guilds_restricted || (Array.isArray(settingsRes.data.restricted_guilds) && settingsRes.data.restricted_guilds.length > 0));
-        state.dmsClosed = isRestricted;
-        if (state.user && state.user.id) {
-          storageSet(localStorage, 'dsc_dms_closed_' + state.user.id, String(isRestricted));
-        }
-        updateDmButtonState(state.dmsClosed);
       }
       if (profileRes && profileRes.status < 400 && profileRes.data && typeof profileRes.data === 'object') {
         state.profileData = profileRes.data;
@@ -2064,7 +2019,6 @@ window.manager = {
     if (!hasAccount()) {
       return;
     }
-    syncDmButton();
     renderProfile(state.user);
     renderDetailsView();
     renderEvolutionView();
@@ -3085,6 +3039,36 @@ window.manager = {
     return 'friends';
   }
 
+  // A guild counts as boosted when the payload carries the current user's boost
+  // stamp (premium_since) or when the guild exposes boost badge data (premium
+  // tier / boost count). Boosted servers are auto-whitelisted so they are never
+  // removed by leave-server operations.
+  function isServerBoosted(guild) {
+    if (!guild) {
+      return false;
+    }
+    if (guild.premium_since || guild.user_premium_since || guild.boosted_since) {
+      return true;
+    }
+    const tier = Number(guild.premium_tier || guild.premiumTier || 0);
+    const boosts = Number(guild.premium_subscription_count || guild.premiumSubscriptionCount || 0);
+    return tier > 0 || boosts > 0;
+  }
+
+  function autoWhitelistBoostedServers() {
+    if (!state.user || !state.user.id) {
+      return;
+    }
+    (state.guilds || []).forEach(function (guild) {
+      if (!guild || !guild.id) {
+        return;
+      }
+      if (isServerBoosted(guild) && !inWl('servers', guild.id)) {
+        setWhitelist('servers', guild.id, true);
+      }
+    });
+  }
+
   function friendName(r) {
     return r && r.user && (r.user.username || 'user') + ' (' + r.id + ')';
   }
@@ -3423,376 +3407,9 @@ window.manager = {
     }];
   }
 
-  function channelDisplayName(c) {
-    if (!c) {
-      return 'Unknown channel';
-    }
-    if (c.type === 3) {
-      return c.name || 'Group Chat (' + ((c.recipients && c.recipients.length) || 0) + ' members)';
-    }
-    return (c.recipients && c.recipients[0] && (c.recipients[0].username || c.recipients[0].id)) || c.name || c.id || 'DM';
-  }
-
-  function searchOwnDMMessages(textQuery) {
-    const myId = state.user && state.user.id ? String(state.user.id) : '';
-    if (!myId) {
-      return Promise.reject(new Error('No account loaded.'));
-    }
-    const username = (state.user && (state.user.username || state.user.global_name)) || '';
-    if (!username) {
-      return Promise.reject(new Error('Cannot search: account has no username.'));
-    }
-    const cleanQuery = String(textQuery || '').trim();
-    const content = cleanQuery ? ('from:' + username + ' ' + cleanQuery) : ('from:' + username);
-    const collected = [];
-    const seen = {};
-    let pages = 0;
-    const MAX_PAGES = 2000;
-    function requestPage(cursor) {
-      const body = {
-        tabs: {
-          messages: {
-            sort_by: 'timestamp',
-            sort_order: 'desc',
-            content: content,
-            cursor: cursor || null,
-            limit: 25
-          }
-        },
-        track_exact_total_hits: false
-      };
-      return apiCall('POST', '/users/@me/messages/search/tabs', body).then(function (res) {
-        if (state.stopped) {
-          return null;
-        }
-        if (!res || res.status !== 200) {
-          const reason = (res && res.data && res.data.message) || 'Discord message search unavailable';
-          throw new Error(reason);
-        }
-        const data = res.data || {};
-        const tab = (data.tabs && data.tabs.messages) || {};
-        const groups = tab.messages;
-        if (!Array.isArray(groups)) {
-          if (pages === 0) {
-            throw new Error('Discord message search returned an unexpected response.');
-          }
-          return null;
-        }
-        const found = groups.reduce(function (acc, entry) {
-          return acc.concat(Array.isArray(entry) ? entry : [entry]);
-        }, []);
-        pages += 1;
-        let mine = 0;
-        found.forEach(function (m) {
-          if (m && m.id && m.author && String(m.author.id) === myId && !seen[m.id]) {
-            seen[m.id] = true;
-            mine += 1;
-            collected.push(m);
-          }
-        });
-        emitLine('Search page ' + pages + ': ' + found.length + ' result(s), ' + mine + ' of yours so far.');
-        if (pages >= MAX_PAGES) {
-          emitLine('Reached the search page limit (' + MAX_PAGES + '), stopping early.');
-          return null;
-        }
-        const next = tab.cursor || null;
-        if (!next || found.length === 0) {
-          return null;
-        }
-        return delay(Math.max(150, currentDelay())).then(function () {
-          return next;
-        });
-      });
-    }
-    function loop(cursor) {
-      if (state.stopped) {
-        return null;
-      }
-      return requestPage(cursor || null).then(function (next) {
-        if (!next) {
-          return null;
-        }
-        return loop(next);
-      });
-    }
-    return loop(null).then(function () {
-      emitLine('Search complete: ' + collected.length + ' of your message(s) across all DMs.');
-      return collected;
-    });
-  }
-
-  function groupOwnMessagesByChannel(messages) {
-    const groups = [];
-    const map = {};
-    messages.forEach(function (m) {
-      const channelId = m && (m.channel_id || m.channelId) ? String(m.channel_id || m.channelId) : '';
-      if (!channelId) {
-        return;
-      }
-      if (!map[channelId]) {
-        const ch = (state.channels || []).find(function (c) {
-          return String(c.id) === channelId;
-        }) || null;
-        map[channelId] = {
-          channel: ch,
-          channelId: channelId,
-          channelName: channelDisplayName(ch || { id: channelId, type: 1 }),
-          messages: []
-        };
-        groups.push(map[channelId]);
-      }
-      map[channelId].messages.push(m);
-    });
-    return groups;
-  }
-
-  function deleteAllViaChannelWalk() {
-    const items = buildDeleteAllDMsMessagesItems(true);
-    let seq = Promise.resolve();
-    items.forEach(function (item) {
-      seq = seq.then(function () {
-        if (state.stopped) {
-          return null;
-        }
-        return item.action();
-      });
-    });
-    return seq;
-  }
-
   function isOwnMessage(m) {
     return !!(m && m.author && state.user && state.user.id &&
       String(m.author.id) === String(state.user.id));
-  }
-
-  function searchOwnGuildMessages() {
-    const myId = state.user && state.user.id ? String(state.user.id) : '';
-    if (!myId) {
-      return Promise.reject(new Error('No account loaded.'));
-    }
-    const guilds = (state.guilds || []).filter(function (g) {
-      return !inWl('servers', g && g.id);
-    });
-    if (guilds.length === 0) {
-      emitLine('No servers to search.');
-      return Promise.resolve([]);
-    }
-    emitLine('Searching your messages in ' + guilds.length + ' server(s)...');
-    const collected = [];
-    const seen = {};
-    const RETRIES = 3;
-    function searchGuild(g) {
-      const gid = g.id;
-      const gname = g.name || gid;
-      let offset = 0;
-      let total = null;
-      function page(attempt) {
-        return apiCall('GET', '/guilds/' + gid + '/messages/search?author_id=' + myId + '&limit=25&offset=' + offset)
-          .then(function (res) {
-            if (state.stopped) {
-              return null;
-            }
-            if (res && res.status === 202) {
-              const secs = (res.data && Number(res.data.retry_after)) || 2;
-              if (attempt < RETRIES) {
-                emitLine('[' + gname + '] Search index not ready, retrying in ' + secs + 's...');
-                return delay(Math.max(1000, secs * 1000)).then(function () {
-                  return page(attempt + 1);
-                });
-              }
-              emitLine('[' + gname + '] Search index never became ready, skipping this server.');
-              return null;
-            }
-            if (!res || res.status !== 200) {
-              throw new Error((res && res.data && res.data.message) || ('HTTP ' + (res && res.status)));
-            }
-            const data = res.data || {};
-            total = typeof data.total_results === 'number' ? data.total_results : 0;
-            const groups = data.messages;
-            if (!Array.isArray(groups)) {
-              return null;
-            }
-            let mine = 0;
-            groups.forEach(function (entry) {
-              const msgs = Array.isArray(entry) ? entry : [entry];
-              msgs.forEach(function (m) {
-                if (isOwnMessage(m) && !seen[m.id]) {
-                  seen[m.id] = true;
-                  mine += 1;
-                  collected.push(m);
-                }
-              });
-            });
-            const pageNum = Math.floor(offset / 25) + 1;
-            emitLine('[' + gname + '] Page ' + pageNum + ': ' + mine + ' new of ' + total + ' total result(s).');
-            if (offset >= 9975) {
-              emitLine('[' + gname + '] Reached the search result depth limit, moving on.');
-              return null;
-            }
-            offset += 25;
-            if (offset >= total) {
-              return null;
-            }
-            return delay(Math.max(150, currentDelay())).then(function () {
-              return true;
-            });
-          })
-          .catch(function (err) {
-            emitLine('[' + gname + '] Skipped: ' + ((err && err.message) || 'search failed'));
-            return null;
-          });
-      }
-      function loop() {
-        return page(0).then(function (again) {
-          if (!again) {
-            return null;
-          }
-          return loop();
-        });
-      }
-      return loop();
-    }
-    let seq = Promise.resolve();
-    guilds.forEach(function (g) {
-      seq = seq.then(function () {
-        if (state.stopped) {
-          return null;
-        }
-        return delay(Math.max(150, currentDelay())).then(function () {
-          return searchGuild(g);
-        });
-      });
-    });
-    return seq.then(function () {
-      emitLine('Server search complete: ' + collected.length + ' of your message(s) found in servers.');
-      return collected;
-    });
-  }
-
-  function groupGuildMessages(messages) {
-    const groups = [];
-    const map = {};
-    const guildNames = {};
-    (state.guilds || []).forEach(function (g) {
-      guildNames[String(g.id)] = g.name || g.id;
-    });
-    messages.forEach(function (m) {
-      const channelId = m && (m.channel_id || m.channelId) ? String(m.channel_id || m.channelId) : '';
-      if (!channelId) {
-        return;
-      }
-      if (!map[channelId]) {
-        const guildId = m && m.guild_id ? String(m.guild_id) : '';
-        const guildName = guildNames[guildId] || 'Server';
-        map[channelId] = {
-          channel: null,
-          channelId: channelId,
-          channelName: guildName + ' #' + channelId,
-          messages: []
-        };
-        groups.push(map[channelId]);
-      }
-      map[channelId].messages.push(m);
-    });
-    return groups;
-  }
-
-  function deleteOwnMessageGroups(groups) {
-    const safe = Array.isArray(groups) ? groups : [];
-    const total = safe.reduce(function (sum, group) {
-      return sum + (group.messages ? group.messages.length : 0);
-    }, 0);
-    emitLine('Deleting ' + total + ' message(s) across ' + safe.length + ' conversation(s).');
-    let seq = Promise.resolve();
-    safe.forEach(function (group) {
-      seq = seq.then(function () {
-        if (state.stopped) {
-          return null;
-        }
-        return deleteOwnMessagesInChannel(group.channelId, group.channelName, group.messages);
-      });
-    });
-    return seq;
-  }
-
-  function buildSearchDeleteItems() {
-    return [{
-      label: 'Search your message history across every DM and server, then delete each message you sent.',
-      action: function () {
-        let dmCollected = [];
-        function fetchDMsAndFallback() {
-          return searchOwnDMMessages().then(function (list) {
-            dmCollected = Array.isArray(list) ? list : [];
-            const hasDms = (state.channels || []).some(function (c) {
-              return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
-            });
-            if (dmCollected.length === 0 && hasDms) {
-              emitLine('DM search returned nothing - that looks wrong, so checking every DM conversation instead.');
-              return deleteAllViaChannelWalk();
-            }
-            return Promise.resolve();
-          }).catch(function (err) {
-            emitLine('DM search unavailable (' + ((err && err.message) || 'error') + ').');
-            emitLine('Checking every DM conversation instead.');
-            return deleteAllViaChannelWalk();
-          });
-        }
-        emitLine('Searching all DM history for your messages...');
-        return fetchDMsAndFallback().then(function () {
-          if (state.stopped) {
-            return null;
-          }
-          return searchOwnGuildMessages();
-        }).then(function (guildList) {
-          if (state.stopped) {
-            return null;
-          }
-          const dmGroups = groupOwnMessagesByChannel(dmCollected).filter(function (group) {
-            if (!group.channel) {
-              return true;
-            }
-            return !dmWhitelisted(group.channel);
-          });
-          const guildGroups = guildList && guildList.length ? groupGuildMessages(guildList) : [];
-          return deleteOwnMessageGroups(dmGroups.concat(guildGroups));
-        });
-      }
-    }];
-  }
-
-  function buildDeleteAttachmentItems() {
-    const items = [];
-    const channels = (state.channels || []).filter(function (c) {
-      return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
-    });
-    if (channels.length > 0) {
-      channels.forEach(function (c) {
-        const isGroup = c.type === 3;
-        const recipientName = isGroup
-          ? (c.name || 'Group Chat (' + ((c.recipients && c.recipients.length) || 0) + ' members)')
-          : ((c.recipients && c.recipients[0] && (c.recipients[0].username || c.recipients[0].id)) || c.name || c.id);
-        items.push({
-          label: 'Fetch attachments in DM and delete their messages: ' + recipientName + ' (' + c.id + ')',
-          action: function () {
-            return fetchAllMyDMMessages(c.id, recipientName).then(function (myMessages) {
-              if (state.stopped) {
-                return null;
-              }
-              const withAttachments = (myMessages || []).filter(function (m) {
-                return isOwnMessage(m) && m.attachments && m.attachments.length > 0;
-              });
-              if (withAttachments.length === 0) {
-                emitLine('[' + recipientName + '] No attachment messages found in this conversation.');
-                return null;
-              }
-              emitLine('[' + recipientName + '] ' + withAttachments.length + ' message(s) with attachment files found.');
-              return deleteOwnMessagesInChannel(c.id, recipientName, withAttachments);
-            });
-          }
-        });
-      });
-    }
-    return items;
   }
 
   function buildTextSearchChannelWalkItems(text) {
@@ -4555,11 +4172,6 @@ window.manager = {
       if (countEl) countEl.textContent = String(actionable.length);
       if (skippedEl) skippedEl.textContent = '• ' + skipped + ' protected/whitelisted';
       if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((actionable.length * currentDelay()) / 1000)) + 's';
-      if (title === 'Delete All My Messages (Search)') {
-        if (countEl) countEl.textContent = 'scan';
-        if (skippedEl) skippedEl.textContent = '• searches every DM';
-        if (estimateEl) estimateEl.textContent = 'Search runs first, then every message found is deleted.';
-      }
       if (confirmBtn) {
         confirmBtn.disabled = actionable.length === 0;
         confirmBtn.classList.remove('btn-loading');
@@ -5501,130 +5113,64 @@ window.manager = {
       }
     });
 
-    const attachmentsBtn = byId('deleteDmAttachmentsBtn');
-    if (attachmentsBtn) {
-      attachmentsBtn.addEventListener('click', function () {
-        if (state.running) {
-          toast('An operation is already running.', 'error');
-          return;
-        }
-        if (!hasAccount()) {
-          toast('Please log in first.', 'error');
-          return;
-        }
-        closeDeleteDmModal();
-        openOperationConfirmModal('Delete Attachment Messages', buildDeleteAttachmentItems, byId('deleteUserDMsBtn'), 'Scan the entire message history of every non-whitelisted DM, then delete each message you sent that contains an attachment file. Deleting a message also removes its uploaded files. This can be slow on accounts with long conversations.');
-      });
-    }
-
-    const closeDmsBtn = byId('deleteDmCloseDmsBtn');
-    if (closeDmsBtn) {
-      closeDmsBtn.addEventListener('click', function () {
-        closeDeleteDmModal();
-        toggleDMs();
-      });
-    }
-
-    const specificBtn = byId('deleteDmSpecificBtn');
+    const primaryBtn = byId('deleteDmPrimaryBtn');
     const targetInput = byId('deleteDmTargetInput');
     const targetError = byId('deleteDmTargetError');
-    if (specificBtn) {
-      specificBtn.addEventListener('click', function () {
-        const fullHistory = !!byId('deleteDmFullHistory') && byId('deleteDmFullHistory').checked;
-        const target = targetInput ? targetInput.value.trim() : '';
-        if (!target) {
-          if (targetError) targetError.textContent = 'Enter a user ID or username first.';
-          if (targetInput) targetInput.focus();
-          return;
-        }
-        if (targetError) targetError.textContent = '';
-        closeDeleteDmModal();
-        showView('operation', { persist: true });
-        resetTerminal('Delete DM Messages');
-        if (opPill) opPill.textContent = 'preparing';
-        emitLine('Preparing targeted DM message deletion...');
-        const btn = byId('deleteUserDMsBtn');
-        openOperationConfirmModal('Delete DM Messages (' + target + ')', function () {
-          return buildDeleteTargetDMsItems(target, fullHistory);
-        }, btn, 'Delete your messages from the selected DM conversation' + (fullHistory ? ' (entire history).' : '.'));
-      });
-    }
-
-    if (targetInput && specificBtn) {
-      targetInput.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          specificBtn.click();
-        }
-      });
-      targetInput.addEventListener('input', function () {
-        if (targetError) targetError.textContent = '';
-      });
-    }
-
-    const searchTextBtn = byId('deleteDmSearchTextBtn');
     const textInput = byId('deleteDmTextInput');
     const textError = byId('deleteDmTextError');
-    if (searchTextBtn) {
-      searchTextBtn.addEventListener('click', function () {
+    if (primaryBtn) {
+      primaryBtn.addEventListener('click', function () {
         if (state.running) {
           toast('An operation is already running.', 'error');
           return;
         }
+        const target = targetInput ? targetInput.value.trim() : '';
         const text = textInput ? textInput.value.trim() : '';
-        if (!text) {
-          if (textError) textError.textContent = 'Enter the text to search for first.';
+        if (target && text) {
+          if (textError) textError.textContent = 'Use either a user or message text, not both.';
           if (textInput) textInput.focus();
           return;
         }
+        if (targetError) targetError.textContent = '';
         if (textError) textError.textContent = '';
-        closeDeleteDmModal();
-        // The deterministic walk, not the search index. Search is faster while
-        // its index is healthy, but it silently misses messages that have not
-        // been indexed or that tokenize differently, which is exactly the case
-        // where a bulk delete must not be wrong.
-        runTextWalkOperation(text);
-      });
-    }
-
-    if (textInput && searchTextBtn) {
-      textInput.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          searchTextBtn.click();
-        }
-      });
-      textInput.addEventListener('input', function () {
-        if (textError) textError.textContent = '';
-      });
-    }
-
-    const allBtn = byId('deleteDmAllBtn');
-    if (allBtn) {
-      allBtn.addEventListener('click', function () {
         const fullHistory = !!byId('deleteDmFullHistory') && byId('deleteDmFullHistory').checked;
+        const btn = byId('deleteUserDMsBtn');
         closeDeleteDmModal();
         showView('operation', { persist: true });
-        resetTerminal('Delete All DM Messages');
+        if (target) {
+          resetTerminal('Delete DM Messages');
+          if (opPill) opPill.textContent = 'preparing';
+          emitLine('Preparing targeted DM message deletion...');
+          openOperationConfirmModal('Delete DM Messages (' + target + ')', function () {
+            return buildDeleteTargetDMsItems(target, fullHistory);
+          }, btn, 'Delete your messages from the selected DM conversation' + (fullHistory ? ' (entire history).' : '.'));
+          return;
+        }
+        if (text) {
+          runTextWalkOperation(text);
+          return;
+        }
+        resetTerminal('Close / Delete All DMs');
         if (opPill) opPill.textContent = 'preparing';
         emitLine('Preparing all DM message deletion...');
-        const btn = byId('deleteUserDMsBtn');
-        openOperationConfirmModal('Delete All DM Messages', function () {
+        openOperationConfirmModal('Close / Delete All DMs', function () {
           return buildDeleteAllDMsMessagesItems(fullHistory);
-        }, btn, 'Delete your messages from all non-whitelisted DM conversations' + (fullHistory ? ' (entire history).' : '.'));
+        }, btn, 'Delete your messages from every non-whitelisted DM conversation' + (fullHistory ? ' (entire history).' : '.') + ' Whitelisted conversations are skipped.');
       });
-    }
-
-    const searchAllBtn = byId('deleteDmSearchAllBtn');
-    if (searchAllBtn) {
-      searchAllBtn.addEventListener('click', function () {
-        closeDeleteDmModal();
-        showView('operation', { persist: true });
-        resetTerminal('Delete All My Messages (Search)');
-        if (opPill) opPill.textContent = 'preparing';
-        emitLine('Preparing search-based DM message deletion...');
-        const btn = byId('deleteUserDMsBtn');
-        openOperationConfirmModal('Delete All My Messages (Search)', buildSearchDeleteItems, btn, 'Search your entire message history - every DM and every server you are in - then delete each message you sent. Whitelisted DMs and servers are skipped. This can take a very long time on big accounts. If search fails, it falls back to per-conversation fetch.');
+      [targetInput, textInput].forEach(function (input) {
+        if (!input) {
+          return;
+        }
+        input.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            primaryBtn.click();
+          }
+        });
+        input.addEventListener('input', function () {
+          if (input === targetInput && targetError) targetError.textContent = '';
+          if (input === textInput && textError) textError.textContent = '';
+        });
       });
     }
 
@@ -6090,7 +5636,7 @@ window.manager = {
           opPill.textContent = 'preparing';
         }
         emitLine('Preparing Close DMs...');
-        prepareOperation('Close DMs', buildDmItems, byId('deleteDmCloseDmsBtn'));
+        prepareOperation('Close DMs', buildDmItems, null);
       });
     }
     if (closeDmsCancelBtn) {
@@ -6901,6 +6447,7 @@ window.manager = {
           initials: (g.name || 'S').slice(0, 1).toUpperCase(),
           isServer: true,
           isOwned: !!g.owner,
+          isBoosted: isServerBoosted(g),
           relationshipType: g.owner ? 'Owner' : 'Member'
         };
       });
@@ -6916,7 +6463,8 @@ window.manager = {
           avatar: guildIconUrl(g, 128),
           initials: (g.name || 'S').slice(0, 1).toUpperCase(),
           isServer: true,
-          isOwned: true
+          isOwned: true,
+          isBoosted: isServerBoosted(g)
         };
       });
     } else if (type === 'dms') {
@@ -6997,7 +6545,7 @@ window.manager = {
       if (iconEl) iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
     } else if (type === 'servers') {
       if (titleEl) titleEl.textContent = 'Joined Servers';
-      if (subtitleEl) subtitleEl.textContent = 'Manage and leave community servers';
+      if (subtitleEl) subtitleEl.textContent = 'Manage all servers you are in - community, private, and owned; boosted servers stay whitelisted';
       if (iconEl) iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
     } else if (type === 'owned') {
       if (titleEl) titleEl.textContent = 'Owned Servers';
@@ -7104,6 +6652,13 @@ window.manager = {
         badge.className = 'inspector-tag-badge owner';
         badge.textContent = 'Owner';
         nameEl.appendChild(badge);
+      }
+      if (item.isBoosted) {
+        const boostBadge = document.createElement('span');
+        boostBadge.className = 'inspector-tag-badge boosted';
+        boostBadge.textContent = 'Boosted';
+        boostBadge.title = 'Boosted server - whitelisted and protected from operations';
+        nameEl.appendChild(boostBadge);
       }
       if (item.relationshipType && !item.isOwned) {
         const relationBadge = document.createElement('span');
@@ -7355,8 +6910,12 @@ window.manager = {
 
   function handleSingleLeaveServer(id, name, rowEl) {
     const server = (state.guilds || []).filter(function (g) { return g.id === id; })[0];
-    if ((server && server.owner) || inWl('servers', id)) {
-      toast(server && server.owner ? 'Owned servers cannot be left.' : 'This server is whitelisted. Remove the whitelist first.', 'warning');
+    if (server && server.owner) {
+      toast('Owned servers cannot be left.', 'warning');
+      return;
+    }
+    if (inWl('servers', id)) {
+      toast('This server is boosted/whitelisted. Remove it from the whitelist first.', 'warning');
       return;
     }
     openLeaveServersConfirmModal({ id: id, name: name, rowEl: rowEl });
@@ -7511,10 +7070,15 @@ window.manager = {
   function handleBatchLeaveServers() {
     const ids = state.inspectSelected.filter(function (id) {
       const server = (state.guilds || []).filter(function (g) { return g.id === id; })[0];
-      return server && !server.owner && !inWl('servers', id);
+      if (!server || server.owner) {
+        return false;
+      }
+      // Boosted servers are auto-whitelisted, so the whitelist is the single
+      // guard that must hold here: any whitelisted server is never left.
+      return !inWl('servers', id);
     });
     if (ids.length !== state.inspectSelected.length) {
-      toast('Owned or whitelisted servers were skipped.', 'warning');
+      toast('Owned, boosted, or whitelisted servers were skipped.', 'warning');
     }
     executeBatchAction('Leave Servers', ids, function (id) {
       return apiCall('DELETE', '/users/@me/guilds/' + id).then(function (res) {

@@ -3744,17 +3744,6 @@ html[data-theme="light"] .density-option span {
   box-shadow: 0 0 28px rgba(242, 63, 67, 0.6) !important;
 }
 
-.btn-ops[data-dm-state="closed"] {
-  border-color: rgba(240, 178, 50, 0.4);
-  color: #f0b232;
-}
-
-.btn-ops[data-dm-state="closed"]:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(240, 178, 50, 0.22), rgba(255, 255, 255, 0.04));
-  border-color: rgba(240, 178, 50, 0.7);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45), 0 0 22px rgba(240, 178, 50, 0.4);
-}
-
 .btn-ops:disabled,
 .btn-ops.btn-disabled {
   opacity: 0.55;
@@ -4976,6 +4965,12 @@ html[data-theme="light"] .btn.btn-loading::after {
   background: rgba(240, 178, 50, 0.15);
   color: var(--warn);
   border-color: rgba(240, 178, 50, 0.35);
+}
+
+.inspector-tag-badge.boosted {
+  background: rgba(235, 69, 158, 0.16);
+  color: #ff7ac6;
+  border-color: rgba(235, 69, 158, 0.38);
 }
 
 .inspector-tag-badge.whitelist {
