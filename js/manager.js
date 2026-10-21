@@ -572,7 +572,7 @@ window.manager = {
   // read from the guild member payload (premium_since), member totals from the
   // guild counts endpoint. Cached to keep repeated loads and confirm modals fast.
   const GUILD_META_TTL_MS = 30 * 60 * 1000;
-  const GUILD_META_MAX_PER_PASS = 40;
+  const GUILD_META_MAX_PER_PASS = 200;
 
   const MAX_RATE_RETRIES = 3;
 
@@ -1887,7 +1887,7 @@ window.manager = {
       return accountDataRequest;
     }
     const promises = [
-      apiCall('GET', '/users/@me/guilds'),
+      apiCall('GET', '/users/@me/guilds?with_counts=true'),
       apiCall('GET', '/users/@me/relationships'),
       apiCall('GET', '/users/@me/channels'),
       apiCall('GET', '/users/@me/settings'),
@@ -3096,51 +3096,46 @@ window.manager = {
     return !!(meta && meta.boosted);
   }
 
-  function isBoostCandidate(guild) {
-    if (!guild) {
-      return false;
-    }
-    if (guild.premium_since || guild.user_premium_since || guild.boosted_since) {
-      return true;
-    }
-    const tier = Number(guild.premium_tier || guild.premiumTier || 0);
-    const boosts = Number(guild.premium_subscription_count || guild.premiumSubscriptionCount || 0);
-    return tier > 0 || boosts > 0;
-  }
-
   function fetchGuildMeta(guild) {
     const key = guildMetaKey(guild.id);
     const prev = state.guildMeta[key];
+    const directBoost = !!(guild.premium_since || guild.user_premium_since || guild.boosted_since);
     const meta = {
-      boosted: !!(prev && prev.boosted),
-      memberCount: prev && typeof prev.memberCount === 'number' ? prev.memberCount : null,
+      boosted: directBoost || !!(prev && prev.boosted),
+      memberCount: prev && typeof prev.memberCount === 'number' ? prev.memberCount : guildMemberCount(guild),
       ts: Date.now()
     };
     let ok = 0;
     const tasks = [];
-    if (isBoostCandidate(guild)) {
+    if (!directBoost) {
+      // The current-user guild list never includes per-user boost state, so the
+      // member record is the only reliable source for this account's boost.
       tasks.push(apiCall('GET', '/users/@me/guilds/' + guild.id + '/member')
         .then(function (res) {
-          if (res && res.status === 200 && res.data) {
+          if (res && res.status !== 0 && res.status !== 429 && res.status < 500) {
             ok += 1;
-            meta.boosted = !!(res.data.premium_since || res.data.user_premium_since);
+            if (res.status === 200 && res.data) {
+              meta.boosted = !!(res.data.premium_since || res.data.user_premium_since);
+            }
           }
         })
         .catch(function () { }));
     }
-    if (guild.owner) {
+    if (guild.owner && meta.memberCount == null) {
       tasks.push(apiCall('GET', '/guilds/' + guild.id + '?with_counts=true')
         .then(function (res) {
-          if (res && res.status === 200 && res.data) {
-            const raw = res.data.approximate_member_count != null
-              ? res.data.approximate_member_count
-              : res.data.member_count;
-            const count = Number(raw);
-            if (raw != null && !isNaN(count)) {
-              ok += 1;
-              meta.memberCount = count;
-              guild.member_count = count;
-              guild.approximate_member_count = count;
+          if (res && res.status !== 0 && res.status !== 429 && res.status < 500) {
+            ok += 1;
+            if (res.status === 200 && res.data) {
+              const raw = res.data.approximate_member_count != null
+                ? res.data.approximate_member_count
+                : res.data.member_count;
+              const count = Number(raw);
+              if (raw != null && !isNaN(count)) {
+                meta.memberCount = count;
+                guild.member_count = count;
+                guild.approximate_member_count = count;
+              }
             }
           }
         })
@@ -3150,7 +3145,7 @@ window.manager = {
       return Promise.resolve(meta);
     }
     return Promise.all(tasks).then(function () {
-      // Do not cache a failed pass - retry on the next load instead.
+      // Cache definitive answers; leave transport/rate-limit failures uncached.
       if (ok > 0 || prev) {
         state.guildMeta[key] = meta;
       }
@@ -3158,15 +3153,16 @@ window.manager = {
     });
   }
 
-  // Enrich owned guilds with member totals and check whether this account holds
-  // an active boost on boosted guilds. Small concurrency keeps the Discord rate
-  // limit happy; cached entries are skipped on subsequent loads.
+  // Check every guild once for this account's boost state (the guild list does
+  // not expose it) and fill in owned-server member totals. Results are cached
+  // per account and shared across loads; concurrency is kept small to stay
+  // inside Discord's rate limits.
   function enrichGuildDetails(guilds) {
     if (!hasAccount()) {
       return Promise.resolve();
     }
     const stale = (guilds || []).filter(function (g) {
-      return g && g.id && !getGuildMeta(g.id) && (g.owner || isBoostCandidate(g));
+      return g && g.id && !getGuildMeta(g.id);
     }).slice(0, GUILD_META_MAX_PER_PASS);
     if (!stale.length) {
       return Promise.resolve();
@@ -3181,7 +3177,7 @@ window.manager = {
       return fetchGuildMeta(guild).then(worker);
     }
     const workers = [];
-    for (let i = 0; i < Math.min(3, stale.length); i += 1) {
+    for (let i = 0; i < Math.min(5, stale.length); i += 1) {
       workers.push(worker());
     }
     return Promise.all(workers);
@@ -4141,7 +4137,6 @@ window.manager = {
     const modal = byId('historyModal');
     if (modal) {
       modal.classList.add('active');
-      document.body.classList.add('history-open');
     }
   }
 
@@ -4149,7 +4144,6 @@ window.manager = {
     const modal = byId('historyModal');
     if (modal) {
       modal.classList.remove('active');
-      document.body.classList.remove('history-open');
     }
   }
 
@@ -6914,7 +6908,13 @@ window.manager = {
       if (item.isBoosted) {
         const boostBadge = document.createElement('span');
         boostBadge.className = 'inspector-tag-badge boosted';
-        boostBadge.textContent = 'Boosted';
+        const boostIcon = document.createElement('img');
+        boostIcon.className = 'inspector-tag-icon';
+        boostIcon.src = 'assets/images/badges/boost_badges/discordboost1.svg';
+        boostIcon.alt = '';
+        boostIcon.setAttribute('aria-hidden', 'true');
+        boostBadge.appendChild(boostIcon);
+        boostBadge.appendChild(document.createTextNode('Nitro Boost'));
         boostBadge.title = 'Nitro Boost active on this server from this account - whitelisted and protected from operations';
         nameEl.appendChild(boostBadge);
       }

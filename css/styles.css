@@ -1154,31 +1154,34 @@ body::after {
 
 /* ---------- Notification visibility toggle ---------- */
 
-.toast-toggle-btn {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 101;
-  width: 38px;
-  height: 38px;
+.header-actions {
   display: flex;
   align-items: center;
+  gap: 8px;
+  margin-right: 0;
+}
+
+.toast-toggle-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 11px;
   border: 1px solid var(--border-glass);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-1);
-  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
   cursor: pointer;
   transition: transform 0.08s, color 0.15s, background 0.15s, border-color 0.15s, opacity 0.15s;
 }
 
 .toast-toggle-btn:hover {
   color: var(--text);
-  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-glass-strong);
 }
 
 .toast-toggle-btn:active {
@@ -1214,7 +1217,7 @@ body.toasts-hidden .toast-toggle-icon-off {
 }
 
 body.toasts-hidden .toast-toggle-btn {
-  color: var(--text-2);
+  color: var(--muted);
   opacity: 0.72;
 }
 
@@ -1239,15 +1242,6 @@ body.toasts-hidden .toast-toggle-btn {
 
 .toast-toggle-badge[hidden] {
   display: none;
-}
-
-/* Keep the toggle clear of the toast stack on small screens. The container
-   offset for <=600px lives with the other mobile rules further down. */
-@media (max-width: 480px) {
-  .toast-toggle-btn {
-    top: 12px;
-    right: 12px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1445,7 +1439,7 @@ body.toasts-hidden .toast-toggle-btn {
 
 .app-sidebar {
   grid-area: sidebar;
-  width: 240px;
+  width: 260px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1481,6 +1475,11 @@ body.toasts-hidden .toast-toggle-btn {
   gap: 10px;
   padding: 6px 10px 14px;
   white-space: nowrap;
+}
+
+.sidebar-brand .app-brand-name {
+  font-size: 0.9em;
+  letter-spacing: -0.02em;
 }
 
 .sidebar-nav {
@@ -4591,12 +4590,6 @@ body.toasts-hidden .history-bell-btn {
   opacity: 0.72;
 }
 
-/* The bell lives in the history header while the modal is open, so the fixed
-   corner button must not float over the overlay. */
-body.history-open .toast-toggle-btn {
-  display: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .history-bell-btn {
     transition: none;
@@ -5064,6 +5057,19 @@ body.history-open .toast-toggle-btn {
   border: 1px solid var(--border-glass);
 }
 
+.inspector-tag-badge.boosted {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inspector-tag-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  display: block;
+}
+
 .inspector-tag-badge.owner {
   background: rgba(240, 178, 50, 0.15);
   color: var(--warn);
@@ -5520,6 +5526,7 @@ html[data-theme="light"] .btn-ops:hover {
   }
 
   .app-header .icon-btn,
+  .app-header .toast-toggle-btn,
   #menuToggle {
     width: 34px;
     height: 34px;

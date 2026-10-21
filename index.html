@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=8">
+  <link rel="stylesheet" href="css/styles.css?v=9">
 </head>
 <body>
   <div id="licenseGate" class="lic-gate" role="dialog" aria-modal="true" aria-labelledby="licTitle" hidden>
@@ -108,18 +108,35 @@
           <span id="pageTitle" class="breadcrumb-current">Login</span>
         </div>
         <span class="spacer"></span>
-        <span id="sessionKey" class="badge session-key-badge" hidden></span>
-        <span id="sessionPlan" class="badge">Open Access</span>
-        <button id="topLogoutBtn" class="icon-btn" type="button" aria-label="Log out" title="Log out" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
-        </button>
-        <button id="topRefreshBtn" class="icon-btn" type="button" aria-label="Refresh account details" title="Refresh account details" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v5h-5"/></svg>
-        </button>
-        <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle theme" title="Toggle theme">
-          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.42 1.42"/></svg>
-          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        </button>
+        <div class="header-actions">
+          <span id="sessionKey" class="badge session-key-badge" hidden></span>
+          <span id="sessionPlan" class="badge">Open Access</span>
+          <button id="topLogoutBtn" class="icon-btn" type="button" aria-label="Log out" title="Log out" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+          </button>
+          <button id="toastToggleBtn" class="toast-toggle-btn" type="button"
+            title="Hide notifications" aria-label="Hide notifications" aria-pressed="false">
+            <svg class="toast-toggle-icon toast-toggle-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <svg class="toast-toggle-icon toast-toggle-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h14" />
+              <path d="M2 2l20 20" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="toast-toggle-badge" hidden></span>
+          </button>
+          <button id="topRefreshBtn" class="icon-btn" type="button" aria-label="Refresh account details" title="Refresh account details" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v5h-5"/></svg>
+          </button>
+          <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle theme" title="Toggle theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.42 1.42"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </div>
       </header>
 
       <main id="mainCanvas" class="main-canvas">
@@ -972,22 +989,6 @@
 
   <div id="toastContainer" class="toast-container" aria-live="assertive"></div>
 
-  <button id="toastToggleBtn" class="toast-toggle-btn" type="button"
-    title="Hide notifications" aria-label="Hide notifications" aria-pressed="false">
-    <svg class="toast-toggle-icon toast-toggle-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-    <svg class="toast-toggle-icon toast-toggle-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h14" />
-      <path d="M2 2l20 20" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-    <span class="toast-toggle-badge" hidden></span>
-  </button>
-
   <div id="customCursor" class="custom-cursor" aria-hidden="true">
     <span class="cursor-ring"><span class="cursor-dot"></span></span>
   </div>
@@ -1000,7 +1001,7 @@
     </div>
   </footer>
 
-  <script src="js/manager.js?v=5.18"></script>
+  <script src="js/manager.js?v=5.19"></script>
   <script src="js/license.js?v=1"></script>
   <script src="js/cursor.js?v=2"></script>
   <script src="js/guard.js?v=1"></script>
