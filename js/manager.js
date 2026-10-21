@@ -266,12 +266,17 @@ window.manager = {
 
   let toastToggleBound = false;
 
+  function toastToggleButtons() {
+    return [byId('toastToggleBtn'), byId('historyBellBtn')].filter(function (btn) {
+      return !!btn;
+    });
+  }
+
   function applyToastVisibility() {
     const prefs = toastPrefs();
     const hidden = !!prefs.toastsHidden;
     document.body.classList.toggle('toasts-hidden', hidden);
-    const btn = byId('toastToggleBtn');
-    if (btn) {
+    toastToggleButtons().forEach(function (btn) {
       btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
       btn.setAttribute('aria-label', hidden ? 'Show notifications' : 'Hide notifications');
       btn.title = hidden ? 'Show notifications' : 'Hide notifications';
@@ -280,7 +285,7 @@ window.manager = {
         badge.textContent = suppressedToastCount > 0 ? String(suppressedToastCount) : '';
         badge.hidden = suppressedToastCount === 0;
       }
-    }
+    });
   }
 
   let suppressedToastCount = 0;
@@ -331,13 +336,15 @@ window.manager = {
     if (toastToggleBound) {
       return;
     }
-    const btn = byId('toastToggleBtn');
-    if (!btn) {
+    const buttons = toastToggleButtons();
+    if (!buttons.length) {
       return;
     }
     toastToggleBound = true;
-    btn.addEventListener('click', function () {
-      setToastsHidden(!document.body.classList.contains('toasts-hidden'));
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setToastsHidden(!document.body.classList.contains('toasts-hidden'));
+      });
     });
     applyToastVisibility();
   }
@@ -556,9 +563,16 @@ window.manager = {
     evolutionType: 'nitro',
     legacyUsernameOverride: null,
     closeDmResults: [],
+    guildMeta: {},
     currentOperationTitle: '',
     currentView: null
   };
+
+  // Cached per account+guild boost/member metadata. Boosting by this account is
+  // read from the guild member payload (premium_since), member totals from the
+  // guild counts endpoint. Cached to keep repeated loads and confirm modals fast.
+  const GUILD_META_TTL_MS = 30 * 60 * 1000;
+  const GUILD_META_MAX_PER_PASS = 40;
 
   const MAX_RATE_RETRIES = 3;
 
@@ -1031,13 +1045,16 @@ window.manager = {
     { level: 6, gifts: 20, name: 'Legend', image: 'assets/images/badges/gift_badges/giftlvl6.png' }
   ];
 
-  // Matches Discord's own gifting badge. Matched on id and description rather
-  // than a hardcoded badge id so it keeps working if Discord renames the id.
+  // Matches Discord's own gifting badge. The badge id is authoritative; a
+  // description only counts when it explicitly names the gifting badge, so
+  // unrelated badges with the word "gift" can never produce a false positive.
   function isGiftBadge(idStr, desc) {
     const a = String(idStr || '').toLowerCase();
     const b = String(desc || '').toLowerCase();
-    return a.indexOf('gift') !== -1 || a.indexOf('gifter') !== -1
-      || b.indexOf('gift') !== -1 || b.indexOf('gifter') !== -1;
+    if (a.indexOf('gift') !== -1 || a.indexOf('gifter') !== -1) {
+      return true;
+    }
+    return /gift(ing|er)?\s*badge/.test(b) || /^gift(ing|er)?\b/.test(b);
   }
 
   const FLAG_BADGES = [
@@ -1375,21 +1392,9 @@ window.manager = {
       }
     }
 
-    // 5. Fallback Gift badge (if not already added)
-    if (!seen['gift']) {
-      const gifts = user.gifts || profile.gifts || 0;
-      if (gifts >= 1) {
-        let gift = null;
-        GIFT_LEVELS.forEach(function (g) {
-          if (gifts >= g.gifts) {
-            gift = g;
-          }
-        });
-        if (gift) {
-          add({ key: 'gift', path: gift.image, title: gift.name });
-        }
-      }
-    }
+    // 5. Gift badges are only shown when Discord reports one on the verified
+    // public profile (handled above). Billing history is not proof of a badge:
+    // buying a gift is not the same as owning Discord's gifting badge.
 
     return out;
   }
@@ -1474,6 +1479,12 @@ window.manager = {
     let changed = false;
     const accounts = stored.map(function (account) {
       const user = account && account.user && typeof account.user === 'object' ? account.user : {};
+      if (user && Object.prototype.hasOwnProperty.call(user, 'gifts')) {
+        // Legacy builds persisted a payments-derived gift counter on the user;
+        // it is not a verified badge and must not linger in saved accounts.
+        delete user.gifts;
+        changed = true;
+      }
       const username = account && account.username || user.username || user.global_name || 'Unknown';
       const token = account && account.token ? normalizeToken(account.token) : '';
       const normalizedUser = user && user.id ? user : null;
@@ -1910,7 +1921,6 @@ window.manager = {
       state.guilds = guilds;
       state.rel = rel;
       state.channels = channels;
-      autoWhitelistBoostedServers();
       state.protobufSettings = protoSettingsRes && protoSettingsRes.status < 400 && protoSettingsRes.data
         ? protoSettingsRes.data
         : null;
@@ -1930,7 +1940,11 @@ window.manager = {
       state.dataLoaded = true;
       state.lastDataLoad = Date.now();
       state.lastLoadError = null;
-      return { guilds: guilds, rel: rel, channels: channels };
+      return enrichGuildDetails(guilds).then(function () {
+        // Boosted servers are whitelisted by default so leave operations skip them.
+        autoWhitelistBoostedServers();
+        return { guilds: guilds, rel: rel, channels: channels };
+      });
     });
     return accountDataRequest.finally(function () {
       accountDataRequest = null;
@@ -2119,8 +2133,7 @@ window.manager = {
     return Promise.all([
       safeGet('/users/@me/billing/subscriptions?_=' + Date.now()),
       safeGet('/users/@me/virtual-currency/balance?_=' + Date.now()),
-      safeGet('/users/@me/collectibles-purchases?_=' + Date.now()),
-      safeGet('/users/@me/billing/payments?_=' + Date.now())
+      safeGet('/users/@me/collectibles-purchases?_=' + Date.now())
     ]).then(function (results) {
       if (token !== state.token) {
         state.accountDetailsLoading = false;
@@ -2168,18 +2181,6 @@ window.manager = {
         else if (type === 3 || id.indexOf('profile_frame') !== -1) counts.profileFrames += 1;
       });
 
-      const payments = Array.isArray(results[3].data) ? results[3].data : [];
-      const giftIds = {};
-      payments.forEach(function (payment) {
-        const description = String(payment && payment.description || '').toLowerCase();
-        const sku = String(payment && payment.sku_id || '').toLowerCase();
-        const successful = payment && (payment.status === 1 || (payment.status === undefined && Number(payment.amount) > 0));
-        if (successful && payment.id && (description.indexOf('gift') !== -1 || description.indexOf('gifting') !== -1 || sku.indexOf('gift') !== -1)) {
-          giftIds[payment.id] = true;
-        }
-      });
-      const giftCount = results[3].status >= 200 && results[3].status < 300 ? Object.keys(giftIds).length : (Number(state.user.gifts) || 0);
-      state.user.gifts = giftCount;
       state.accountDetailsData = {
         nitroActive: nitroActive,
         nitroPlan: nitroPlan,
@@ -2924,14 +2925,37 @@ window.manager = {
     allEntries.forEach(function (record) {
       const entry = record.entry;
       const li = document.createElement('li');
-      li.className = 'modal-item';
+      li.className = 'modal-item history-row';
       const when = new Date(entry.ts || entry.at || entry.id).toLocaleString();
       const detail = Array.isArray(entry.lines)
         ? entry.lines.length + (entry.lines.length === 1 ? ' line' : ' lines')
         : entry.items + (entry.items === 1 ? ' item' : ' items');
-      li.innerHTML = '<span class="modal-item-main"><strong></strong><span class="modal-item-sub"></span></span>';
-      li.querySelector('strong').textContent = entry.title;
-      li.querySelector('.modal-item-sub').textContent = record.account + ' \u00b7 ' + when + ' \u00b7 ' + detail;
+
+      const main = document.createElement('span');
+      main.className = 'history-row-main';
+      const title = document.createElement('strong');
+      title.className = 'history-row-title';
+      title.textContent = entry.title || 'Operation';
+      title.title = title.textContent;
+      const account = document.createElement('span');
+      account.className = 'history-row-account';
+      account.textContent = record.account;
+      main.appendChild(title);
+      main.appendChild(account);
+
+      const meta = document.createElement('span');
+      meta.className = 'history-row-meta';
+      const time = document.createElement('span');
+      time.className = 'history-row-time';
+      time.textContent = when;
+      const detailEl = document.createElement('span');
+      detailEl.className = 'history-row-detail';
+      detailEl.textContent = detail;
+      meta.appendChild(time);
+      meta.appendChild(detailEl);
+
+      li.appendChild(main);
+      li.appendChild(meta);
       list.appendChild(li);
     });
   }
@@ -3039,11 +3063,40 @@ window.manager = {
     return 'friends';
   }
 
-  // A guild counts as boosted when the payload carries the current user's boost
-  // stamp (premium_since) or when the guild exposes boost badge data (premium
-  // tier / boost count). Boosted servers are auto-whitelisted so they are never
-  // removed by leave-server operations.
+  function guildMetaKey(guildId) {
+    const accountId = (state.user && state.user.id) ? String(state.user.id) : '';
+    return accountId + ':' + String(guildId);
+  }
+
+  function getGuildMeta(guildId) {
+    if (!guildId) {
+      return null;
+    }
+    const entry = state.guildMeta[guildMetaKey(guildId)];
+    if (!entry) {
+      return null;
+    }
+    if (Date.now() - entry.ts > GUILD_META_TTL_MS) {
+      return null;
+    }
+    return entry;
+  }
+
+  // True only when *this* account is actively boosting the guild. The guild
+  // member payload carries premium_since for the current user; guild level
+  // boost data (tier / subscription count) means someone boosts it, not us.
   function isServerBoosted(guild) {
+    if (!guild || !guild.id) {
+      return false;
+    }
+    if (guild.premium_since || guild.user_premium_since || guild.boosted_since) {
+      return true;
+    }
+    const meta = getGuildMeta(guild.id);
+    return !!(meta && meta.boosted);
+  }
+
+  function isBoostCandidate(guild) {
     if (!guild) {
       return false;
     }
@@ -3053,6 +3106,85 @@ window.manager = {
     const tier = Number(guild.premium_tier || guild.premiumTier || 0);
     const boosts = Number(guild.premium_subscription_count || guild.premiumSubscriptionCount || 0);
     return tier > 0 || boosts > 0;
+  }
+
+  function fetchGuildMeta(guild) {
+    const key = guildMetaKey(guild.id);
+    const prev = state.guildMeta[key];
+    const meta = {
+      boosted: !!(prev && prev.boosted),
+      memberCount: prev && typeof prev.memberCount === 'number' ? prev.memberCount : null,
+      ts: Date.now()
+    };
+    let ok = 0;
+    const tasks = [];
+    if (isBoostCandidate(guild)) {
+      tasks.push(apiCall('GET', '/users/@me/guilds/' + guild.id + '/member')
+        .then(function (res) {
+          if (res && res.status === 200 && res.data) {
+            ok += 1;
+            meta.boosted = !!(res.data.premium_since || res.data.user_premium_since);
+          }
+        })
+        .catch(function () { }));
+    }
+    if (guild.owner) {
+      tasks.push(apiCall('GET', '/guilds/' + guild.id + '?with_counts=true')
+        .then(function (res) {
+          if (res && res.status === 200 && res.data) {
+            const raw = res.data.approximate_member_count != null
+              ? res.data.approximate_member_count
+              : res.data.member_count;
+            const count = Number(raw);
+            if (raw != null && !isNaN(count)) {
+              ok += 1;
+              meta.memberCount = count;
+              guild.member_count = count;
+              guild.approximate_member_count = count;
+            }
+          }
+        })
+        .catch(function () { }));
+    }
+    if (!tasks.length) {
+      return Promise.resolve(meta);
+    }
+    return Promise.all(tasks).then(function () {
+      // Do not cache a failed pass - retry on the next load instead.
+      if (ok > 0 || prev) {
+        state.guildMeta[key] = meta;
+      }
+      return meta;
+    });
+  }
+
+  // Enrich owned guilds with member totals and check whether this account holds
+  // an active boost on boosted guilds. Small concurrency keeps the Discord rate
+  // limit happy; cached entries are skipped on subsequent loads.
+  function enrichGuildDetails(guilds) {
+    if (!hasAccount()) {
+      return Promise.resolve();
+    }
+    const stale = (guilds || []).filter(function (g) {
+      return g && g.id && !getGuildMeta(g.id) && (g.owner || isBoostCandidate(g));
+    }).slice(0, GUILD_META_MAX_PER_PASS);
+    if (!stale.length) {
+      return Promise.resolve();
+    }
+    let index = 0;
+    function worker() {
+      if (index >= stale.length) {
+        return Promise.resolve();
+      }
+      const guild = stale[index];
+      index += 1;
+      return fetchGuildMeta(guild).then(worker);
+    }
+    const workers = [];
+    for (let i = 0; i < Math.min(3, stale.length); i += 1) {
+      workers.push(worker());
+    }
+    return Promise.all(workers);
   }
 
   function autoWhitelistBoostedServers() {
@@ -3067,6 +3199,43 @@ window.manager = {
         setWhitelist('servers', guild.id, true);
       }
     });
+  }
+
+  function guildMemberCount(guild) {
+    if (!guild) {
+      return null;
+    }
+    const raw = guild.member_count != null ? guild.member_count
+      : (guild.approximate_member_count != null ? guild.approximate_member_count
+        : (guild.memberCount != null ? guild.memberCount
+          : (guild.members != null ? (Array.isArray(guild.members) ? guild.members.length : guild.members) : null)));
+    if (raw == null) {
+      return null;
+    }
+    const count = Number(raw);
+    return isNaN(count) ? null : count;
+  }
+
+  function serverSubtitle(guild) {
+    const parts = [];
+    if (guild.owner) {
+      parts.push('Owned');
+    }
+    const boosts = Number(guild.premium_subscription_count || guild.premiumSubscriptionCount || 0);
+    const tier = Number(guild.premium_tier || guild.premiumTier || 0);
+    if (isServerBoosted(guild)) {
+      parts.push('Boosted by you');
+    } else if (boosts || tier) {
+      parts.push('Boost' + (tier ? ': L' + tier : '') + (boosts ? ' (' + boosts + ')' : ''));
+    }
+    if (guild.owner) {
+      const members = guildMemberCount(guild);
+      if (members != null) {
+        parts.push('Members: ' + members.toLocaleString());
+      }
+    }
+    parts.push('ID: ' + guild.id);
+    return parts.join(' \u00b7 ');
   }
 
   function friendName(r) {
@@ -3140,12 +3309,20 @@ window.manager = {
   function getLeaveServerCandidates() {
     return (state.guilds || []).map(function (g) {
       const name = g.name || g.id;
-      const leaveable = !g.owner && !inWl('servers', g.id);
+      const boosted = isServerBoosted(g);
+      const whitelisted = inWl('servers', g.id);
+      const leaveable = !g.owner && !whitelisted;
+      let reason = 'Ready';
+      if (g.owner) {
+        reason = 'Owned by account';
+      } else if (whitelisted) {
+        reason = boosted ? 'Boosted by you (whitelisted)' : 'Whitelisted';
+      }
       return {
         id: g.id,
         name: name,
         leaveable: leaveable,
-        reason: g.owner ? 'Owned by account' : (inWl('servers', g.id) ? 'Whitelisted' : 'Ready')
+        reason: reason
       };
     });
   }
@@ -3410,6 +3587,55 @@ window.manager = {
   function isOwnMessage(m) {
     return !!(m && m.author && state.user && state.user.id &&
       String(m.author.id) === String(state.user.id));
+  }
+
+  // Close (hide) a single DM conversation without deleting any message history.
+  function buildCloseTargetDMItems(targetId) {
+    const cleanId = String(targetId || '').trim();
+    if (!cleanId) {
+      return [];
+    }
+    const needle = cleanId.toLowerCase();
+    const ch = (state.channels || []).find(function (c) {
+      if (c.type !== 1 && c.type !== 3) {
+        return false;
+      }
+      if (String(c.id) === cleanId) {
+        return true;
+      }
+      return (c.recipients || []).some(function (r) {
+        return String(r.id) === cleanId ||
+          String(r.username || '').toLowerCase() === needle ||
+          String(r.global_name || '').toLowerCase() === needle;
+      });
+    });
+    if (!ch) {
+      return [{
+        label: 'Close DM: ' + cleanId,
+        skip: 'No open DM conversation found'
+      }];
+    }
+    const name = ch.type === 3
+      ? (ch.name || 'Group Chat')
+      : ((ch.recipients && ch.recipients[0] && (ch.recipients[0].username || ch.recipients[0].id)) || ch.name || ch.id);
+    if (dmWhitelisted(ch)) {
+      return [{
+        label: 'Close DM: ' + name + ' (' + ch.id + ')',
+        skip: 'Whitelisted'
+      }];
+    }
+    return [{
+      label: 'Close DM: ' + name + ' (' + ch.id + ')',
+      action: function () {
+        return apiCall('DELETE', '/channels/' + ch.id).then(function (res) {
+          if (res && res.status >= 200 && res.status < 300) {
+            state.channels = (state.channels || []).filter(function (c) { return c.id !== ch.id; });
+            updateMetricsFrom(state);
+          }
+          return res;
+        });
+      }
+    }];
   }
 
   function buildTextSearchChannelWalkItems(text) {
@@ -3915,6 +4141,7 @@ window.manager = {
     const modal = byId('historyModal');
     if (modal) {
       modal.classList.add('active');
+      document.body.classList.add('history-open');
     }
   }
 
@@ -3922,6 +4149,7 @@ window.manager = {
     const modal = byId('historyModal');
     if (modal) {
       modal.classList.remove('active');
+      document.body.classList.remove('history-open');
     }
   }
 
@@ -5113,13 +5341,20 @@ window.manager = {
       }
     });
 
-    const primaryBtn = byId('deleteDmPrimaryBtn');
     const targetInput = byId('deleteDmTargetInput');
     const targetError = byId('deleteDmTargetError');
     const textInput = byId('deleteDmTextInput');
     const textError = byId('deleteDmTextError');
-    if (primaryBtn) {
-      primaryBtn.addEventListener('click', function () {
+    const purgeBtn = byId('deleteDmPurgeBtn');
+    const closeAllBtn = byId('deleteDmCloseAllBtn');
+
+    function clearDmFilterErrors() {
+      if (targetError) targetError.textContent = '';
+      if (textError) textError.textContent = '';
+    }
+
+    if (purgeBtn) {
+      purgeBtn.addEventListener('click', function () {
         if (state.running) {
           toast('An operation is already running.', 'error');
           return;
@@ -5131,17 +5366,16 @@ window.manager = {
           if (textInput) textInput.focus();
           return;
         }
-        if (targetError) targetError.textContent = '';
-        if (textError) textError.textContent = '';
+        clearDmFilterErrors();
         const fullHistory = !!byId('deleteDmFullHistory') && byId('deleteDmFullHistory').checked;
         const btn = byId('deleteUserDMsBtn');
         closeDeleteDmModal();
         showView('operation', { persist: true });
         if (target) {
-          resetTerminal('Delete DM Messages');
+          resetTerminal('Delete All Sent Messages');
           if (opPill) opPill.textContent = 'preparing';
-          emitLine('Preparing targeted DM message deletion...');
-          openOperationConfirmModal('Delete DM Messages (' + target + ')', function () {
+          emitLine('Preparing targeted message deletion...');
+          openOperationConfirmModal('Delete All Sent Messages (' + target + ')', function () {
             return buildDeleteTargetDMsItems(target, fullHistory);
           }, btn, 'Delete your messages from the selected DM conversation' + (fullHistory ? ' (entire history).' : '.'));
           return;
@@ -5150,29 +5384,53 @@ window.manager = {
           runTextWalkOperation(text);
           return;
         }
-        resetTerminal('Close / Delete All DMs');
+        resetTerminal('Delete All Sent Messages');
         if (opPill) opPill.textContent = 'preparing';
-        emitLine('Preparing all DM message deletion...');
-        openOperationConfirmModal('Close / Delete All DMs', function () {
+        emitLine('Preparing all sent message deletion...');
+        openOperationConfirmModal('Delete All Sent Messages', function () {
           return buildDeleteAllDMsMessagesItems(fullHistory);
-        }, btn, 'Delete your messages from every non-whitelisted DM conversation' + (fullHistory ? ' (entire history).' : '.') + ' Whitelisted conversations are skipped.');
-      });
-      [targetInput, textInput].forEach(function (input) {
-        if (!input) {
-          return;
-        }
-        input.addEventListener('keydown', function (event) {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            primaryBtn.click();
-          }
-        });
-        input.addEventListener('input', function () {
-          if (input === targetInput && targetError) targetError.textContent = '';
-          if (input === textInput && textError) textError.textContent = '';
-        });
+        }, btn, 'Delete every message you sent in non-whitelisted DM conversations' + (fullHistory ? ' (entire history).' : '.') + ' Whitelisted conversations are skipped.');
       });
     }
+
+    if (closeAllBtn) {
+      closeAllBtn.addEventListener('click', function () {
+        if (state.running) {
+          toast('An operation is already running.', 'error');
+          return;
+        }
+        const target = targetInput ? targetInput.value.trim() : '';
+        clearDmFilterErrors();
+        const btn = byId('deleteUserDMsBtn');
+        closeDeleteDmModal();
+        showView('operation', { persist: true });
+        const label = target ? 'Close DM (' + target + ')' : 'Close All Open DMs';
+        resetTerminal(label);
+        if (opPill) opPill.textContent = 'preparing';
+        emitLine(target ? 'Preparing targeted DM close...' : 'Preparing to close all open DMs...');
+        openOperationConfirmModal(label, function () {
+          return target ? buildCloseTargetDMItems(target) : buildCleanDMsItems();
+        }, btn, 'Close (hide) DM conversations without deleting any message history. Whitelisted conversations are skipped.');
+      });
+    }
+
+    [targetInput, textInput].forEach(function (input) {
+      if (!input) {
+        return;
+      }
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (purgeBtn) {
+            purgeBtn.click();
+          }
+        }
+      });
+      input.addEventListener('input', function () {
+        if (input === targetInput && targetError) targetError.textContent = '';
+        if (input === textInput && textError) textError.textContent = '';
+      });
+    });
 
     const closeBtn = byId('deleteDmModalClose');
     if (closeBtn) {
@@ -6442,7 +6700,7 @@ window.manager = {
           id: g.id,
           raw: g,
           title: g.name || 'Server',
-          subtitle: (function(){var parts=[]; if(g.owner) parts.push('Owned'); if(g.premium_subscription_count || g.premium_tier || g.premiumSubscriptionCount || g.premiumTier) {var b=g.premium_subscription_count||g.premiumSubscriptionCount||0; var t=g.premium_tier||g.premiumTier||''; parts.push('Boost'+(t?': L'+t:'')+(b?(' ('+b+')'):'') ); } var m=g.member_count||g.approximate_member_count||g.members||g.memberCount; if(m!=null) parts.push(m+' members'); parts.push('ID: '+g.id); return parts.join(' \u00b7 ');})(),
+          subtitle: serverSubtitle(g),
           avatar: guildIconUrl(g, 128),
           initials: (g.name || 'S').slice(0, 1).toUpperCase(),
           isServer: true,
@@ -6459,7 +6717,7 @@ window.manager = {
           id: g.id,
           raw: g,
           title: g.name || 'Server',
-          subtitle: (function(){var parts=[]; if(g.owner) parts.push('Owned'); if(g.premium_subscription_count || g.premium_tier || g.premiumSubscriptionCount || g.premiumTier) {var b=g.premium_subscription_count||g.premiumSubscriptionCount||0; var t=g.premium_tier||g.premiumTier||''; parts.push('Boost'+(t?': L'+t:'')+(b?(' ('+b+')'):'') ); } var m=g.member_count||g.approximate_member_count||g.members||g.memberCount; if(m!=null) parts.push(m+' members'); parts.push('ID: '+g.id); return parts.join(' \u00b7 ');})(),
+          subtitle: serverSubtitle(g),
           avatar: guildIconUrl(g, 128),
           initials: (g.name || 'S').slice(0, 1).toUpperCase(),
           isServer: true,
@@ -6657,7 +6915,7 @@ window.manager = {
         const boostBadge = document.createElement('span');
         boostBadge.className = 'inspector-tag-badge boosted';
         boostBadge.textContent = 'Boosted';
-        boostBadge.title = 'Boosted server - whitelisted and protected from operations';
+        boostBadge.title = 'Nitro Boost active on this server from this account - whitelisted and protected from operations';
         nameEl.appendChild(boostBadge);
       }
       if (item.relationshipType && !item.isOwned) {

@@ -4548,6 +4548,65 @@ html[data-theme="light"] .btn.btn-loading::after {
   letter-spacing: -0.01em;
 }
 
+.history-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.history-bell-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: transform 0.08s, color 0.15s, background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.history-bell-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.history-bell-btn:active {
+  transform: translateY(1px) scale(0.96);
+}
+
+.history-bell-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+body.toasts-hidden .history-bell-btn {
+  color: var(--text-2);
+  opacity: 0.72;
+}
+
+/* The bell lives in the history header while the modal is open, so the fixed
+   corner button must not float over the overlay. */
+body.history-open .toast-toggle-btn {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-bell-btn {
+    transition: none;
+  }
+
+  .history-bell-btn:active {
+    transform: none;
+  }
+}
+
 .modal-list {
   list-style: none;
   display: flex;
@@ -4572,6 +4631,50 @@ html[data-theme="light"] .btn.btn-loading::after {
 .modal-item-sub {
   color: var(--muted);
   font-size: 0.78em;
+}
+
+.history-card .modal-item.history-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+}
+
+.history-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.history-row-title {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-row-account {
+  color: var(--muted);
+  font-size: 0.78em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-row-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 0.78em;
+  color: var(--muted);
 }
 
 /* ---------- Inspector Modal & Batch Selection (PRO MAX) ---------- */
