@@ -599,6 +599,7 @@ window.manager = {
   let inFlightController = null;
   let accountDataRequest = null;
   let guildMetaRequest = null;
+  let lastRateLimitToastAt = 0;
 
   function delay(ms) {
     return new Promise(function (resolve, reject) {
@@ -621,7 +622,11 @@ window.manager = {
     });
   }
 
-  function makeRequest(method, path, body, token, timeoutMs) {
+  function makeRequest(method, path, body, token, timeoutMs, requestSettings) {
+    const settings = requestSettings || {};
+    const maxRateRetries = settings.maxRateRetries == null
+      ? MAX_RATE_RETRIES
+      : Math.max(0, Number(settings.maxRateRetries) || 0);
     const authToken = token || state.token;
     const headers = {
       'Authorization': authToken,
@@ -725,11 +730,14 @@ window.manager = {
     };
     const run = function () {
       return single().then(function (res) {
-        if (res.status === 429 && attempts < MAX_RATE_RETRIES && !stopped()) {
+        if (res.status === 429 && attempts < maxRateRetries && !stopped()) {
           attempts += 1;
           const retryAfter = Number(res.retryAfter);
           const secs = Math.max(Math.ceil(isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5), 1);
-          toast('Rate Limited - retrying in ' + secs + 's...', 'warning');
+          if (!settings.silentRateLimit && Date.now() - lastRateLimitToastAt >= 5000) {
+            lastRateLimitToastAt = Date.now();
+            toast('Rate Limited - retrying in ' + secs + 's...', 'warning');
+          }
           return delay(secs * 1000).then(run);
         }
         if (isUnknownSession(res) && sessionAttempts < MAX_SESSION_RETRIES && !stopped()) {
@@ -744,8 +752,8 @@ window.manager = {
     return run();
   }
 
-  function apiCall(method, path, body, timeoutMs) {
-    return makeRequest(method, path, body, state.token, timeoutMs);
+  function apiCall(method, path, body, timeoutMs, requestSettings) {
+    return makeRequest(method, path, body, state.token, timeoutMs, requestSettings);
   }
 
   function abortInFlight() {
@@ -2104,11 +2112,13 @@ window.manager = {
     });
   }
 
-  function setMetrics(owned, joined, friends, dms) {
+  function setMetrics(owned, joined, friends, dms, boosted) {
     const ownedEl = byId('metricOwned');
     const joinedEl = byId('metricJoined');
     const friendsEl = byId('metricFriends');
     const dmsEl = byId('metricDMs');
+    const boostedEl = byId('metricBoosted');
+    const boostedHintEl = byId('metricBoostedHint');
     if (ownedEl) {
       animateCounter(ownedEl, owned);
     }
@@ -2120,6 +2130,14 @@ window.manager = {
     }
     if (dmsEl) {
       animateCounter(dmsEl, dms);
+    }
+    if (boostedEl) {
+      boostedEl.textContent = boosted == null ? '—' : String(boosted);
+    }
+    if (boostedHintEl) {
+      boostedHintEl.textContent = boosted == null
+        ? 'click to check boost status'
+        : 'servers with your active boost';
     }
   }
 
@@ -2137,18 +2155,20 @@ window.manager = {
     const dms = channels.filter(function (c) {
       return c.type === 1 || c.type === 3;
     }).length;
-    setMetrics(owned, joined, friends, dms);
+    const boostsKnown = guildBoostStatusComplete(guilds);
+    const boosted = boostsKnown ? guilds.filter(isServerBoosted).length : null;
+    setMetrics(owned, joined, friends, dms, boosted);
   }
 
   function refreshMetrics() {
     if (!hasAccount()) {
-      setMetrics('-', '-', '-', '-');
+      setMetrics('-', '-', '-', '-', null);
       return;
     }
     loadAccountData()
       .then(updateMetricsFrom)
       .catch(function () {
-        setMetrics('-', '-', '-', '-');
+        setMetrics('-', '-', '-', '-', null);
       });
   }
 
@@ -3246,7 +3266,17 @@ window.manager = {
       return true;
     }
     const meta = getGuildMeta(guild.id);
-    return !!(meta && meta.boosted);
+    return !!(meta && meta.boostKnown && meta.boosted);
+  }
+
+  function guildBoostStatusComplete(guilds) {
+    return (guilds || []).every(function (guild) {
+      if (!guild || !guild.id || guild.premium_since || guild.user_premium_since || guild.boosted_since) {
+        return true;
+      }
+      const meta = getGuildMeta(guild.id);
+      return !!(meta && meta.boostKnown);
+    });
   }
 
   function fetchGuildMeta(guild) {
@@ -3254,94 +3284,105 @@ window.manager = {
     const prev = state.guildMeta[key];
     const directBoost = !!(guild.premium_since || guild.user_premium_since || guild.boosted_since);
     const meta = {
-      boosted: directBoost || !!(prev && prev.boosted),
+      boosted: directBoost || (prev && prev.boostKnown ? !!prev.boosted : false),
+      boostKnown: directBoost || !!(prev && prev.boostKnown),
       memberCount: prev && typeof prev.memberCount === 'number' ? prev.memberCount : guildMemberCount(guild),
       ts: Date.now()
     };
-    let ok = 0;
-    const tasks = [];
-    if (!directBoost) {
-      // The current-user guild list never includes per-user boost state, so the
-      // member record is the only reliable source for this account's boost.
-      tasks.push(apiCall('GET', '/users/@me/guilds/' + guild.id + '/member')
+    const settings = { maxRateRetries: 0, silentRateLimit: true };
+    let rateLimited = false;
+    let unavailable = false;
+
+    const loadBoost = directBoost || meta.boostKnown
+      ? Promise.resolve()
+      : apiCall('GET', '/users/@me/guilds/' + guild.id + '/member', undefined, undefined, settings)
         .then(function (res) {
-          if (res && res.status !== 0 && res.status !== 429 && res.status < 500) {
-            ok += 1;
-            if (res.status === 200 && res.data) {
-              meta.boosted = !!(res.data.premium_since || res.data.user_premium_since);
-            }
+          if (res && res.status === 429) {
+            rateLimited = true;
+          } else if (res && res.status === 200 && res.data) {
+            meta.boosted = !!(res.data.premium_since || res.data.user_premium_since);
+            meta.boostKnown = true;
+          } else {
+            unavailable = true;
           }
         })
-        .catch(function () { }));
-    }
-    if (guild.owner && meta.memberCount == null) {
-      tasks.push(apiCall('GET', '/guilds/' + guild.id + '?with_counts=true')
+        .catch(function () {
+          unavailable = true;
+        });
+
+    return loadBoost.then(function () {
+      if (rateLimited || !guild.owner || meta.memberCount != null) {
+        return;
+      }
+      return apiCall('GET', '/guilds/' + guild.id + '?with_counts=true', undefined, undefined, settings)
         .then(function (res) {
-          if (res && res.status !== 0 && res.status !== 429 && res.status < 500) {
-            ok += 1;
-            if (res.status === 200 && res.data) {
-              const raw = res.data.approximate_member_count != null
-                ? res.data.approximate_member_count
-                : res.data.member_count;
-              const count = Number(raw);
-              if (raw != null && !isNaN(count)) {
-                meta.memberCount = count;
-                guild.member_count = count;
-                guild.approximate_member_count = count;
-              }
-            }
+          if (res && res.status === 429) {
+            rateLimited = true;
+            return;
+          }
+          if (!res || res.status !== 200 || !res.data) {
+            return;
+          }
+          const raw = res.data.approximate_member_count != null
+            ? res.data.approximate_member_count
+            : res.data.member_count;
+          const count = Number(raw);
+          if (raw != null && !isNaN(count)) {
+            meta.memberCount = count;
+            guild.member_count = count;
+            guild.approximate_member_count = count;
           }
         })
-        .catch(function () { }));
-    }
-    if (!tasks.length) {
-      return Promise.resolve(meta);
-    }
-    return Promise.all(tasks).then(function () {
-      // Cache definitive answers; leave transport/rate-limit failures uncached.
-      if (ok > 0 || prev) {
+        .catch(function () {
+          unavailable = true;
+        });
+    }).then(function () {
+      meta.ts = Date.now();
+      if (!rateLimited || meta.boostKnown) {
         state.guildMeta[key] = meta;
       }
-      return meta;
+      return { rateLimited: rateLimited, unavailable: unavailable };
     });
   }
 
-  // Check every guild once for this account's boost state (the guild list does
-  // not expose it) and fill in owned-server member totals. Results are cached
-  // per account and shared across loads; concurrency is kept small to stay
-  // inside Discord's rate limits.
+  // Check guilds sequentially because the guild list does not expose per-user
+  // boost state. Stop as soon as Discord rate-limits the lookup.
   function enrichGuildDetails(guilds) {
     if (!hasAccount()) {
-      return Promise.resolve();
+      return Promise.resolve({ rateLimited: false, unavailable: false });
     }
     const stale = (guilds || []).filter(function (g) {
       return g && g.id && !getGuildMeta(g.id);
     }).slice(0, GUILD_META_MAX_PER_PASS);
     if (!stale.length) {
-      return Promise.resolve();
+      return Promise.resolve({ rateLimited: false, unavailable: false });
     }
-    let index = 0;
-    function worker() {
-      if (index >= stale.length) {
-        return Promise.resolve();
+    const result = { rateLimited: false, unavailable: false };
+    function next(index) {
+      if (index >= stale.length || result.rateLimited) {
+        return Promise.resolve(result);
       }
-      const guild = stale[index];
-      index += 1;
-      return fetchGuildMeta(guild).then(worker);
+      return fetchGuildMeta(stale[index]).then(function (entry) {
+        result.rateLimited = result.rateLimited || entry.rateLimited;
+        result.unavailable = result.unavailable || entry.unavailable;
+        return next(index + 1);
+      });
     }
-    const workers = [];
-    for (let i = 0; i < Math.min(5, stale.length); i += 1) {
-      workers.push(worker());
-    }
-    return Promise.all(workers);
+    return next(0);
   }
 
   function ensureGuildMetaLoaded() {
     if (guildMetaRequest) {
       return guildMetaRequest;
     }
-    guildMetaRequest = enrichGuildDetails(state.guilds).then(function () {
+    guildMetaRequest = enrichGuildDetails(state.guilds).then(function (result) {
       autoWhitelistBoostedServers();
+      updateMetricsFrom(state);
+      if (result.rateLimited) {
+        toast('Discord rate-limited the boost lookup. Confirmed results are shown; open this list later to continue checking servers.', 'warning');
+      } else if (result.unavailable) {
+        toast('Discord did not return boost details for every server. Unconfirmed servers are not counted.', 'warning');
+      }
     }).finally(function () {
       guildMetaRequest = null;
     });
@@ -6829,7 +6870,7 @@ window.manager = {
         list.innerHTML = '<li class="inspector-empty"><div class="brand-dot" style="margin-bottom:8px;"></div><span>Fetching fresh data from Discord...</span></li>';
       }
     }
-    const needsBoostDetails = type === 'servers' || type === 'owned';
+    const needsBoostDetails = type === 'servers' || type === 'owned' || type === 'boosted';
     const accountLoad = stale ? loadAccountData().then(function (data) {
       updateMetricsFrom(data);
     }) : Promise.resolve();
@@ -6921,6 +6962,20 @@ window.manager = {
           isOwned: !!g.owner,
           isBoosted: isServerBoosted(g),
           relationshipType: g.owner ? 'Owner' : 'Member'
+        };
+      });
+    } else if (type === 'boosted') {
+      items = (state.guilds || []).filter(isServerBoosted).map(function (g) {
+        return {
+          id: g.id,
+          raw: g,
+          title: g.name || 'Server',
+          subtitle: serverSubtitle(g),
+          avatar: guildIconUrl(g, 128),
+          initials: (g.name || 'S').slice(0, 1).toUpperCase(),
+          isServer: true,
+          isOwned: !!g.owner,
+          isBoosted: true
         };
       });
     } else if (type === 'owned') {
@@ -7019,6 +7074,10 @@ window.manager = {
       if (titleEl) titleEl.textContent = 'Joined Servers';
       if (subtitleEl) subtitleEl.textContent = 'Manage all servers you are in - community, private, and owned; boosted servers stay whitelisted';
       if (iconEl) iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    } else if (type === 'boosted') {
+      if (titleEl) titleEl.textContent = 'Servers Boosted';
+      if (subtitleEl) subtitleEl.textContent = 'Servers with a confirmed active boost from this account';
+      if (iconEl) iconEl.innerHTML = '<img class="inspector-header-boost-icon" src="assets/images/badges/boost_badges/discordboost1.svg" alt="" aria-hidden="true">';
     } else if (type === 'owned') {
       if (titleEl) titleEl.textContent = 'Owned Servers';
       if (subtitleEl) subtitleEl.textContent = 'Servers where you have ownership privileges';
@@ -7089,7 +7148,12 @@ window.manager = {
     if (!items.length) {
       const emptyLi = document.createElement('li');
       emptyLi.className = 'inspector-empty';
-      emptyLi.innerHTML = '<div class="inspector-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div><span>No ' + type + ' found matching your search.</span>';
+      const emptyMessage = type === 'boosted'
+        ? (guildBoostStatusComplete(state.guilds)
+          ? 'No servers boosted by this account.'
+          : 'Discord has not confirmed boost status for every server. Try again later to continue checking.')
+        : 'No ' + type + ' found matching your search.';
+      emptyLi.innerHTML = '<div class="inspector-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div><span>' + emptyMessage + '</span>';
       listEl.appendChild(emptyLi);
       return;
     }
@@ -7112,7 +7176,22 @@ window.manager = {
       } else {
         avatar.textContent = item.initials;
       }
-      li.appendChild(avatar);
+      if (item.isServer) {
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'inspector-guild-icon-wrap';
+        iconWrap.appendChild(avatar);
+        if (item.isBoosted) {
+          const boostIcon = document.createElement('img');
+          boostIcon.className = 'inspector-guild-boost-icon';
+          boostIcon.src = 'assets/images/badges/boost_badges/discordboost1.svg';
+          boostIcon.alt = 'Boosted by this account';
+          boostIcon.title = 'This account is boosting this server';
+          iconWrap.appendChild(boostIcon);
+        }
+        li.appendChild(iconWrap);
+      } else {
+        li.appendChild(avatar);
+      }
 
       const info = document.createElement('div');
       info.className = 'inspector-item-info';
