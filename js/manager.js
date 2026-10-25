@@ -573,6 +573,8 @@ window.manager = {
   // guild counts endpoint. Cached to keep repeated loads and confirm modals fast.
   const GUILD_META_TTL_MS = 30 * 60 * 1000;
   const GUILD_META_MAX_PER_PASS = 200;
+  const GUILD_META_REQUEST_INTERVAL_MS = 1100;
+  const MAX_GUILD_META_AUTO_RETRIES = 3;
 
   const MAX_RATE_RETRIES = 3;
 
@@ -599,6 +601,9 @@ window.manager = {
   let inFlightController = null;
   let accountDataRequest = null;
   let guildMetaRequest = null;
+  let guildMetaRetryTimer = null;
+  let guildMetaRetryAttempts = 0;
+  let lastGuildMetaRequestAt = 0;
   let lastRateLimitToastAt = 0;
 
   function delay(ms) {
@@ -845,6 +850,12 @@ window.manager = {
   }
 
   function setActiveAccount(token, user) {
+    if (guildMetaRetryTimer) {
+      clearTimeout(guildMetaRetryTimer);
+      guildMetaRetryTimer = null;
+    }
+    guildMetaRetryAttempts = 0;
+    lastGuildMetaRequestAt = 0;
     state.token = normalizeToken(token);
     state.user = user;
     rememberAvatar(user);
@@ -871,6 +882,12 @@ window.manager = {
 
   function clearActiveAccount() {
     abortInFlight();
+    if (guildMetaRetryTimer) {
+      clearTimeout(guildMetaRetryTimer);
+      guildMetaRetryTimer = null;
+    }
+    guildMetaRetryAttempts = 0;
+    lastGuildMetaRequestAt = 0;
     state.token = '';
     state.user = null;
     state.legacyUsernameOverride = null;
@@ -3279,9 +3296,16 @@ window.manager = {
     });
   }
 
+  function waitForGuildMetaRequestSlot() {
+    const waitMs = Math.max(0, lastGuildMetaRequestAt + GUILD_META_REQUEST_INTERVAL_MS - Date.now());
+    return delay(waitMs).then(function () {
+      lastGuildMetaRequestAt = Date.now();
+    });
+  }
+
   function fetchGuildMeta(guild) {
     const key = guildMetaKey(guild.id);
-    const prev = state.guildMeta[key];
+    const prev = getGuildMeta(guild.id);
     const directBoost = !!(guild.premium_since || guild.user_premium_since || guild.boosted_since);
     const meta = {
       boosted: directBoost || (prev && prev.boostKnown ? !!prev.boosted : false),
@@ -3292,13 +3316,18 @@ window.manager = {
     const settings = { maxRateRetries: 0, silentRateLimit: true };
     let rateLimited = false;
     let unavailable = false;
+    let retryAfter = null;
 
     const loadBoost = directBoost || meta.boostKnown
       ? Promise.resolve()
-      : apiCall('GET', '/users/@me/guilds/' + guild.id + '/member', undefined, undefined, settings)
+      : waitForGuildMetaRequestSlot()
+        .then(function () {
+          return apiCall('GET', '/users/@me/guilds/' + guild.id + '/member', undefined, undefined, settings);
+        })
         .then(function (res) {
           if (res && res.status === 429) {
             rateLimited = true;
+            retryAfter = res.retryAfter;
           } else if (res && res.status === 200 && res.data) {
             meta.boosted = !!(res.data.premium_since || res.data.user_premium_since);
             meta.boostKnown = true;
@@ -3314,10 +3343,14 @@ window.manager = {
       if (rateLimited || !guild.owner || meta.memberCount != null) {
         return;
       }
-      return apiCall('GET', '/guilds/' + guild.id + '?with_counts=true', undefined, undefined, settings)
+      return waitForGuildMetaRequestSlot()
+        .then(function () {
+          return apiCall('GET', '/guilds/' + guild.id + '?with_counts=true', undefined, undefined, settings);
+        })
         .then(function (res) {
           if (res && res.status === 429) {
             rateLimited = true;
+            retryAfter = res.retryAfter;
             return;
           }
           if (!res || res.status !== 200 || !res.data) {
@@ -3338,26 +3371,26 @@ window.manager = {
         });
     }).then(function () {
       meta.ts = Date.now();
-      if (!rateLimited || meta.boostKnown) {
+      if (meta.boostKnown) {
         state.guildMeta[key] = meta;
       }
-      return { rateLimited: rateLimited, unavailable: unavailable };
+      return { rateLimited: rateLimited, unavailable: unavailable, retryAfter: retryAfter };
     });
   }
 
   // Check guilds sequentially because the guild list does not expose per-user
   // boost state. Stop as soon as Discord rate-limits the lookup.
-  function enrichGuildDetails(guilds) {
+  function enrichGuildDetails(guilds, onGuildUpdated) {
     if (!hasAccount()) {
-      return Promise.resolve({ rateLimited: false, unavailable: false });
+      return Promise.resolve({ rateLimited: false, unavailable: false, retryAfter: null });
     }
     const stale = (guilds || []).filter(function (g) {
       return g && g.id && !getGuildMeta(g.id);
     }).slice(0, GUILD_META_MAX_PER_PASS);
     if (!stale.length) {
-      return Promise.resolve({ rateLimited: false, unavailable: false });
+      return Promise.resolve({ rateLimited: false, unavailable: false, retryAfter: null });
     }
-    const result = { rateLimited: false, unavailable: false };
+    const result = { rateLimited: false, unavailable: false, retryAfter: null };
     function next(index) {
       if (index >= stale.length || result.rateLimited) {
         return Promise.resolve(result);
@@ -3365,23 +3398,74 @@ window.manager = {
       return fetchGuildMeta(stale[index]).then(function (entry) {
         result.rateLimited = result.rateLimited || entry.rateLimited;
         result.unavailable = result.unavailable || entry.unavailable;
+        if (entry.retryAfter != null) {
+          result.retryAfter = entry.retryAfter;
+        }
+        if (typeof onGuildUpdated === 'function') {
+          onGuildUpdated(stale[index]);
+        }
         return next(index + 1);
       });
     }
     return next(0);
   }
 
+  function scheduleGuildMetaRetry(retryAfter) {
+    if (guildMetaRetryTimer) {
+      clearTimeout(guildMetaRetryTimer);
+      guildMetaRetryTimer = null;
+    }
+    const accountId = state.user && state.user.id ? String(state.user.id) : '';
+    const token = state.token;
+    const seconds = Number(retryAfter);
+    const waitMs = (isFinite(seconds) && seconds > 0 ? seconds : 60) * 1000 + 1000;
+    const retryAt = Date.now() + waitMs;
+    const schedule = function () {
+      const remaining = retryAt - Date.now();
+      if (remaining > 0) {
+        guildMetaRetryTimer = setTimeout(schedule, Math.min(remaining, 2147483000));
+        return;
+      }
+      guildMetaRetryTimer = null;
+      if (token === state.token && accountId && state.user && String(state.user.id) === accountId) {
+        ensureGuildMetaLoaded();
+      }
+    };
+    guildMetaRetryTimer = setTimeout(schedule, Math.min(waitMs, 2147483000));
+  }
+
   function ensureGuildMetaLoaded() {
     if (guildMetaRequest) {
       return guildMetaRequest;
     }
-    guildMetaRequest = enrichGuildDetails(state.guilds).then(function (result) {
+    guildMetaRequest = enrichGuildDetails(state.guilds, function () {
+      autoWhitelistBoostedServers();
+      updateMetricsFrom(state);
+      const modal = byId('inspectorModal');
+      if (modal && modal.classList.contains('active') &&
+          (state.inspectType === 'servers' || state.inspectType === 'owned' || state.inspectType === 'boosted')) {
+        const list = byId('inspectorList');
+        const scrollTop = list ? list.scrollTop : 0;
+        renderInspector();
+        if (list) {
+          list.scrollTop = scrollTop;
+        }
+      }
+    }).then(function (result) {
       autoWhitelistBoostedServers();
       updateMetricsFrom(state);
       if (result.rateLimited) {
-        toast('Discord rate-limited the boost lookup. Confirmed results are shown; open this list later to continue checking servers.', 'warning');
+        guildMetaRetryAttempts += 1;
+        if (guildMetaRetryAttempts <= MAX_GUILD_META_AUTO_RETRIES) {
+          toast("Discord rate-limited the boost lookup. Confirmed badges are shown; checking will resume after Discord's cooldown.", 'warning');
+          scheduleGuildMetaRetry(result.retryAfter);
+        } else {
+          toast('Boost checking paused after repeated rate limits. Open Joined Servers later to retry.', 'warning');
+        }
       } else if (result.unavailable) {
         toast('Discord did not return boost details for every server. Unconfirmed servers are not counted.', 'warning');
+      } else if (guildBoostStatusComplete(state.guilds)) {
+        guildMetaRetryAttempts = 0;
       }
     }).finally(function () {
       guildMetaRequest = null;
