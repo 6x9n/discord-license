@@ -2129,13 +2129,11 @@ window.manager = {
     });
   }
 
-  function setMetrics(owned, joined, friends, dms, boosted) {
+  function setMetrics(owned, joined, friends, dms) {
     const ownedEl = byId('metricOwned');
     const joinedEl = byId('metricJoined');
     const friendsEl = byId('metricFriends');
     const dmsEl = byId('metricDMs');
-    const boostedEl = byId('metricBoosted');
-    const boostedHintEl = byId('metricBoostedHint');
     if (ownedEl) {
       animateCounter(ownedEl, owned);
     }
@@ -2147,14 +2145,6 @@ window.manager = {
     }
     if (dmsEl) {
       animateCounter(dmsEl, dms);
-    }
-    if (boostedEl) {
-      boostedEl.textContent = boosted == null ? '—' : String(boosted);
-    }
-    if (boostedHintEl) {
-      boostedHintEl.textContent = boosted == null
-        ? 'click to check boost status'
-        : 'servers with your active boost';
     }
   }
 
@@ -2172,20 +2162,18 @@ window.manager = {
     const dms = channels.filter(function (c) {
       return c.type === 1 || c.type === 3;
     }).length;
-    const boostsKnown = guildBoostStatusComplete(guilds);
-    const boosted = boostsKnown ? guilds.filter(isServerBoosted).length : null;
-    setMetrics(owned, joined, friends, dms, boosted);
+    setMetrics(owned, joined, friends, dms);
   }
 
   function refreshMetrics() {
     if (!hasAccount()) {
-      setMetrics('-', '-', '-', '-', null);
+      setMetrics('-', '-', '-', '-');
       return;
     }
     loadAccountData()
       .then(updateMetricsFrom)
       .catch(function () {
-        setMetrics('-', '-', '-', '-', null);
+        setMetrics('-', '-', '-', '-');
       });
   }
 
@@ -3443,7 +3431,7 @@ window.manager = {
       updateMetricsFrom(state);
       const modal = byId('inspectorModal');
       if (modal && modal.classList.contains('active') &&
-          (state.inspectType === 'servers' || state.inspectType === 'owned' || state.inspectType === 'boosted')) {
+          (state.inspectType === 'servers' || state.inspectType === 'owned')) {
         const list = byId('inspectorList');
         const scrollTop = list ? list.scrollTop : 0;
         renderInspector();
@@ -3509,9 +3497,7 @@ window.manager = {
     }
     const boosts = Number(guild.premium_subscription_count || guild.premiumSubscriptionCount || 0);
     const tier = Number(guild.premium_tier || guild.premiumTier || 0);
-    if (isServerBoosted(guild)) {
-      parts.push('Boosted by you');
-    } else if (boosts || tier) {
+    if (boosts || tier) {
       parts.push('Boost' + (tier ? ': L' + tier : '') + (boosts ? ' (' + boosts + ')' : ''));
     }
     if (guild.owner) {
@@ -3595,14 +3581,13 @@ window.manager = {
   function getLeaveServerCandidates() {
     return (state.guilds || []).map(function (g) {
       const name = g.name || g.id;
-      const boosted = isServerBoosted(g);
       const whitelisted = inWl('servers', g.id);
       const leaveable = !g.owner && !whitelisted;
       let reason = 'Ready';
       if (g.owner) {
         reason = 'Owned by account';
       } else if (whitelisted) {
-        reason = boosted ? 'Boosted by you (whitelisted)' : 'Whitelisted';
+        reason = 'Whitelisted';
       }
       return {
         id: g.id,
@@ -4052,13 +4037,14 @@ window.manager = {
         updateMetricsFrom(data);
         const leaveToggle = byId('allInOneLeave');
         if (title === 'All-in-One Cleanup' && leaveToggle && leaveToggle.checked) {
-          return ensureGuildMetaLoaded();
+          return ensureGuildMetaLoaded().then(function () {
+            if (!guildBoostStatusComplete(state.guilds)) {
+              throw new Error('Could not verify boost protection for every server. No cleanup actions were started; try again after Discord recovers.');
+            }
+          });
         }
       })
-      .catch(function (err) {
-        state.lastLoadError = err && err.message ? err.message : state.lastLoadError;
-      })
-      .finally(function () {
+      .then(function () {
         if (state.stopped) {
           state.running = false;
           setCurrentOperation('', '');
@@ -4067,16 +4053,25 @@ window.manager = {
           toast('Operation stopped.', 'info');
           return;
         }
-        try {
-          const builtItems = typeof buildFn === 'function' ? buildFn() : [];
-          runOperation(title, builtItems, triggerBtn, true);
-        } catch (err) {
+        const builtItems = typeof buildFn === 'function' ? buildFn() : [];
+        runOperation(title, builtItems, triggerBtn, true);
+      })
+      .catch(function (err) {
+        if (state.stopped) {
           state.running = false;
           setCurrentOperation('', '');
           unlockOperationButtons();
           abortInFlight();
-          toast((err && err.message) || 'Could not build the operation list.', 'error');
+          toast('Operation stopped.', 'info');
+          return;
         }
+        state.lastLoadError = err && err.message ? err.message : state.lastLoadError;
+        state.running = false;
+        state.stopped = false;
+        setCurrentOperation('', '');
+        unlockOperationButtons();
+        abortInFlight();
+        toast((err && err.message) || 'Could not prepare the operation. No actions were started.', 'error');
       });
   }
 
@@ -4553,6 +4548,16 @@ window.manager = {
     return items;
   }
 
+  function estimateOperationSeconds(items) {
+    const queue = Array.isArray(items) ? items.filter(function (item) { return !!item; }) : [];
+    const cooldown = Number((byId('allInOneCooldown') || {}).value) || 0;
+    let totalMs = 0;
+    for (let i = 1; i < queue.length; i += 1) {
+      totalMs += queue[i].operationBoundary ? cooldown : currentDelay();
+    }
+    return Math.ceil(totalMs / 1000);
+  }
+
   function updateAllInOneSummary() {
     const items = buildAllInOneItems();
     const actionable = items.filter(function (item) { return item && !item.skip; });
@@ -4562,7 +4567,7 @@ window.manager = {
     const confirmBtn = byId('operationConfirmBtn');
     if (countEl) countEl.textContent = String(actionable.length);
     if (skippedEl) skippedEl.textContent = '• ' + (items.length - actionable.length) + ' protected/whitelisted';
-    if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((actionable.length * currentDelay()) / 1000)) + 's';
+    if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + estimateOperationSeconds(items) + 's';
     if (confirmBtn) confirmBtn.disabled = actionable.length === 0;
     paintOperationConfirmTargets(actionable);
   }
@@ -4687,7 +4692,12 @@ window.manager = {
       if (descriptionEl) descriptionEl.textContent = description || 'Review the operation before it starts.';
       if (countEl) countEl.textContent = String(actionable.length);
       if (skippedEl) skippedEl.textContent = '• ' + skipped + ' protected/whitelisted';
-      if (estimateEl) estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((actionable.length * currentDelay()) / 1000)) + 's';
+      if (estimateEl) {
+        const seconds = title === 'All-in-One Cleanup'
+          ? estimateOperationSeconds(items)
+          : Math.max(0, Math.ceil((actionable.length * currentDelay()) / 1000));
+        estimateEl.textContent = 'Estimated processing time: ~' + seconds + 's';
+      }
       if (confirmBtn) {
         confirmBtn.disabled = actionable.length === 0;
         confirmBtn.classList.remove('btn-loading');
@@ -6954,7 +6964,7 @@ window.manager = {
         list.innerHTML = '<li class="inspector-empty"><div class="brand-dot" style="margin-bottom:8px;"></div><span>Fetching fresh data from Discord...</span></li>';
       }
     }
-    const needsBoostDetails = type === 'servers' || type === 'owned' || type === 'boosted';
+    const needsBoostDetails = type === 'servers' || type === 'owned';
     const accountLoad = stale ? loadAccountData().then(function (data) {
       updateMetricsFrom(data);
     }) : Promise.resolve();
@@ -7046,20 +7056,6 @@ window.manager = {
           isOwned: !!g.owner,
           isBoosted: isServerBoosted(g),
           relationshipType: g.owner ? 'Owner' : 'Member'
-        };
-      });
-    } else if (type === 'boosted') {
-      items = (state.guilds || []).filter(isServerBoosted).map(function (g) {
-        return {
-          id: g.id,
-          raw: g,
-          title: g.name || 'Server',
-          subtitle: serverSubtitle(g),
-          avatar: guildIconUrl(g, 128),
-          initials: (g.name || 'S').slice(0, 1).toUpperCase(),
-          isServer: true,
-          isOwned: !!g.owner,
-          isBoosted: true
         };
       });
     } else if (type === 'owned') {
@@ -7158,10 +7154,6 @@ window.manager = {
       if (titleEl) titleEl.textContent = 'Joined Servers';
       if (subtitleEl) subtitleEl.textContent = 'Manage all servers you are in - community, private, and owned; boosted servers stay whitelisted';
       if (iconEl) iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
-    } else if (type === 'boosted') {
-      if (titleEl) titleEl.textContent = 'Servers Boosted';
-      if (subtitleEl) subtitleEl.textContent = 'Servers with a confirmed active boost from this account';
-      if (iconEl) iconEl.innerHTML = '<img class="inspector-header-boost-icon" src="assets/images/badges/boost_badges/discordboost1.svg" alt="" aria-hidden="true">';
     } else if (type === 'owned') {
       if (titleEl) titleEl.textContent = 'Owned Servers';
       if (subtitleEl) subtitleEl.textContent = 'Servers where you have ownership privileges';
@@ -7232,12 +7224,7 @@ window.manager = {
     if (!items.length) {
       const emptyLi = document.createElement('li');
       emptyLi.className = 'inspector-empty';
-      const emptyMessage = type === 'boosted'
-        ? (guildBoostStatusComplete(state.guilds)
-          ? 'No servers boosted by this account.'
-          : 'Discord has not confirmed boost status for every server. Try again later to continue checking.')
-        : 'No ' + type + ' found matching your search.';
-      emptyLi.innerHTML = '<div class="inspector-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div><span>' + emptyMessage + '</span>';
+      emptyLi.innerHTML = '<div class="inspector-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div><span>No ' + type + ' found matching your search.</span>';
       listEl.appendChild(emptyLi);
       return;
     }

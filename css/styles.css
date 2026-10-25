@@ -583,6 +583,8 @@ body::after {
   z-index: 50;
   align-items: center;
   justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   transition: opacity 0.25s ease, visibility 0.25s ease;
 }
 
@@ -594,11 +596,16 @@ body::after {
 .modal-card {
   width: 100%;
   max-width: 380px;
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   border-radius: var(--radius);
   padding: clamp(24px, 4vw, 34px);
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   text-align: center;
   transform: scale(0.96) translateY(10px);
   transition: transform 0.4s var(--spring);
@@ -1028,6 +1035,8 @@ body::after {
   flex-direction: column;
   gap: 6px;
   max-height: 220px;
+  max-height: min(220px, 28vh);
+  max-height: min(220px, 28dvh);
   overflow: auto;
   text-align: left;
 }
@@ -1056,6 +1065,30 @@ body::after {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.86em;
+}
+
+@media (max-width: 600px) {
+  .modal {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .modal-card {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    margin-block: auto;
+    padding: 18px 16px;
+  }
+
+  .leave-confirm-card .modal-actions-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .leave-confirm-card .modal-actions-row .btn {
+    width: 100%;
+    min-height: 46px;
+  }
 }
 
 /* ---------- Toasts ---------- */
