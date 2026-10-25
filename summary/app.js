@@ -47,7 +47,8 @@ function splitList(value) {
    name still resolve through BadgeIcons and show as removable custom chips.
 
    Ordered the way the main profile tool draws a profile: account badges in
-   Discord flag order, then Nitro, then Server Boost, then the gift tier. */
+   Discord flag order, then Nitro, then Server Boost, then the gift tier, then
+   the beta activity families, then the remaining badges. */
 var BADGE_OPTIONS = [
   'Discord Staff',
   'Partner',
@@ -84,9 +85,50 @@ var BADGE_OPTIONS = [
   'Icon',
   'Hero',
   'Legend',
+  'Seed',
+  'Sprout',
+  'Bud',
+  'Sapling',
+  'Blossom',
+  'Redwood',
+  'Sequoia',
+  'Bristlecone',
+  'Stromatolite',
+  'Primordial',
+  'Newcomer',
+  'Fledgling',
+  'Breakout',
+  'Standout',
+  'Trendsetter',
+  'Headliner',
+  'Star',
+  'Sensation',
+  'Visionary',
+  'Phenomenon',
+  'Casual',
+  'Recreational',
+  'Dedicated',
+  'Committed',
+  'Serious',
+  'Devoted',
+  'Seasoned',
+  'Ironclad',
+  'Unshakeable',
+  'Eternal',
+  'Sampler',
+  'Dabbler',
+  'Enthusiast',
+  'Ranger',
+  'Explorer',
+  'Adventurer',
+  'Voyager',
+  'Maverick',
+  'Polymath',
+  'Universalist',
   'Completed a Quest',
   'Orb',
-  'Leaf'
+  'Leaf',
+  'Last Meadow Online'
 ];
 
 /* Badge labels are stored as free text, so rows saved before the rename still

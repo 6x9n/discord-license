@@ -35,6 +35,8 @@
 
     // Nitro
     'Nitro': 'discordnitro.svg',
+    'Nitro Basic': 'discordnitrobasic.svg',
+    'Nitro (Legacy)': 'olddiscordnitro.svg',
     'Bronze': 'nitro_badges/bronze.png',
     'Silver': 'nitro_badges/silver.png',
     'Gold': 'nitro_badges/gold.png',
@@ -73,8 +75,144 @@
     // hand-drawn file, the same size and shape as the glyphs drawn below.
     'Completed a Quest': 'quest.png',
     'Orb': 'orb.svg',
-    'Leaf': 'leaf.png'
+    'Leaf': 'leaf.png',
+
+    // General badges added with the expanded asset set.
+    'Last Meadow Online': 'lastmeadow.png',
+
+    // Account age tiers (Discord experiment, maxed at 10+ years).
+    'Seed': 'account_age/seed.svg',
+    'Sprout': 'account_age/sprout.svg',
+    'Bud': 'account_age/bud.svg',
+    'Sapling': 'account_age/sapling.svg',
+    'Blossom': 'account_age/blossom.svg',
+    'Redwood': 'account_age/redwood.svg',
+    'Sequoia': 'account_age/sequoia.svg',
+    'Bristlecone': 'account_age/bristlecone.svg',
+    'Stromatolite': 'account_age/stromatolite.svg',
+    'Primordial': 'account_age/primordial.svg',
+
+    // Streaming hours tiers (Discord experiment).
+    'Newcomer': 'streaming/newcomer.svg',
+    'Fledgling': 'streaming/fledgling.svg',
+    'Breakout': 'streaming/breakout.svg',
+    'Standout': 'streaming/standout.svg',
+    'Trendsetter': 'streaming/trendsetter.svg',
+    'Headliner': 'streaming/headliner.svg',
+    'Star': 'streaming/star.svg',
+    'Sensation': 'streaming/sensation.svg',
+    'Visionary': 'streaming/visionary.svg',
+    'Phenomenon': 'streaming/phenomenon.svg',
+
+    // Time spent in detected games tiers (Discord experiment).
+    'Casual': 'game_time/casual.svg',
+    'Recreational': 'game_time/recreational.svg',
+    'Dedicated': 'game_time/dedicated.svg',
+    'Committed': 'game_time/committed.svg',
+    'Serious': 'game_time/serious.svg',
+    'Devoted': 'game_time/devoted.svg',
+    'Seasoned': 'game_time/seasoned.svg',
+    'Ironclad': 'game_time/ironclad.svg',
+    'Unshakeable': 'game_time/unshakeable.svg',
+    'Eternal': 'game_time/eternal.svg',
+
+    // Number of detected games played tiers (Discord experiment).
+    'Sampler': 'game_variety/sampler.svg',
+    'Dabbler': 'game_variety/dabbler.svg',
+    'Enthusiast': 'game_variety/enthusiast.svg',
+    'Ranger': 'game_variety/ranger.svg',
+    'Explorer': 'game_variety/explorer.svg',
+    'Adventurer': 'game_variety/adventurer.svg',
+    'Voyager': 'game_variety/voyager.svg',
+    'Maverick': 'game_variety/maverick.svg',
+    'Polymath': 'game_variety/polymath.svg',
+    'Universalist': 'game_variety/universalist.svg',
+
+    // Bot badges. These are public-flag badges on bot accounts, not user
+    // profile badges, so they are catalogued but kept out of the user picker.
+    'Supports Commands': 'supportscommands.svg',
+    'Uses AutoMod': 'automod.svg',
+    'Premium App': 'premiumbot.png',
+    'Verified Bot Developer': 'discordbotdev.svg'
   };
+
+  // Non-profile artwork imported with the expanded badge set. Server badges,
+  // message flairs, tag icons and hall-of-fame variants are not account
+  // profile badges, so they are catalogued here with stable keys/titles/paths
+  // but are intentionally kept out of the account badge pickers.
+  var EXTRA_ASSETS = {
+    serverBadges: [
+      { key: 'server_staff', title: 'Internal Employee (Staff)', path: 'server_badges/staff.svg' },
+      { key: 'server_partnered', title: 'Partnered Server', path: 'server_badges/partnered.svg' },
+      { key: 'server_verified', title: 'Verified Server', path: 'server_badges/verified.svg' },
+      { key: 'server_public_boosted', title: 'Public Server (Boosted)', path: 'server_badges/discoverable-boosted.svg' },
+      { key: 'server_public_dark', title: 'Public Server (Dark)', path: 'server_badges/discoverable-dark.svg' },
+      { key: 'server_public_light', title: 'Public Server (Light)', path: 'server_badges/discoverable-light.svg' },
+      { key: 'server_community_boosted', title: 'Community Server (Boosted)', path: 'server_badges/community-boosted.svg' },
+      { key: 'server_community_dark', title: 'Community Server (Dark)', path: 'server_badges/community-dark.svg' },
+      { key: 'server_community_light', title: 'Community Server (Light)', path: 'server_badges/community-light.svg' },
+      { key: 'server_boost_0', title: 'Boosted Server Level 0', path: 'server_badges/boost-0.svg' },
+      { key: 'server_boost_1', title: 'Boosted Server Level 1', path: 'server_badges/boost-1.svg' },
+      { key: 'server_boost_2_dark', title: 'Boosted Server Level 2 (Dark)', path: 'server_badges/boost-2-dark.svg' },
+      { key: 'server_boost_2_light', title: 'Boosted Server Level 2 (Light)', path: 'server_badges/boost-2-light.svg' },
+      { key: 'server_boost_3_dark', title: 'Boosted Server Level 3 (Dark)', path: 'server_badges/boost-3-dark.svg' },
+      { key: 'server_boost_3_light', title: 'Boosted Server Level 3 (Light)', path: 'server_badges/boost-3-light.svg' },
+      { key: 'server_owner', title: 'Server Owner', path: 'server_badges/crown.svg' },
+      { key: 'server_new_here', title: "I'm new here, say hi!", path: 'server_badges/new-here.svg' }
+    ],
+    specialFlairs: [
+      { key: 'flare_official', title: 'Official', path: 'special_flairs/official.svg' },
+      { key: 'flare_system', title: 'System', path: 'special_flairs/system.svg' },
+      { key: 'flare_server', title: 'Server', path: 'special_flairs/server.svg' },
+      { key: 'flare_verified_bot', title: 'Verified Bot', path: 'special_flairs/verified-bot.svg' },
+      { key: 'flare_verified_app', title: 'Verified App', path: 'special_flairs/verified-app.svg' },
+      { key: 'flare_bot', title: 'Bot', path: 'special_flairs/bot.svg' },
+      { key: 'flare_app', title: 'App', path: 'special_flairs/app.svg' },
+      { key: 'flare_beta', title: 'Beta', path: 'special_flairs/beta.svg' },
+      { key: 'flare_ai_light', title: 'AI (Light)', path: 'special_flairs/light-ai.svg' },
+      { key: 'flare_ai_dark', title: 'AI (Dark)', path: 'special_flairs/dark-ai.svg' },
+      { key: 'flare_original_poster', title: 'Original Poster', path: 'special_flairs/original-poster.svg' },
+      { key: 'flare_lootbox', title: 'A clown, for a limited time', path: 'special_flairs/discord-lootbox.svg' }
+    ],
+    tagIcons: [],
+    hallOfFame: [
+      { key: 'fame_spongetext_staff', title: 'Spongetext Staff', path: 'fame/spongetext-staff.png' },
+      { key: 'fame_sapphire_mod', title: 'Sapphire Moderator Alumni', path: 'fame/sapphire-mod.png' },
+      { key: 'fame_gear_mod', title: 'GearBot Moderator Alumni', path: 'fame/gear-mod.png' },
+      { key: 'fame_wumpus', title: 'Wumpus', path: 'fame/wumpus.png' }
+    ],
+    nitroMaterials: [
+      { key: 'nitro_material_bronze', title: 'Nitro Bronze (Material)', path: 'nitro_materials/bronze.svg' },
+      { key: 'nitro_material_silver', title: 'Nitro Silver (Material)', path: 'nitro_materials/silver.svg' },
+      { key: 'nitro_material_gold', title: 'Nitro Gold (Material)', path: 'nitro_materials/gold.svg' },
+      { key: 'nitro_material_platinum', title: 'Nitro Platinum (Material)', path: 'nitro_materials/platinum.svg' },
+      { key: 'nitro_material_emerald', title: 'Nitro Emerald (Material)', path: 'nitro_materials/emerald.svg' },
+      { key: 'nitro_material_ruby', title: 'Nitro Ruby (Material)', path: 'nitro_materials/ruby.svg' },
+      { key: 'nitro_material_opal', title: 'Nitro Opal (Material)', path: 'nitro_materials/opal.svg' },
+      { key: 'nitro_material_diamond', title: 'Nitro Diamond (Material)', path: 'nitro_materials/diamond.svg' }
+    ],
+    nitroLegacy: [
+      { key: 'nitro_legacy_bronze', title: 'Nitro Bronze (Legacy)', path: 'nitro_legacy/bronze.svg' },
+      { key: 'nitro_legacy_silver', title: 'Nitro Silver (Legacy)', path: 'nitro_legacy/silver.svg' },
+      { key: 'nitro_legacy_gold', title: 'Nitro Gold (Legacy)', path: 'nitro_legacy/gold.svg' },
+      { key: 'nitro_legacy_platinum', title: 'Nitro Platinum (Legacy)', path: 'nitro_legacy/platinum.svg' },
+      { key: 'nitro_legacy_diamond', title: 'Nitro Diamond (Legacy)', path: 'nitro_legacy/diamond.svg' },
+      { key: 'nitro_legacy_emerald', title: 'Nitro Emerald (Legacy)', path: 'nitro_legacy/emerald.svg' },
+      { key: 'nitro_legacy_ruby', title: 'Nitro Ruby (Legacy)', path: 'nitro_legacy/ruby.svg' },
+      { key: 'nitro_legacy_fire', title: 'Nitro Fire (Legacy)', path: 'nitro_legacy/fire.svg' }
+    ]
+  };
+
+  (function () {
+    for (var i = 1; i <= 41; i += 1) {
+      var kind = i >= 22 ? 'Badge Pack Tag Icon' : (i >= 12 ? 'Free Server Tag Icon' : 'Legacy Server Tag Icon');
+      EXTRA_ASSETS.tagIcons.push({
+        key: 'tag_icon_' + i,
+        title: kind + ' ' + i,
+        path: 'tag_icons/' + i + '.svg'
+      });
+    }
+  })();
 
   // The asset for a badge, or '' when there is none and the glyph is used.
   function asset(label) {
@@ -224,6 +362,14 @@
     'questbadge': 'Completed a Quest',
     'questcompleted': 'Completed a Quest',
     'questbadgecompleted': 'Completed a Quest',
+    'orbsapprentice': 'Orb',
+    'orbs apprentice': 'Orb',
+    'orb': 'Orb',
+    'lastmeadow': 'Last Meadow Online',
+    'lastmeadowonline': 'Last Meadow Online',
+    'last meadow online': 'Last Meadow Online',
+    'nitrobasic': 'Nitro Basic',
+    'nitro basic': 'Nitro Basic',
     'orbs': 'Orb',
     'leaves': 'Leaf'
   };
@@ -264,6 +410,12 @@
   Object.keys(GLYPHS).forEach(function (label) {
     BY_KEY[normalise(label)] = label;
   });
+  // Imported badges that ship artwork do not need a hand-drawn glyph, but they
+  // still have to resolve so they can be picked, canonicalised and displayed.
+  Object.keys(ASSETS).forEach(function (label) {
+    var key = normalise(label);
+    if (!BY_KEY[key]) BY_KEY[key] = label;
+  });
 
   function resolve(label) {
     var key = normalise(label);
@@ -303,7 +455,9 @@
   // a cached copy of the CSS.
   function svg(label, className) {
     var key = resolve(label);
-    if (!key) return '';
+    // Asset-only badges (the imported set) have no drawn fallback; media()
+    // still renders their artwork.
+    if (!key || !GLYPHS[key]) return '';
     var cls = className ? ' class="' + className + '"' : ' class="badge-icon"';
     return '<svg' + cls + ' width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
       + ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
@@ -343,10 +497,11 @@
 
   // The order a profile displays badges in, and the order every saved account
   // should render them in: account badges in Discord flag order, then Nitro,
-  // then Server Boost, then the gift tier, then the rest. Badge values are
-  // stored as free text in whatever order they were ticked, so a saved row has
-  // to be put back into this order before it is drawn, otherwise two accounts
-  // with the same badges show them in a different sequence.
+  // then Server Boost, then the gift tier, then the beta activity families
+  // (account age, streaming, game time, game variety), then the rest. Badge
+  // values are stored as free text in whatever order they were ticked, so a
+  // saved row has to be put back into this order before it is drawn, otherwise
+  // two accounts with the same badges show them in a different sequence.
   //
   // A badge we do not recognise is a custom one, so it keeps its place at the
   // end rather than being dropped or sorted somewhere arbitrary.
@@ -355,11 +510,20 @@
     'HypeSquad Bravery', 'HypeSquad Brilliance', 'HypeSquad Balance',
     'Early Supporter', 'Bug Hunter Level 2', 'Discord Certified Moderator',
     'Active Developer',
-    'Nitro', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond',
+    'Nitro', 'Nitro Basic', 'Nitro (Legacy)',
+    'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond',
     'Boost Level 1', 'Boost Level 2', 'Boost Level 3', 'Boost Level 4', 'Boost Level 5',
     'Boost Level 6', 'Boost Level 7', 'Boost Level 8', 'Boost Level 9',
     'Patron', 'Champion', 'Luminary', 'Icon', 'Hero', 'Legend',
-    'Completed a Quest', 'Orb', 'Leaf'
+    'Seed', 'Sprout', 'Bud', 'Sapling', 'Blossom', 'Redwood', 'Sequoia',
+    'Bristlecone', 'Stromatolite', 'Primordial',
+    'Newcomer', 'Fledgling', 'Breakout', 'Standout', 'Trendsetter', 'Headliner',
+    'Star', 'Sensation', 'Visionary', 'Phenomenon',
+    'Casual', 'Recreational', 'Dedicated', 'Committed', 'Serious', 'Devoted',
+    'Seasoned', 'Ironclad', 'Unshakeable', 'Eternal',
+    'Sampler', 'Dabbler', 'Enthusiast', 'Ranger', 'Explorer', 'Adventurer',
+    'Voyager', 'Maverick', 'Polymath', 'Universalist',
+    'Completed a Quest', 'Orb', 'Leaf', 'Last Meadow Online'
   ];
 
   var ORDER_INDEX = {};
@@ -419,8 +583,11 @@
 
   global.BadgeIcons = {
     svg: svg, media: media, chip: chip, has: has, resolve: resolve,
-    asset: asset, canonical: canonical, labels: Object.keys(GLYPHS),
-    assets: ASSETS, assetBase: ASSET_BASE,
+    asset: asset, canonical: canonical,
+    labels: Object.keys(GLYPHS).concat(Object.keys(ASSETS).filter(function (label) {
+      return !GLYPHS[label];
+    })),
+    assets: ASSETS, extras: EXTRA_ASSETS, assetBase: ASSET_BASE,
     profileOrder: PROFILE_ORDER, orderBadges: orderBadges,
     nitroEndInfo: nitroEndInfo,
     nitroSoonDays: NITRO_SOON_DAYS, nitroWarnDays: NITRO_WARN_DAYS

@@ -598,6 +598,7 @@ window.manager = {
 
   let inFlightController = null;
   let accountDataRequest = null;
+  let guildMetaRequest = null;
 
   function delay(ms) {
     return new Promise(function (resolve, reject) {
@@ -726,7 +727,8 @@ window.manager = {
       return single().then(function (res) {
         if (res.status === 429 && attempts < MAX_RATE_RETRIES && !stopped()) {
           attempts += 1;
-          const secs = Math.min(Math.max(Math.ceil(Number(res.retryAfter) || 5), 1), 30);
+          const retryAfter = Number(res.retryAfter);
+          const secs = Math.max(Math.ceil(isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5), 1);
           toast('Rate Limited - retrying in ' + secs + 's...', 'warning');
           return delay(secs * 1000).then(run);
         }
@@ -1045,6 +1047,152 @@ window.manager = {
     { level: 6, gifts: 20, name: 'Legend', image: 'assets/images/badges/gift_badges/giftlvl6.png' }
   ];
 
+  // Discord's beta activity badges. Each family is a single profile badge whose
+  // artwork levels up, so only one level is ever shown at a time.
+  const ACCOUNT_AGE_LEVELS = [
+    { years: 1, name: 'Seed', image: 'assets/images/badges/account_age/seed.svg' },
+    { years: 2, name: 'Sprout', image: 'assets/images/badges/account_age/sprout.svg' },
+    { years: 3, name: 'Bud', image: 'assets/images/badges/account_age/bud.svg' },
+    { years: 4, name: 'Sapling', image: 'assets/images/badges/account_age/sapling.svg' },
+    { years: 5, name: 'Blossom', image: 'assets/images/badges/account_age/blossom.svg' },
+    { years: 6, name: 'Redwood', image: 'assets/images/badges/account_age/redwood.svg' },
+    { years: 7, name: 'Sequoia', image: 'assets/images/badges/account_age/sequoia.svg' },
+    { years: 8, name: 'Bristlecone', image: 'assets/images/badges/account_age/bristlecone.svg' },
+    { years: 9, name: 'Stromatolite', image: 'assets/images/badges/account_age/stromatolite.svg' },
+    { years: 10, name: 'Primordial', image: 'assets/images/badges/account_age/primordial.svg' }
+  ];
+
+  const STREAMING_LEVELS = [
+    { hours: 1, name: 'Newcomer', image: 'assets/images/badges/streaming/newcomer.svg' },
+    { hours: 5, name: 'Fledgling', image: 'assets/images/badges/streaming/fledgling.svg' },
+    { hours: 20, name: 'Breakout', image: 'assets/images/badges/streaming/breakout.svg' },
+    { hours: 75, name: 'Standout', image: 'assets/images/badges/streaming/standout.svg' },
+    { hours: 150, name: 'Trendsetter', image: 'assets/images/badges/streaming/trendsetter.svg' },
+    { hours: 300, name: 'Headliner', image: 'assets/images/badges/streaming/headliner.svg' },
+    { hours: 500, name: 'Star', image: 'assets/images/badges/streaming/star.svg' },
+    { hours: 1000, name: 'Sensation', image: 'assets/images/badges/streaming/sensation.svg' },
+    { hours: 2000, name: 'Visionary', image: 'assets/images/badges/streaming/visionary.svg' },
+    { hours: 5000, name: 'Phenomenon', image: 'assets/images/badges/streaming/phenomenon.svg' }
+  ];
+
+  const GAME_TIME_LEVELS = [
+    { hours: 1, name: 'Casual', image: 'assets/images/badges/game_time/casual.svg' },
+    { hours: 5, name: 'Recreational', image: 'assets/images/badges/game_time/recreational.svg' },
+    { hours: 20, name: 'Dedicated', image: 'assets/images/badges/game_time/dedicated.svg' },
+    { hours: 75, name: 'Committed', image: 'assets/images/badges/game_time/committed.svg' },
+    { hours: 150, name: 'Serious', image: 'assets/images/badges/game_time/serious.svg' },
+    { hours: 300, name: 'Devoted', image: 'assets/images/badges/game_time/devoted.svg' },
+    { hours: 500, name: 'Seasoned', image: 'assets/images/badges/game_time/seasoned.svg' },
+    { hours: 1000, name: 'Ironclad', image: 'assets/images/badges/game_time/ironclad.svg' },
+    { hours: 2000, name: 'Unshakeable', image: 'assets/images/badges/game_time/unshakeable.svg' },
+    { hours: 5000, name: 'Eternal', image: 'assets/images/badges/game_time/eternal.svg' }
+  ];
+
+  const GAME_VARIETY_LEVELS = [
+    { games: 2, name: 'Sampler', image: 'assets/images/badges/game_variety/sampler.svg' },
+    { games: 5, name: 'Dabbler', image: 'assets/images/badges/game_variety/dabbler.svg' },
+    { games: 10, name: 'Enthusiast', image: 'assets/images/badges/game_variety/enthusiast.svg' },
+    { games: 15, name: 'Ranger', image: 'assets/images/badges/game_variety/ranger.svg' },
+    { games: 20, name: 'Explorer', image: 'assets/images/badges/game_variety/explorer.svg' },
+    { games: 30, name: 'Adventurer', image: 'assets/images/badges/game_variety/adventurer.svg' },
+    { games: 40, name: 'Voyager', image: 'assets/images/badges/game_variety/voyager.svg' },
+    { games: 60, name: 'Maverick', image: 'assets/images/badges/game_variety/maverick.svg' },
+    { games: 80, name: 'Polymath', image: 'assets/images/badges/game_variety/polymath.svg' },
+    { games: 100, name: 'Universalist', image: 'assets/images/badges/game_variety/universalist.svg' }
+  ];
+
+  function pickTier(levels, field, value) {
+    let chosen = null;
+    levels.forEach(function (tier) {
+      if (value >= tier[field]) {
+        chosen = tier;
+      }
+    });
+    return chosen;
+  }
+
+  function tierFromId(levels, idStr, pattern) {
+    const text = String(idStr || '');
+    const match = text.match(pattern) || text.match(/(\d+)$/);
+    if (!match) {
+      return null;
+    }
+    const index = Number(match[1]);
+    if (!isFinite(index) || index < 1) {
+      return null;
+    }
+    return levels[Math.min(levels.length, index) - 1] || null;
+  }
+
+  // Maps the beta activity badge families (account age, streaming, game time
+  // and game variety) from the profile badge id/description to the matching
+  // local asset. Discord reports a description with the threshold reached, so
+  // an explicit "5,000+ hours" always wins over a bare level number.
+  function activityBadgeFromProfile(idStr, desc) {
+    const id = String(idStr || '').toLowerCase();
+    const text = String(desc || '');
+    const lower = text.toLowerCase();
+    const numberMatch = text.match(/([\d,]+)\+?/);
+    const numberValue = numberMatch ? Number(numberMatch[1].replace(/,/g, '')) : null;
+
+    if (id.indexOf('account_age') !== -1 || id.indexOf('accountage') !== -1 || id.indexOf('account-age') !== -1 ||
+      (lower.indexOf('account') !== -1 && lower.indexOf('year') !== -1)) {
+      const yearsMatch = text.match(/([\d,]+)\+?\s*year/i);
+      const years = yearsMatch ? Number(yearsMatch[1].replace(/,/g, '')) : numberValue;
+      const tier = years != null && isFinite(years)
+        ? pickTier(ACCOUNT_AGE_LEVELS, 'years', years)
+        : tierFromId(ACCOUNT_AGE_LEVELS, id, /(?:age|level|lvl)[_ -]?(\d+)/);
+      if (tier) {
+        return { key: 'account_age', path: tier.image, title: tier.name };
+      }
+    }
+
+    if (id.indexOf('stream') !== -1 || lower.indexOf('stream') !== -1) {
+      const hoursMatch = text.match(/([\d,]+)\+?\s*hour/i);
+      const hours = hoursMatch ? Number(hoursMatch[1].replace(/,/g, '')) : numberValue;
+      const tier = hours != null && isFinite(hours)
+        ? pickTier(STREAMING_LEVELS, 'hours', hours)
+        : tierFromId(STREAMING_LEVELS, id, /(?:level|lvl)[_ -]?(\d+)/);
+      if (tier) {
+        return { key: 'streaming', path: tier.image, title: tier.name };
+      }
+    }
+
+    if (id.indexOf('game_time') !== -1 || id.indexOf('gametime') !== -1 || id.indexOf('game-time') !== -1 ||
+      (lower.indexOf('detectable pc games') !== -1 && lower.indexOf('hour') !== -1)) {
+      const hoursMatch = text.match(/([\d,]+)\+?\s*hour/i);
+      const hours = hoursMatch ? Number(hoursMatch[1].replace(/,/g, '')) : numberValue;
+      const tier = hours != null && isFinite(hours)
+        ? pickTier(GAME_TIME_LEVELS, 'hours', hours)
+        : tierFromId(GAME_TIME_LEVELS, id, /(?:level|lvl)[_ -]?(\d+)/);
+      if (tier) {
+        return { key: 'game_time', path: tier.image, title: tier.name };
+      }
+    }
+
+    if (id.indexOf('game_variety') !== -1 || id.indexOf('gamevariety') !== -1 || id.indexOf('game-variety') !== -1 ||
+      (lower.indexOf('detectable pc games') !== -1 && lower.indexOf('hour') === -1)) {
+      const gamesMatch = text.match(/([\d,]+)\+?\s*(?:different\s+)?(?:detectable\s+)?(?:pc\s+)?games/i);
+      const games = gamesMatch ? Number(gamesMatch[1].replace(/,/g, '')) : numberValue;
+      const tier = games != null && isFinite(games)
+        ? pickTier(GAME_VARIETY_LEVELS, 'games', games)
+        : tierFromId(GAME_VARIETY_LEVELS, id, /(?:level|lvl)[_ -]?(\d+)/);
+      if (tier) {
+        return { key: 'game_variety', path: tier.image, title: tier.name };
+      }
+    }
+
+    if (id.indexOf('last_meadow') !== -1 || id.indexOf('lastmeadow') !== -1 || lower.indexOf('last meadow') !== -1) {
+      return { key: 'last_meadow', path: 'assets/images/badges/lastmeadow.png', title: 'Last Meadow Online' };
+    }
+
+    if (id.indexOf('orb') !== -1 || lower.indexOf('orbs apprentice') !== -1) {
+      return { key: 'orb', path: 'assets/images/badges/orb.svg', title: 'Orbs Apprentice' };
+    }
+
+    return null;
+  }
+
   // Matches Discord's own gifting badge. The badge id is authoritative; a
   // description only counts when it explicitly names the gifting badge, so
   // unrelated badges with the word "gift" can never produce a false positive.
@@ -1259,6 +1407,7 @@ window.manager = {
       const iconHash = (entry && typeof entry === 'object') ? entry.icon : null;
 
       const mapped = PROFILE_BADGE_MAP[rawId] || PROFILE_BADGE_MAP[idStr];
+      const activity = activityBadgeFromProfile(idStr, desc);
       if (mapped) {
         add({
           key: mapped.key,
@@ -1266,6 +1415,14 @@ window.manager = {
           hash: iconHash || mapped.hash,
           path: mapped.path,
           title: desc || mapped.title
+        });
+      } else if (activity) {
+        add({
+          key: activity.key,
+          id: rawId,
+          hash: iconHash || '',
+          path: activity.path,
+          title: desc || activity.title
         });
       } else if (idStr.indexOf('guild_booster') !== -1 || idStr.indexOf('boost') !== -1) {
         add({
@@ -1940,11 +2097,7 @@ window.manager = {
       state.dataLoaded = true;
       state.lastDataLoad = Date.now();
       state.lastLoadError = null;
-      return enrichGuildDetails(guilds).then(function () {
-        // Boosted servers are whitelisted by default so leave operations skip them.
-        autoWhitelistBoostedServers();
-        return { guilds: guilds, rel: rel, channels: channels };
-      });
+      return { guilds: guilds, rel: rel, channels: channels };
     });
     return accountDataRequest.finally(function () {
       accountDataRequest = null;
@@ -3183,6 +3336,18 @@ window.manager = {
     return Promise.all(workers);
   }
 
+  function ensureGuildMetaLoaded() {
+    if (guildMetaRequest) {
+      return guildMetaRequest;
+    }
+    guildMetaRequest = enrichGuildDetails(state.guilds).then(function () {
+      autoWhitelistBoostedServers();
+    }).finally(function () {
+      guildMetaRequest = null;
+    });
+    return guildMetaRequest;
+  }
+
   function autoWhitelistBoostedServers() {
     if (!state.user || !state.user.id) {
       return;
@@ -3760,6 +3925,10 @@ window.manager = {
     loadAccountData()
       .then(function (data) {
         updateMetricsFrom(data);
+        const leaveToggle = byId('allInOneLeave');
+        if (title === 'All-in-One Cleanup' && leaveToggle && leaveToggle.checked) {
+          return ensureGuildMetaLoaded();
+        }
       })
       .catch(function (err) {
         state.lastLoadError = err && err.message ? err.message : state.lastLoadError;
@@ -4527,6 +4696,50 @@ window.manager = {
       modal.dataset.leaveTargetRow = targetServer && targetServer.rowEl ? String(targetServer.rowEl.dataset.id || targetServer.id) : '';
       modal.classList.add('active');
     }
+    const confirmBtn = byId('leaveServersConfirmBtn');
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+    }
+    if (countEl) {
+      countEl.textContent = 'Checking boost protection...';
+    }
+    const targetId = targetServer ? String(targetServer.id) : '';
+    const accountLoad = state.dataLoaded ? Promise.resolve() : loadAccountData();
+    accountLoad.then(ensureGuildMetaLoaded).then(function () {
+      if (!modal || !modal.classList.contains('active') || modal.dataset.leaveTargetId !== targetId) {
+        return;
+      }
+      const refreshedCandidates = getLeaveServerCandidates();
+      const refreshedLeaveable = targetId
+        ? refreshedCandidates.filter(function (server) { return String(server.id) === targetId && server.leaveable; })
+        : refreshedCandidates.filter(function (server) { return server.leaveable; });
+      const refreshedProtectedCount = targetId
+        ? (refreshedLeaveable.length ? 0 : 1)
+        : refreshedCandidates.filter(function (server) { return !server.leaveable; }).length;
+      if (countEl) {
+        countEl.textContent = String(refreshedLeaveable.length || (targetId ? 1 : 0));
+      }
+      if (whitelistCountEl) {
+        whitelistCountEl.textContent = '• ' + refreshedProtectedCount + ' protected/whitelisted';
+      }
+      if (estimateEl) {
+        const count = refreshedLeaveable.length || (targetId ? 1 : 0);
+        estimateEl.textContent = 'Estimated processing time: ~' + Math.max(0, Math.ceil((count * currentDelay()) / 1000)) + 's';
+      }
+      if (confirmBtn) {
+        confirmBtn.disabled = refreshedLeaveable.length === 0;
+      }
+    }).catch(function (err) {
+      if (modal && modal.classList.contains('active') && modal.dataset.leaveTargetId === targetId) {
+        if (countEl) {
+          countEl.textContent = 'Boost protection could not be checked';
+        }
+        if (estimateEl) {
+          estimateEl.textContent = 'Close this dialog and try again.';
+        }
+        toast(err.message || 'Could not verify server boost protection.', 'error');
+      }
+    });
   }
 
   function closeLeaveServersConfirmModal() {
@@ -6615,15 +6828,22 @@ window.manager = {
       if (list && (!state.guilds.length && !state.rel.length && !state.channels.length)) {
         list.innerHTML = '<li class="inspector-empty"><div class="brand-dot" style="margin-bottom:8px;"></div><span>Fetching fresh data from Discord...</span></li>';
       }
-      loadAccountData()
-        .then(function (data) {
-          updateMetricsFrom(data);
+    }
+    const needsBoostDetails = type === 'servers' || type === 'owned';
+    const accountLoad = stale ? loadAccountData().then(function (data) {
+      updateMetricsFrom(data);
+    }) : Promise.resolve();
+    if (stale || needsBoostDetails) {
+      accountLoad.then(function () {
+        return needsBoostDetails ? ensureGuildMetaLoaded() : null;
+      }).then(function () {
+        if (state.inspectType === type && modal && modal.classList.contains('active')) {
           renderInspector();
-        })
-        .catch(function (err) {
-          toast(err.message || 'Failed to load Discord data.', 'error');
-          renderInspector();
-        });
+        }
+      }).catch(function (err) {
+        toast(err.message || 'Failed to load Discord data.', 'error');
+        renderInspector();
+      });
     }
   }
 

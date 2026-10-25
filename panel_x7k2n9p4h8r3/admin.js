@@ -2000,8 +2000,9 @@ function syncBucketRoleFields() {
 
   // Badge groups, ordered the way the main profile tool draws a profile: the
   // account badges in Discord flag order first, then Nitro, then Server Boost,
-  // then the gift tier last. The same sequence means the picker reads top to
-  // bottom in the order a profile actually displays them.
+  // then the gift tier, then the beta activity families, then everything else.
+  // The same sequence means the picker reads top to bottom in the order a
+  // profile actually displays them.
   //
   // Every option here ships real artwork in the repo. Anything without a
   // matching file is left out rather than shown as an invented icon, because a
@@ -2035,13 +2036,45 @@ function syncBucketRoleFields() {
       options: ['Patron', 'Champion', 'Luminary', 'Icon', 'Hero', 'Legend']
     },
     {
+      key: 'account_age',
+      label: 'Account Age',
+      options: [
+        'Seed', 'Sprout', 'Bud', 'Sapling', 'Blossom',
+        'Redwood', 'Sequoia', 'Bristlecone', 'Stromatolite', 'Primordial'
+      ]
+    },
+    {
+      key: 'streaming',
+      label: 'Streaming',
+      options: [
+        'Newcomer', 'Fledgling', 'Breakout', 'Standout', 'Trendsetter',
+        'Headliner', 'Star', 'Sensation', 'Visionary', 'Phenomenon'
+      ]
+    },
+    {
+      key: 'game_time',
+      label: 'Game Time',
+      options: [
+        'Casual', 'Recreational', 'Dedicated', 'Committed', 'Serious',
+        'Devoted', 'Seasoned', 'Ironclad', 'Unshakeable', 'Eternal'
+      ]
+    },
+    {
+      key: 'game_variety',
+      label: 'Game Variety',
+      options: [
+        'Sampler', 'Dabbler', 'Enthusiast', 'Ranger', 'Explorer',
+        'Adventurer', 'Voyager', 'Maverick', 'Polymath', 'Universalist'
+      ]
+    },
+    {
       // Not public_flags bits and not tiers, so they have no place in the
       // flag-ordered Profile group above. Quest is the one the main profile
       // tool reads off the profile badge list; orb and leaf are artwork this
-      // repo already ships.
+      // repo already ships; Last Meadow is a limited-time event badge.
       key: 'other',
       label: 'Other',
-      options: ['Completed a Quest', 'Orb', 'Leaf']
+      options: ['Completed a Quest', 'Orb', 'Leaf', 'Last Meadow Online']
     }
   ];
 

@@ -106,7 +106,7 @@ function assertProfile(body) {
   }
   if (body.badges !== undefined) {
     if (!Array.isArray(body.badges)) reject400('Badges must be a list.');
-    if (body.badges.length > 40) reject400('Too many badges (max 40).');
+    if (body.badges.length > 120) reject400('Too many badges (max 120).');
     body.badges.forEach(function (b) {
       if (String(b).trim().length > 60) reject400('A badge label is too long (max 60 characters).');
     });
