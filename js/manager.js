@@ -2095,10 +2095,23 @@ window.manager = {
         state.lastLoadError = msg;
         throw err;
       }
+      if (!channelsRes || channelsRes.status >= 400) {
+        const msg = (channelsRes && channelsRes.data && channelsRes.data.message) ||
+          ('Discord DM channel request failed (' + ((channelsRes && channelsRes.status) || 'no response') + ').');
+        const err = new Error(msg);
+        state.lastLoadError = msg;
+        throw err;
+      }
+      if (!Array.isArray(channelsRes.data)) {
+        const msg = 'Discord returned an unexpected DM channel list.';
+        const err = new Error(msg);
+        state.lastLoadError = msg;
+        throw err;
+      }
 
       const guilds = Array.isArray(guildsRes.data) ? guildsRes.data : [];
       const rel = Array.isArray(relRes.data) ? relRes.data : [];
-      const channels = Array.isArray(channelsRes.data) ? channelsRes.data : [];
+      const channels = channelsRes.data;
 
       state.guilds = guilds;
       state.rel = rel;
@@ -2171,7 +2184,12 @@ window.manager = {
       return;
     }
     loadAccountData()
-      .then(updateMetricsFrom)
+      .then(function (data) {
+        updateMetricsFrom(data);
+        return ensureGuildMetaLoaded().catch(function (err) {
+          toast(err.message || 'Could not check server boost status.', 'warning');
+        });
+      })
       .catch(function () {
         setMetrics('-', '-', '-', '-');
       });
