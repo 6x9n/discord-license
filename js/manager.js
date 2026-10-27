@@ -3440,7 +3440,14 @@ window.manager = {
     guildMetaRetryTimer = setTimeout(schedule, Math.min(waitMs, 2147483000));
   }
 
-  function ensureGuildMetaLoaded() {
+  function ensureGuildMetaLoaded(manualRetry) {
+    if (manualRetry && guildMetaRetryAttempts > MAX_GUILD_META_AUTO_RETRIES) {
+      guildMetaRetryAttempts = 0;
+      if (guildMetaRetryTimer) {
+        clearTimeout(guildMetaRetryTimer);
+        guildMetaRetryTimer = null;
+      }
+    }
     if (guildMetaRequest) {
       return guildMetaRequest;
     }
@@ -6988,7 +6995,7 @@ window.manager = {
     }) : Promise.resolve();
     if (stale || needsBoostDetails) {
       accountLoad.then(function () {
-        return needsBoostDetails ? ensureGuildMetaLoaded() : null;
+        return needsBoostDetails ? ensureGuildMetaLoaded(true) : null;
       }).then(function () {
         if (state.inspectType === type && modal && modal.classList.contains('active')) {
           renderInspector();
