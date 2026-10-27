@@ -201,7 +201,6 @@ function sanitizeCreate(body) {
     source: String(body.source || '').trim(),
     notes: String(body.notes || '').trim(),
     server_member_count: (function(){const m=Number(body.serverMemberCount||body.server_member_count); return isFinite(m)&&m>=0?m:null;})(),
-    server_boosts: null,
     server_name: String(body.serverName||body.server_name||'').trim(),
     server_invite: String(body.serverInvite||body.server_invite||'').trim()
   };
@@ -230,7 +229,6 @@ function sanitizeUpdate(body) {
     source: 'source',
     status_label: 'statusLabel',
     server_member_count: 'serverMemberCount',
-    server_boosts: 'serverBoosts',
     server_name: 'serverName',
     server_invite: 'serverInvite'
   };
@@ -275,14 +273,6 @@ function sanitizeUpdate(body) {
   if (body.server_member_count !== undefined && body.server_member_count !== null && body.server_member_count !== '') {
     const n = Number(body.server_member_count);
     if (isFinite(n) && n >= 0) patch.server_member_count = n;
-  }
-  if (body.serverBoosts !== undefined && body.serverBoosts !== null && body.serverBoosts !== '') {
-    const n = Number(body.serverBoosts);
-    if (isFinite(n) && n >= 0) patch.server_boosts = n;
-  }
-  if (body.server_boosts !== undefined && body.server_boosts !== null && body.server_boosts !== '') {
-    const n = Number(body.server_boosts);
-    if (isFinite(n) && n >= 0) patch.server_boosts = n;
   }
   if (body.serverName !== undefined && body.serverName !== null) patch.server_name = String(body.serverName);
   if (body.server_name !== undefined && body.server_name !== null) patch.server_name = String(body.server_name);
