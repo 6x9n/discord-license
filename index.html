@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=9">
+  <link rel="stylesheet" href="css/styles.css?v=10">
 </head>
 <body>
   <div id="licenseGate" class="lic-gate" role="dialog" aria-modal="true" aria-labelledby="licTitle" hidden>
@@ -236,24 +236,14 @@
                   <div class="stat-sub">you own these</div>
                 </div>
               </div>
-              <div class="stat-card" data-inspect="servers" role="button" tabindex="0" title="Click to view joined servers">
+              <div class="stat-card" data-inspect="servers" role="button" tabindex="0" title="Click to view joined servers and boost status">
                 <div class="stat-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 </div>
                 <div>
                   <div class="stat-label">Joined Servers</div>
                   <div id="metricJoined" class="stat-value">&mdash;</div>
-                  <div class="stat-sub">community member</div>
-                </div>
-              </div>
-              <div class="stat-card" data-inspect="boosted" role="button" tabindex="0" title="Click to view servers boosted by this account">
-                <div class="stat-icon">
-                  <img src="assets/images/badges/boost_badges/discordboost1.svg" alt="" aria-hidden="true">
-                </div>
-                <div>
-                  <div class="stat-label">Servers Boosted</div>
-                  <div id="metricBoosted" class="stat-value">&mdash;</div>
-                  <div id="metricBoostedHint" class="stat-sub">click to check boost status</div>
+                  <div id="metricJoinedHint" class="stat-sub">click to check boosts</div>
                 </div>
               </div>
               <div class="stat-card" data-inspect="friends" role="button" tabindex="0" title="Click to view friends list">
@@ -967,6 +957,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>
           </div>
+          <button id="inspectorBoostFilterBtn" class="btn btn-ghost btn-small inspector-boost-filter" type="button" aria-pressed="false" title="Show only servers boosted by this account" hidden>
+            <img src="assets/images/badges/boost_badges/discordboost1.svg" alt="" aria-hidden="true">
+            <span>Boosted only</span>
+          </button>
           <span id="inspectorCountBadge" class="badge">0 items</span>
         </div>
 
@@ -1011,7 +1005,7 @@
     </div>
   </footer>
 
-  <script src="js/manager.js?v=5.20"></script>
+  <script src="js/manager.js?v=5.21"></script>
   <script src="js/license.js?v=1"></script>
   <script src="js/cursor.js?v=2"></script>
   <script src="js/guard.js?v=1"></script>

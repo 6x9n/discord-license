@@ -4823,6 +4823,23 @@ body.toasts-hidden .history-bell-btn {
   box-shadow: 0 0 14px rgba(88, 101, 242, 0.3);
 }
 
+.inspector-boost-filter {
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.inspector-boost-filter img {
+  width: 14px;
+  height: 14px;
+}
+
+.inspector-boost-filter.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(88, 101, 242, 0.5);
+  box-shadow: 0 0 14px rgba(88, 101, 242, 0.3);
+}
+
 .inspector-toolbar {
   display: flex;
   align-items: center;
@@ -5407,6 +5424,13 @@ body.toasts-hidden .history-bell-btn {
   }
   .inspector-toolbar {
     padding: 10px 16px;
+    gap: 8px;
+  }
+  .inspector-boost-filter {
+    padding: 8px 10px;
+  }
+  .inspector-boost-filter span {
+    display: none;
   }
   .inspector-body {
     padding: 10px 12px 14px;

@@ -560,6 +560,7 @@ window.manager = {
     inspectSelected: [],
     inspectSelectMode: false,
     inspectSearchQuery: '',
+    inspectBoostedOnly: false,
     evolutionType: 'nitro',
     legacyUsernameOverride: null,
     closeDmResults: [],
@@ -2177,10 +2178,9 @@ window.manager = {
   function setMetrics(owned, joined, friends, dms, boosted, boostsComplete) {
     const ownedEl = byId('metricOwned');
     const joinedEl = byId('metricJoined');
+    const joinedHintEl = byId('metricJoinedHint');
     const friendsEl = byId('metricFriends');
     const dmsEl = byId('metricDMs');
-    const boostedEl = byId('metricBoosted');
-    const boostedHintEl = byId('metricBoostedHint');
     if (ownedEl) {
       animateCounter(ownedEl, owned);
     }
@@ -2193,14 +2193,17 @@ window.manager = {
     if (dmsEl) {
       animateCounter(dmsEl, dms);
     }
-    if (boostedEl) {
-      boostedEl.textContent = boosted == null ? '\u2014' : String(boosted);
-      boostedEl.dataset.current = String(boosted == null ? 0 : boosted);
-    }
-    if (boostedHintEl) {
-      boostedHintEl.textContent = boosted == null
-        ? 'click to check boost status'
-        : (boostsComplete ? 'servers with your active boost' : 'confirmed so far - click to check all');
+    // Boost status now lives inside the Joined Servers card. An unknown scan
+    // state stays honest instead of showing a misleading zero.
+    if (joinedHintEl) {
+      if (boosted == null) {
+        joinedHintEl.textContent = 'click to check boosts';
+      } else if (boosted === 0) {
+        joinedHintEl.textContent = boostsComplete ? 'no active boosts' : 'no boosts confirmed yet';
+      } else {
+        joinedHintEl.textContent = boosted + (boosted === 1 ? ' boosted server' : ' boosted servers')
+          + (boostsComplete ? '' : ' so far');
+      }
     }
   }
 
@@ -7184,6 +7187,7 @@ window.manager = {
     state.inspectSelected = [];
     state.inspectSelectMode = false;
     state.inspectSearchQuery = '';
+    state.inspectBoostedOnly = false;
 
     const searchInput = byId('inspectorSearchInput');
     if (searchInput) {
@@ -7238,6 +7242,7 @@ window.manager = {
     state.inspectSelected = [];
     state.inspectSelectMode = false;
     state.inspectSearchQuery = '';
+    state.inspectBoostedOnly = false;
   }
 
   function setInspectorSelectMode(active) {
@@ -7290,20 +7295,24 @@ window.manager = {
         };
       });
     } else if (type === 'servers') {
-      items = (state.guilds || []).map(function (g) {
-        return {
-          id: g.id,
-          raw: g,
-          title: g.name || 'Server',
-          subtitle: serverSubtitle(g),
-          avatar: guildIconUrl(g, 128),
-          initials: (g.name || 'S').slice(0, 1).toUpperCase(),
-          isServer: true,
-          isOwned: !!g.owner,
-          isBoosted: isServerBoosted(g),
-          relationshipType: g.owner ? 'Owner' : 'Member'
-        };
-      });
+      items = (state.guilds || [])
+        .filter(function (g) {
+          return !state.inspectBoostedOnly || isServerBoosted(g);
+        })
+        .map(function (g) {
+          return {
+            id: g.id,
+            raw: g,
+            title: g.name || 'Server',
+            subtitle: serverSubtitle(g),
+            avatar: guildIconUrl(g, 128),
+            initials: (g.name || 'S').slice(0, 1).toUpperCase(),
+            isServer: true,
+            isOwned: !!g.owner,
+            isBoosted: isServerBoosted(g),
+            relationshipType: g.owner ? 'Owner' : 'Member'
+          };
+        });
     } else if (type === 'owned') {
       items = (state.guilds || []).filter(function (g) {
         return !!g.owner;
@@ -7395,6 +7404,7 @@ window.manager = {
     const toggleText = byId('inspectorSelectToggleText');
     const selCountText = byId('inspectorSelectedCount');
     const dynamicBatchBtns = byId('inspectorDynamicBatchBtns');
+    const boostFilterBtn = byId('inspectorBoostFilterBtn');
 
     if (!modal || !listEl) return;
 
@@ -7413,7 +7423,9 @@ window.manager = {
       if (iconEl) iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
     } else if (type === 'servers') {
       if (titleEl) titleEl.textContent = 'Joined Servers';
-      if (subtitleEl) subtitleEl.textContent = 'Manage all servers you are in - community, private, and owned; boosted servers stay whitelisted';
+      if (subtitleEl) subtitleEl.textContent = state.inspectBoostedOnly
+        ? 'Showing only servers boosted by this account; boosted servers stay whitelisted'
+        : 'Manage all servers you are in - community, private, and owned; boosted servers stay whitelisted';
       if (iconEl) iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
     } else if (type === 'owned') {
       if (titleEl) titleEl.textContent = 'Owned Servers';
@@ -7427,6 +7439,13 @@ window.manager = {
       if (titleEl) titleEl.textContent = 'Private DMs';
       if (subtitleEl) subtitleEl.textContent = 'Direct messages and group conversations';
       if (iconEl) iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    }
+
+    if (boostFilterBtn) {
+      const showBoostFilter = type === 'servers';
+      boostFilterBtn.hidden = !showBoostFilter;
+      boostFilterBtn.classList.toggle('active', showBoostFilter && !!state.inspectBoostedOnly);
+      boostFilterBtn.setAttribute('aria-pressed', String(showBoostFilter && !!state.inspectBoostedOnly));
     }
 
     const items = getInspectableItems(type);
@@ -7488,12 +7507,12 @@ window.manager = {
     listEl.innerHTML = '';
     if (!items.length) {
       let emptyText = 'No ' + type + ' found matching your search.';
-      if (type === 'boosted') {
+      if (type === 'boosted' || (type === 'servers' && state.inspectBoostedOnly)) {
         emptyText = guildBoostStatusComplete(state.guilds)
           ? 'No servers boosted by this account.'
           : (guildMetaRequest
             ? 'Checking Discord for boost status...'
-            : 'No confirmed boosts yet. Open this card again to check.');
+            : 'No confirmed boosts yet. Reopen Joined Servers to check.');
       }
       const emptyLi = document.createElement('li');
       emptyLi.className = 'inspector-empty';
@@ -8050,6 +8069,7 @@ window.manager = {
     const toggleBtn = byId('inspectorSelectToggleBtn');
     const searchInput = byId('inspectorSearchInput');
     const clearSearchBtn = byId('inspectorClearSearch');
+    const boostFilterBtn = byId('inspectorBoostFilterBtn');
     const selectAllBtn = byId('inspectorSelectAllBtn');
     const deselectAllBtn = byId('inspectorDeselectAllBtn');
     const cancelSelectBtn = byId('inspectorCancelSelectBtn');
@@ -8093,6 +8113,13 @@ window.manager = {
         clearSearchBtn.style.display = 'none';
         renderInspector();
         searchInput.focus();
+      });
+    }
+
+    if (boostFilterBtn) {
+      boostFilterBtn.addEventListener('click', function () {
+        state.inspectBoostedOnly = !state.inspectBoostedOnly;
+        renderInspector();
       });
     }
 
