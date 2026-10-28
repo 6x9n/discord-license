@@ -2558,6 +2558,21 @@ img.badge-icon {
   margin-top: 12px;
 }
 
+/* Optional pricing captured before the token is saved, so the new row appears
+   in the table with real numbers instead of needing a second trip to the
+   full account editor. */
+.token-sale {
+  margin-bottom: 12px;
+}
+
+.token-sold-fields {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(35, 165, 90, 0.28);
+  border-radius: 11px;
+  background: rgba(35, 165, 90, 0.07);
+}
+
 .token-state {
   display: flex;
   flex-wrap: wrap;

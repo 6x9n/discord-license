@@ -35,7 +35,7 @@ const BADGE_MAP = [
   { bit: 1 << 0, label: 'Discord Staff' },
   { bit: 1 << 1, label: 'Partner' },
   { bit: 1 << 2, label: 'HypeSquad Events' },
-  { bit: 1 << 3, label: 'Bug Hunter' },
+  { bit: 1 << 3, label: 'Bug Hunter Level 1' },
   { bit: 1 << 6, label: 'HypeSquad Bravery' },
   { bit: 1 << 7, label: 'HypeSquad Brilliance' },
   { bit: 1 << 8, label: 'HypeSquad Balance' },
@@ -186,8 +186,22 @@ function discordAvatarUrl(user) {
 }
 
 function mapDiscordUser(user) {
-  const flags = user.public_flags !== undefined ? user.public_flags : user.flags;
+  // `flags` is the private set Discord returns to the account itself and
+  // `public_flags` is the smaller public set. Either can be missing or zero, so
+  // merge both instead of preferring one; otherwise a private badge (or any
+  // badge when public_flags is 0) disappears from the preview.
+  const privateFlags = Number(user.flags) || 0;
+  const publicFlags = Number(user.public_flags) || 0;
+  const flags = privateFlags | publicFlags;
   const badges = decodeFlags(flags);
+  const premiumType = Number(user.premium_type) || 0;
+  const nitroTier = PREMIUM_TIERS[premiumType] || 'Unknown';
+  // Nitro is not a flag bit, so add the matching badge from premium_type. Keep
+  // the union free of duplicates in case Discord ever reports both. An
+  // unrecognised tier must not become an "Unknown" badge in the table.
+  if (premiumType > 0 && nitroTier !== 'Unknown' && badges.indexOf(nitroTier) === -1) {
+    badges.push(nitroTier);
+  }
   const decorations = [];
   if (user.avatar_decoration_data && user.avatar_decoration_data.name) {
     decorations.push(String(user.avatar_decoration_data.name));
@@ -208,13 +222,17 @@ function mapDiscordUser(user) {
     twoFactorEnabled: !!user.mfa_enabled,
     verified: !!user.verified,
     creationDate: snowflakeToDate(user.id),
-    nitroTier: PREMIUM_TIERS[Number(user.premium_type)] || 'Unknown',
+    premiumType: premiumType,
+    nitroTier: nitroTier,
+    // Filled in best-effort by fetchNitroEnd(); an unavailable end date stays
+    // empty rather than being guessed from the tier or account age.
     nitroEnds: '',
     badges: badges,
     decorations: decorations,
     avatar: user.avatar || '',
     avatarUrl: discordAvatarUrl(user),
-    publicFlags: Number(flags) || 0
+    publicFlags: publicFlags,
+    privateFlags: privateFlags
   };
 }
 
@@ -339,6 +357,106 @@ async function fetchDiscordUser(rawToken) {
     err.detail = String(raw || '').slice(0, 200);
     throw err;
   }
+}
+
+function parseDiscordDate(value) {
+  if (value === undefined || value === null || value === '') return null;
+  let date;
+  if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+    const n = Number(value);
+    if (!isFinite(n) || n <= 0) return null;
+    date = new Date(n < 1000000000000 ? n * 1000 : n);
+  } else {
+    date = new Date(String(value));
+  }
+  return isNaN(date.getTime()) ? null : date;
+}
+
+// A subscription can expose its end on the subscription itself or on each
+// item. Take the earliest real date so a multi-item plan shows when the first
+// paid period actually ends.
+function subscriptionEndDate(sub) {
+  if (!sub || typeof sub !== 'object') return null;
+  const direct = parseDiscordDate(sub.current_period_end || sub.expires_at);
+  if (direct) return direct;
+  const items = Array.isArray(sub.items) ? sub.items : [];
+  const dates = items.map(function (item) {
+    return parseDiscordDate(item && (item.current_period_end || item.expires_at));
+  }).filter(function (date) { return !!date; });
+  if (!dates.length) return null;
+  dates.sort(function (left, right) { return left.getTime() - right.getTime(); });
+  return dates[0];
+}
+
+// Best-effort request for additional account data. A failure here must never
+// turn a valid token into an error, because the profile call already succeeded.
+async function discordGetJson(token, path, timeoutMs) {
+  if (typeof fetch !== 'function') return null;
+  let timer = null;
+  let controller = null;
+  if (typeof AbortController === 'function') {
+    controller = new AbortController();
+    timer = setTimeout(function () {
+      try { controller.abort(); } catch (e) {}
+    }, timeoutMs || 8000);
+  }
+  try {
+    const response = await fetch(DISCORD_API + path, {
+      method: 'GET',
+      headers: discordHeaders(token),
+      signal: controller ? controller.signal : undefined
+    });
+    if (!response.ok) return null;
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return null;
+    }
+  } catch (e) {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// Nitro's expiry is not part of /users/@me. Discord exposes it through the
+// billing subscriptions endpoint, so read the active Nitro subscription and
+// return its end as YYYY-MM-DD. Anything Discord does not expose stays blank.
+async function fetchNitroEnd(rawToken) {
+  const token = normalizeDiscordToken(rawToken);
+  if (!token) return '';
+  const data = await discordGetJson(token, '/users/@me/billing/subscriptions');
+  const subscriptions = Array.isArray(data)
+    ? data
+    : ((data && (data.subscriptions || data.items)) || []);
+  if (!Array.isArray(subscriptions) || !subscriptions.length) return '';
+
+  const now = Date.now();
+  const live = subscriptions.filter(function (sub) {
+    if (!sub || typeof sub !== 'object') return false;
+    const status = String(sub.status === undefined || sub.status === null ? '' : sub.status).toLowerCase();
+    if (status === '4' || status === 'ended' || status === 'expired' || status === 'inactive') {
+      return false;
+    }
+    const end = subscriptionEndDate(sub);
+    return end ? end.getTime() > now : true;
+  });
+
+  // 1 / 5 / 15 are the Nitro subscription types used by the Discord client
+  // (including the legacy and basic plans). A boost-only subscription is not
+  // Nitro and must not supply the end date.
+  const nitro = live.filter(function (sub) {
+    return [1, 5, 15].indexOf(Number(sub.type)) !== -1;
+  });
+  if (!nitro.length) return '';
+
+  const dated = nitro.map(function (sub) {
+    return { sub: sub, end: subscriptionEndDate(sub) };
+  }).filter(function (entry) { return !!entry.end; });
+  if (!dated.length) return '';
+  dated.sort(function (left, right) { return left.end.getTime() - right.end.getTime(); });
+  return dated[0].end.toISOString().slice(0, 10);
 }
 
 function publicAccount(row) {
@@ -637,10 +755,52 @@ async function opTokenAdd(req, res) {
     return json(res, 502, { success: false, error: 'Discord did not return an account ID for this token.' });
   }
 
+  // The profile preview and the saved row should show the same Nitro expiry.
+  // Reuse the date the preview already resolved so saving does not make a
+  // second billing request (and cannot lose the date to a rate limit). A direct
+  // API caller that sends no date gets a fresh best-effort lookup.
+  const suppliedNitroEnd = String(body.nitroEnds || '').trim();
+  const suppliedNitroTs = Date.parse(suppliedNitroEnd + 'T00:00:00Z');
+  const suppliedNitroValid = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(suppliedNitroEnd)
+    && !isNaN(suppliedNitroTs)
+    && new Date(suppliedNitroTs).toISOString().slice(0, 10) === suppliedNitroEnd;
+  profile.nitroEnds = suppliedNitroValid ? suppliedNitroEnd : await fetchNitroEnd(token);
+
   // The preview call is deliberately read-only: the admin can look at what the
   // token resolves to before anything is written.
   if (body.previewOnly) {
     return json(res, 200, { success: true, preview: true, data: profile });
+  }
+
+  // Optional sale data entered alongside the token. Existing accounts keep
+  // their saved prices and buyer, so these values only apply to new rows.
+  const buyRaw = body.buyPrice;
+  let buyPrice = null;
+  if (buyRaw !== undefined && buyRaw !== null && String(buyRaw).trim() !== '') {
+    buyPrice = Number(buyRaw);
+    if (!isFinite(buyPrice) || buyPrice < 0) {
+      return json(res, 400, { success: false, error: 'Spent price must be a valid non-negative number.' });
+    }
+  }
+  const sellRaw = body.sellPrice;
+  let sellPrice = null;
+  if (sellRaw !== undefined && sellRaw !== null && String(sellRaw).trim() !== '') {
+    sellPrice = Number(sellRaw);
+    if (!isFinite(sellPrice) || sellPrice < 0) {
+      return json(res, 400, { success: false, error: 'Sold price must be a valid non-negative number.' });
+    }
+  }
+  const requestedStatus = String(body.status || 'AVAILABLE').toUpperCase();
+  if (requestedStatus !== 'AVAILABLE' && requestedStatus !== 'SOLD') {
+    return json(res, 400, { success: false, error: 'Status must be AVAILABLE or SOLD.' });
+  }
+  const buyerName = String(body.buyerName || '').trim();
+  if (buyerName.length > 120) {
+    return json(res, 400, { success: false, error: 'Buyer name is too long (max 120 characters).' });
+  }
+  const buyerTelegram = String(body.buyerTelegram || '').trim();
+  if (buyerTelegram.length > 200) {
+    return json(res, 400, { success: false, error: 'Buyer telegram reference is too long (max 200 characters).' });
   }
 
   let encrypted;
@@ -675,6 +835,9 @@ async function opTokenAdd(req, res) {
     avatar: profile.avatar,
     avatar_url: profile.avatarUrl
   };
+  // An unavailable end date must not blank a date the operator already saved
+  // by hand, so only send the column when Discord actually reported one.
+  if (profile.nitroEnds) profileFields.nitro_ends = profile.nitroEnds;
 
   let existing;
   try {
@@ -720,17 +883,19 @@ async function opTokenAdd(req, res) {
 
   const row = Object.assign({
     discord_id: profile.discordId,
-    // A token-added account starts with no purchase or sale price. The columns
-    // are nullable after sql/quick_add_and_discord_token.sql, so the editor opens
-    // with empty money fields instead of a misleading 0.
-    buy_price: null,
-    sell_price: null,
-    status: 'AVAILABLE',
+    // A token-added account has no purchase or sale price unless the operator
+    // entered one before saving. The columns are nullable after
+    // sql/quick_add_and_discord_token.sql, so empty money fields stay empty
+    // instead of reading as a misleading 0.
+    buy_price: buyPrice,
+    sell_price: sellPrice,
+    status: requestedStatus,
+    sold_at: requestedStatus === 'SOLD' ? new Date().toISOString() : null,
     status_label: '',
     source: '',
     notes: '',
-    buyer_name: '',
-    buyer_telegram: '',
+    buyer_name: buyerName,
+    buyer_telegram: buyerTelegram,
     sold_link_1: '',
     sold_link_2: ''
   }, profileFields, tokenFields);
@@ -748,10 +913,16 @@ async function opTokenAdd(req, res) {
     return json(res, friendly.status || 500, { success: false, error: friendly.message });
   }
 
+  const saved = (inserted && inserted[0]) || row;
+  // A token-added account can carry a spent price or a sale on its very first
+  // render, so reconcile the ledger exactly like the create and update paths.
+  // Idempotent, and a missing money table never fails the account save.
+  const money = await syncAccountMoney(saved, {});
   return json(res, 200, {
     success: true,
     created: true,
-    data: publicAccount((inserted && inserted[0]) || row)
+    data: publicAccount(saved),
+    money: { synced: !!money.ok, reason: money.reason || null }
   });
 }
 

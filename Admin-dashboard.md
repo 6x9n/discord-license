@@ -165,23 +165,32 @@ an instalment. Dates are read day-first for `DD/MM/YYYY` and `DD.MM.YYYY`.
 
 ### Discord token accounts
 
-- **Add via Discord Token** fetches `/users/@me`, shows the resolved account,
-  then saves the token. It requires an owner/master key in `X-Owner-Key`
-  (`LICENSE_OWNER_KEY` or `LICENSE_ADMIN_SECRET`); the account list session
-  alone is not enough.
+- **Add via Discord Token** fetches `/users/@me`, shows the resolved account, then
+  saves the token. Badges are the union of the private `flags` and
+  `public_flags`, and an active Nitro badge is added from `premium_type`.
+  It requires an owner/master key in `X-Owner-Key` (`LICENSE_OWNER_KEY` or
+  `LICENSE_ADMIN_SECRET`); the account list session alone is not enough.
+- Nitro expiry is read best-effort from `/users/@me/billing/subscriptions`.
+  The preview shows the date when Discord exposes it; gifted, legacy and
+  non-billing plans legitimately show no date instead of a guess.
+- The same dialog records an optional spent price, status, sold price, buyer
+  name and buyer Telegram. Those values apply only when the token creates a new
+  account, so a new row can appear with its pricing already filled in. The full
+  account editor still opens after saving for badges and later corrections.
 - The token is encrypted with AES-256-GCM (`api/_lib/token-crypto.js`). The
   list endpoint never returns the ciphertext, IV or tag; it exposes only
   `has_token` and `token_hint` (last four characters).
-- Re-adding a token for an existing Discord ID refreshes the profile fields and
-  encrypted token but leaves prices, buyer, status, notes and sold values
-  untouched.
+- Re-adding a token for an existing Discord ID refreshes the profile fields,
+  Nitro tier/end and encrypted token but leaves prices, buyer, status, notes and
+  sold values untouched.
 - **Register in Tool & Open** calls `POST /api/summary?op=register-tool`, marks
   `is_registered_in_tool`, then either posts the token to `TOOL_REGISTER_URL`
   or binds it into the tool's own `localStorage` key `dmt.dsc.accounts` before
   opening `TOOL_OPEN_URL`.
-- Token-added rows start with empty purchase and sale prices. That needs the
-  nullable-price change in `sql/quick_add_and_discord_token.sql`; without it
-  the API reports the missing migration instead of a raw `23502`.
+- Token-added rows start with empty purchase and sale prices unless the
+  operator enters them in the token dialog. That needs the nullable-price
+  change in `sql/quick_add_and_discord_token.sql`; without it the API reports
+  the missing migration instead of a raw `23502`.
 
 ### Environment variables
 

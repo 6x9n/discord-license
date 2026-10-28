@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=18">
+  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=19">
 </head>
 <body>
   <div id="loginView" class="view login-view">
@@ -782,6 +782,37 @@
           <span id="tokenHint" class="muted-text"></span>
         </div>
         <div id="tokenPreview" class="token-preview" hidden></div>
+        <div class="token-sale">
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="field-label" for="tokenBuyPrice">Spent price ($) <span class="muted-text">(optional)</span></label>
+              <input id="tokenBuyPrice" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" autocomplete="off">
+              <span class="field-hint">What this account cost you. It stays empty unless you enter it.</span>
+            </div>
+            <div class="form-field">
+              <label class="field-label" for="tokenStatus">Status</label>
+              <select id="tokenStatus" class="input">
+                <option value="AVAILABLE">Available</option>
+                <option value="SOLD">Sold</option>
+              </select>
+              <span class="field-hint">New accounts only. Refreshing an existing account keeps its sale record.</span>
+            </div>
+          </div>
+          <div id="tokenSoldFields" class="form-grid token-sold-fields" hidden>
+            <div class="form-field">
+              <label class="field-label" for="tokenSellPrice">Sold price ($) <span class="muted-text">(optional)</span></label>
+              <input id="tokenSellPrice" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label class="field-label" for="tokenBuyerName">Buyer name <span class="muted-text">(optional)</span></label>
+              <input id="tokenBuyerName" class="input" type="text" maxlength="120" placeholder="(optional)" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label class="field-label" for="tokenBuyerTelegram">Buyer Telegram <span class="muted-text">(optional)</span></label>
+              <input id="tokenBuyerTelegram" class="input" type="text" maxlength="200" placeholder="@handle" autocomplete="off">
+            </div>
+          </div>
+        </div>
         <div id="tokenMsg" class="msg" role="status"></div>
         <div class="modal-actions">
           <button id="tokenCancelBtn" class="btn btn-ghost" type="button">Cancel</button>
@@ -1166,9 +1197,9 @@
 
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="/js/badge-icons.js?v=9"></script>
+  <script src="/js/badge-icons.js?v=10"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=26"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=27"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {

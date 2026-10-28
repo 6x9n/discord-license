@@ -194,6 +194,12 @@
       tokenFetchBtn: g('tokenFetchBtn'),
       tokenSaveBtn: g('tokenSaveBtn'),
       tokenCancelBtn: g('tokenCancelBtn'),
+      tokenBuyPrice: g('tokenBuyPrice'),
+      tokenStatus: g('tokenStatus'),
+      tokenSoldFields: g('tokenSoldFields'),
+      tokenSellPrice: g('tokenSellPrice'),
+      tokenBuyerName: g('tokenBuyerName'),
+      tokenBuyerTelegram: g('tokenBuyerTelegram'),
       keyModal: g('keyModal'),
       modalTitle: g('modalTitle'),
       newKeyBox: g('newKeyBox'),
@@ -2051,11 +2057,12 @@ function syncBucketRoleFields() {
   // The same sequence means the picker reads top to bottom in the order a
   // profile actually displays them.
   //
-  // Every option here ships real artwork in the repo. Anything without a
-  // matching file is left out rather than shown as an invented icon, because a
-  // badge drawn by hand is not the badge the account actually has. Rows saved
-  // with one of the removed names still resolve through BadgeIcons and surface
-  // in the removable custom chips below, so nothing is lost silently.
+  // Every option here resolves to repo artwork or to a drawn fallback in
+  // js/badge-icons.js. Anything with neither is left out rather than shown as an
+  // invented icon, because a badge drawn by hand is not the badge the account
+  // actually has. Rows saved with one of the removed names still resolve through
+  // BadgeIcons and surface in the removable custom chips below, so nothing is
+  // lost silently.
   var BADGE_GROUPS = [
     {
       key: 'profile',
@@ -2063,14 +2070,14 @@ function syncBucketRoleFields() {
       options: [
         'Discord Staff', 'Partner', 'HypeSquad Events', 'Bug Hunter Level 1',
         'HypeSquad Bravery', 'HypeSquad Brilliance', 'HypeSquad Balance',
-        'Early Supporter', 'Bug Hunter Level 2',
-        'Discord Certified Moderator', 'Active Developer'
+        'Early Supporter', 'Team User', 'Bug Hunter Level 2',
+        'Verified Developer', 'Discord Certified Moderator', 'Active Developer'
       ]
     },
     {
       key: 'nitro',
       label: 'Nitro',
-      options: ['Nitro', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond']
+      options: ['Nitro', 'Nitro Basic', 'Nitro Classic', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond']
     },
     {
       key: 'boost',
@@ -2666,6 +2673,7 @@ function syncBucketRoleFields() {
 
   function accBadgesHtml(row) {
     var out = [];
+    var seen = {};
     // Bare artwork: no chip fill or border, so the badges read as icons rather
     // than pills. The name moves to a tooltip and to a screen-reader-only label.
     // This uses its own class instead of .badge-muted/.badge-nitro so the
@@ -2675,16 +2683,24 @@ function syncBucketRoleFields() {
       return '<span class="badge badge-art" title="' + esc(name) + '">' + art
         + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(name) + '</span></span>';
     }
+    // nitro_tier and the saved badge list can both name the same plan. Show it
+    // once, or a Nitro account reads as two badges.
+    function pushBadge(name) {
+      var canonical = badgeName(name);
+      if (!canonical || seen[canonical]) return;
+      seen[canonical] = true;
+      out.push(chip(canonical));
+    }
     var end = nitroEnd(row.nitro_ends);
     if (row.nitro_tier && row.nitro_tier !== 'None' && row.nitro_tier !== 'Unknown') {
-      out.push(chip(row.nitro_tier));
+      pushBadge(row.nitro_tier);
     }
     // Saved badges come back in whatever order they were ticked, so put them
     // back into profile order or the same set reads differently per account.
     orderBadges(row.badges || []).forEach(function (b) {
       // Show the current badge name so rows saved before the rename read the
       // same as newly added ones.
-      out.push(chip(badgeName(b)));
+      pushBadge(b);
     });
     var html = out.join('') || '<span class="muted-text">�</span>';
     // Nitro expiry goes on its own line below the badges rather than in the
@@ -3310,6 +3326,11 @@ function syncBucketRoleFields() {
     el.tokenMsg.className = 'msg' + (kind ? ' msg-' + kind : '');
   }
 
+  function syncTokenSoldFields() {
+    var sold = !!(el.tokenStatus && String(el.tokenStatus.value || '').toUpperCase() === 'SOLD');
+    if (el.tokenSoldFields) el.tokenSoldFields.hidden = !sold;
+  }
+
   function resetTokenAdd() {
     tokenProfile = null;
     if (el.tokenInput) el.tokenInput.value = '';
@@ -3318,6 +3339,13 @@ function syncBucketRoleFields() {
       el.tokenPreview.hidden = true;
       el.tokenPreview.innerHTML = '';
     }
+    // Prices start empty on purpose. The operator types what was actually paid
+    // or received; the account editor stays available for later edits.
+    [el.tokenBuyPrice, el.tokenSellPrice, el.tokenBuyerName, el.tokenBuyerTelegram].forEach(function (node) {
+      if (node) node.value = '';
+    });
+    if (el.tokenStatus) el.tokenStatus.value = 'AVAILABLE';
+    syncTokenSoldFields();
     if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
     setTokenMsg('');
   }
@@ -3343,13 +3371,16 @@ function syncBucketRoleFields() {
       var art = badgeIcon(b);
       return '<span class="badge badge-art" title="' + esc(b) + '">' + art
         + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(b) + '</span></span>';
-    }).join('') || '<span class="muted-text">No public badges</span>';
+    }).join('') || '<span class="muted-text">No badges reported by Discord</span>';
     var fields = [
       ['Account ID', profile.discordId || '-'],
       ['Username', profile.username ? '@' + profile.username : '-'],
       ['Global name', profile.globalName || '-'],
       ['Email', profile.email || 'not returned by Discord'],
       ['Nitro', profile.nitroTier || 'None'],
+      // Billing only exists for paid subscriptions. Gifted, legacy and
+      // non-billing plans legitimately have no end date to show.
+      ['Nitro ends', profile.nitroEnds ? fmtDate(profile.nitroEnds) : 'not exposed by Discord'],
       ['2FA', profile.twoFactorEnabled ? 'Enabled' : 'Disabled'],
       ['Verified', profile.verified ? 'Yes' : 'No'],
       ['Created', profile.creationDate ? fmtDate(profile.creationDate) : '-']
@@ -3435,6 +3466,44 @@ function syncBucketRoleFields() {
       return;
     }
 
+    // Optional pricing entered on this screen. Sending null for an empty field
+    // keeps a new account's money columns empty instead of turning them into 0.
+    var buyRaw = el.tokenBuyPrice ? String(el.tokenBuyPrice.value || '').trim() : '';
+    var buyPrice = null;
+    if (buyRaw !== '') {
+      buyPrice = Number(buyRaw);
+      if (!isFinite(buyPrice) || buyPrice < 0) {
+        setTokenMsg('Spent price must be a valid non-negative number.', 'error');
+        if (el.tokenBuyPrice) el.tokenBuyPrice.focus();
+        return;
+      }
+    }
+    var status = el.tokenStatus ? String(el.tokenStatus.value || 'AVAILABLE').toUpperCase() : 'AVAILABLE';
+    if (status !== 'SOLD') status = 'AVAILABLE';
+    var payload = {
+      token: tokenProfile.token,
+      buyPrice: buyPrice,
+      status: status,
+      // Reuse the date the preview already fetched, so the save does not need a
+      // second Discord billing request and cannot lose a valid expiry.
+      nitroEnds: (tokenProfile.profile && tokenProfile.profile.nitroEnds) || ''
+    };
+    if (status === 'SOLD') {
+      var sellRaw = el.tokenSellPrice ? String(el.tokenSellPrice.value || '').trim() : '';
+      var sellPrice = null;
+      if (sellRaw !== '') {
+        sellPrice = Number(sellRaw);
+        if (!isFinite(sellPrice) || sellPrice < 0) {
+          setTokenMsg('Sold price must be a valid non-negative number.', 'error');
+          if (el.tokenSellPrice) el.tokenSellPrice.focus();
+          return;
+        }
+      }
+      payload.sellPrice = sellPrice;
+      payload.buyerName = el.tokenBuyerName ? String(el.tokenBuyerName.value || '').trim() : '';
+      payload.buyerTelegram = el.tokenBuyerTelegram ? String(el.tokenBuyerTelegram.value || '').trim() : '';
+    }
+
     tokenSaving = true;
     if (el.tokenSaveBtn) {
       el.tokenSaveBtn.disabled = true;
@@ -3445,13 +3514,13 @@ function syncBucketRoleFields() {
       var res = await api('/api/summary?op=token-add', {
         method: 'POST',
         headers: { 'X-Owner-Key': getSecret() },
-        body: { token: tokenProfile.token }
+        body: payload
       });
       var saved = (res && res.data) || {};
       closeTokenModal();
       toast(res && res.created === false
-        ? 'Existing account refreshed with the new token.'
-        : 'Account added. Set its prices in the editor.', 'ok');
+        ? 'Existing account refreshed. Its saved prices and sale details were kept.'
+        : 'Account added. Check its badges and prices in the editor.', 'ok');
       await loadAccounts();
       var row = saved.id
         ? acc.rows.filter(function (r) { return r.id === saved.id; })[0]
@@ -3830,6 +3899,9 @@ function syncBucketRoleFields() {
     }
     if (el.tokenCancelBtn) {
       el.tokenCancelBtn.addEventListener('click', closeTokenModal);
+    }
+    if (el.tokenStatus) {
+      el.tokenStatus.addEventListener('change', syncTokenSoldFields);
     }
     if (el.tokenForm) {
       el.tokenForm.addEventListener('submit', submitTokenForm);

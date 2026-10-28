@@ -508,9 +508,9 @@
   var PROFILE_ORDER = [
     'Discord Staff', 'Partner', 'HypeSquad Events', 'Bug Hunter Level 1',
     'HypeSquad Bravery', 'HypeSquad Brilliance', 'HypeSquad Balance',
-    'Early Supporter', 'Bug Hunter Level 2', 'Discord Certified Moderator',
-    'Active Developer',
-    'Nitro', 'Nitro Basic', 'Nitro (Legacy)',
+    'Early Supporter', 'Team User', 'Bug Hunter Level 2',
+    'Verified Developer', 'Discord Certified Moderator', 'Active Developer',
+    'Nitro', 'Nitro Basic', 'Nitro Classic', 'Nitro (Legacy)',
     'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Ruby', 'Opal', 'Diamond',
     'Boost Level 1', 'Boost Level 2', 'Boost Level 3', 'Boost Level 4', 'Boost Level 5',
     'Boost Level 6', 'Boost Level 7', 'Boost Level 8', 'Boost Level 9',
