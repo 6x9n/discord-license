@@ -2400,3 +2400,193 @@ img.badge-icon {
     min-width: 30px;
   }
 }
+
+/* ---------- Quick Add + Discord-token accounts ---------- */
+
+/* Four header actions need to wrap on narrower screens instead of forcing the
+   table card below them out of shape. */
+#accountsView .head-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  #accountsView .page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #accountsView .head-actions {
+    justify-content: flex-start;
+  }
+}
+
+.quick-text {
+  min-height: 190px;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.quick-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 0 8px;
+}
+
+.quick-preview-head .field-label {
+  margin: 0;
+}
+
+.quick-preview {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 12px 14px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.quick-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+}
+
+.quick-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.quick-key,
+.token-key {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+}
+
+.quick-val,
+.token-val {
+  font-size: 12.5px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.quick-empty-val {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.quick-warn {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--warn);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.token-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 0 10px;
+}
+
+.token-actions .mini-btn {
+  margin-bottom: 0;
+}
+
+.token-preview {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.token-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.token-avatar {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.token-avatar-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--muted);
+}
+
+.token-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+}
+
+.token-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.token-badges {
+  margin-top: 12px;
+}
+
+.token-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.token-state .mini-btn {
+  margin-bottom: 0;
+}
+
+.token-state-label {
+  font-weight: 600;
+}
+
+.token-inline {
+  color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .quick-grid,
+  .token-fields {
+    grid-template-columns: 1fr;
+  }
+}

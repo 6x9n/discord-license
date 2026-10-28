@@ -33,6 +33,8 @@
       accountsView: g('accountsView'),
       accountsRefreshBtn: g('accountsRefreshBtn'),
       addAccountBtn: g('addAccountBtn'),
+      quickAddBtn: g('quickAddBtn'),
+      tokenAddBtn: g('tokenAddBtn'),
       moneyView: g('moneyView'),
       moneyRefreshBtn: g('moneyRefreshBtn'),
       addBucketBtn: g('addBucketBtn'),
@@ -149,12 +151,12 @@
       accBalanceHint: g('accBalanceHint'),
       accBuyerName: g('accBuyerName'),
       accBuyerTelegram: g('accBuyerTelegram'),
+      accSoldLink1: g('accSoldLink1'),
+      accSoldLink2: g('accSoldLink2'),
+      accTokenState: g('accTokenState'),
       accNotes: g('accNotes'),
       accBadges: g('accBadges'),
       accCustomBadge: g('accCustomBadge'),
-      accServerName: g('accServerName'),
-      accServerInvite: g('accServerInvite'),
-      accServerMembers: g('accServerMembers'),
       accAddBadgeBtn: g('accAddBadgeBtn'),
       accBadgeGroups: g('accBadgeGroups'),
       accSelectedBadges: g('accSelectedBadges'),
@@ -174,6 +176,24 @@
       soldCancelBtn: g('soldCancelBtn'),
       soldSubmitBtn: g('soldSubmitBtn'),
       accSaveBtn: g('accSaveBtn'),
+      quickAddModal: g('quickAddModal'),
+      quickAddForm: g('quickAddForm'),
+      quickAddText: g('quickAddText'),
+      quickAddPreview: g('quickAddPreview'),
+      quickAddSummary: g('quickAddSummary'),
+      quickAddMsg: g('quickAddMsg'),
+      quickAddClearBtn: g('quickAddClearBtn'),
+      quickAddCancelBtn: g('quickAddCancelBtn'),
+      quickAddSaveBtn: g('quickAddSaveBtn'),
+      tokenModal: g('tokenModal'),
+      tokenForm: g('tokenForm'),
+      tokenInput: g('tokenInput'),
+      tokenHint: g('tokenHint'),
+      tokenPreview: g('tokenPreview'),
+      tokenMsg: g('tokenMsg'),
+      tokenFetchBtn: g('tokenFetchBtn'),
+      tokenSaveBtn: g('tokenSaveBtn'),
+      tokenCancelBtn: g('tokenCancelBtn'),
       keyModal: g('keyModal'),
       modalTitle: g('modalTitle'),
       newKeyBox: g('newKeyBox'),
@@ -1100,6 +1120,16 @@
     query: '',
     ready: false
   };
+
+  // Holds the last token whose profile was fetched. The save call only runs
+  // after a successful fetch, so a token is never written without the admin
+  // having seen which account it belongs to.
+  var tokenProfile = null;
+  // Guards against a double submit (Enter twice, or a double click landing
+  // before the disabled attribute paints) creating two rows.
+  var quickAddSaving = false;
+  var tokenSaving = false;
+  var tokenFetching = false;
 
   /* =======================================================================
      Money (buckets + ledger)
@@ -2713,8 +2743,14 @@ function syncBucketRoleFields() {
   }
 
   function accRowHtml(row) {
+    // A token-added account has no price until the operator sets one. Treat
+    // that as unknown rather than as a free account, both in the net figure
+    // and in the cells, so the table does not invent a profit.
+    var priceKnown = row.buy_price != null && row.sell_price != null;
     var net = null;
-    if (row.status === 'SOLD') net = (Number(row.sell_price) || 0) - (Number(row.buy_price) || 0);
+    if (row.status === 'SOLD' && priceKnown) {
+      net = (Number(row.sell_price) || 0) - (Number(row.buy_price) || 0);
+    }
     var netHtml = net === null
       ? '<span class="muted-text">�</span>'
       : '<span class="' + (net < 0 ? 'net-negative' : 'net-positive') + '">' + accMoney(net) + '</span>';
@@ -2724,6 +2760,12 @@ function syncBucketRoleFields() {
       : '<span class="muted-text">no id</span>';
     if (row.username) identity += '<div class="muted-text">@' + esc(row.username) + '</div>';
     identity += accStockAgeHtml(row);
+    if (row.has_token) {
+      identity += '<div class="cell-micro token-inline">'
+        + (row.is_registered_in_tool ? 'in tool' : 'token saved')
+        + (row.token_hint ? ' ' + esc(row.token_hint) : '')
+        + '</div>';
+    }
 
     var statusCell = '<span class="badge ' + (row.status === 'SOLD' ? 'badge-warn' : 'badge-ok') + '">'
       + esc(row.status) + '</span>';
@@ -2748,7 +2790,9 @@ function syncBucketRoleFields() {
       + '<div class="pw-row"><span class="pw-kind">Discord</span>' + accPwCell(row.discord_password, 'Discord password') + '</div>'
       + '</div>';
 
-    var payCell = row.status === 'SOLD' ? accMoney(row.sell_price) : '<span class="muted-text">�</span>';
+    var payCell = row.status === 'SOLD'
+      ? (row.sell_price == null ? '<span class="muted-text">\u2014</span>' : accMoney(row.sell_price))
+      : '<span class="muted-text">\u2014</span>';
     var split = paySplit(row);
     // Show an outstanding balance on any sale, split or not, because an
     // unrecorded payment is the thing worth catching. An unsold account never
@@ -2764,6 +2808,9 @@ function syncBucketRoleFields() {
       + (row.status === 'AVAILABLE'
         ? '<button class="btn btn-ghost mini-btn" data-acc-act="sold" data-id="' + esc(row.id) + '">Sold</button>'
         : '')
+      + (row.has_token
+        ? '<button class="btn btn-ghost mini-btn" data-acc-act="register" data-id="' + esc(row.id) + '" title="Bind this token in the tool and open it">Register in Tool &amp; Open</button>'
+        : '')
       + '<button class="btn btn-danger mini-btn" data-acc-act="del" data-id="' + esc(row.id) + '">Del</button>';
 
     // data-label drives the stacked card layout on narrow screens, where the
@@ -2777,7 +2824,8 @@ function syncBucketRoleFields() {
       + '<td data-label="Passwords"><div class="acc-val">' + pws + '</div></td>'
       + '<td data-label="Badges &amp; Nitro"><div class="acc-val"><div class="tag-row">' + accBadgesHtml(row) + '</div></div></td>'
       + '<td data-label="Status"><div class="acc-val">' + statusCell + '</div></td>'
-      + '<td class="num" data-label="Paid"><div class="acc-val">' + accMoney(row.buy_price) + '</div></td>'
+      + '<td class="num" data-label="Paid"><div class="acc-val">'
+      + (row.buy_price == null ? '<span class="muted-text">\u2014</span>' : accMoney(row.buy_price)) + '</div></td>'
       + '<td class="num" data-label="Sold"><div class="acc-val">' + payCell + '</div></td>'
       + '<td class="num" data-label="Net"><div class="acc-val">' + netHtml + '</div></td>'
       + '<td data-label="Source"><div class="acc-val">' + accSourceHtml(row.source) + '</div></td>'
@@ -2807,9 +2855,14 @@ function syncBucketRoleFields() {
   function resetAccForm() {
     [el.accEditId, el.accEmail, el.accEmailPw, el.accDiscordPw, el.accDiscordId,
       el.accUsername, el.accNitroEnds, el.accStatus, el.accSource,
-      el.accPaid, el.accSell, el.accPaidFirst, el.accPaidSecond, el.accNotes, el.accCustomBadge].forEach(function (node) {
+      el.accPaid, el.accSell, el.accPaidFirst, el.accPaidSecond, el.accBuyerName,
+      el.accBuyerTelegram, el.accSoldLink1, el.accSoldLink2, el.accNotes, el.accCustomBadge].forEach(function (node) {
       if (node) node.value = '';
     });
+    if (el.accTokenState) {
+      el.accTokenState.hidden = true;
+      el.accTokenState.innerHTML = '';
+    }
     // A new account is not sold, so the split stays hidden until it is.
     if (el.accPaySplitField) el.accPaySplitField.hidden = true;
     if (el.accBalanceHint) el.accBalanceHint.textContent = '';
@@ -2831,21 +2884,21 @@ function syncBucketRoleFields() {
       if (el.accDiscordId) el.accDiscordId.value = row.discord_id || '';
       if (el.accUsername) el.accUsername.value = row.username || '';
       if (el.accNitroEnds) el.accNitroEnds.value = row.nitro_ends ? String(row.nitro_ends).slice(0, 10) : '';
-      if (el.accServerName) el.accServerName.value = row.server_name || '';
-      if (el.accServerInvite) el.accServerInvite.value = row.server_invite || '';
-      if (el.accServerMembers) el.accServerMembers.value = row.server_member_count != null ? String(row.server_member_count) : '';
       if (el.accStatus) el.accStatus.value = row.status_label || '';
       if (el.accSource) el.accSource.value = row.source || '';
       if (el.accPaid) el.accPaid.value = row.buy_price != null ? Number(row.buy_price) : '';
       if (el.accSell) el.accSell.value = row.sell_price != null ? Number(row.sell_price) : '';
-    if (el.accPaidFirst) el.accPaidFirst.value = money2(row.sell_paid_first) || '';
-    if (el.accPaidSecond) el.accPaidSecond.value = money2(row.sell_paid_second) || '';
-    // The split only means something once the account is sold, so it stays
-    // hidden otherwise rather than showing a balance against an asking price.
-    if (el.accPaySplitField) el.accPaySplitField.hidden = !(row && row.status === 'SOLD');
-    updateBalanceHint(el.accSell, el.accPaidFirst, el.accPaidSecond, el.accBalanceHint);
+      if (el.accPaidFirst) el.accPaidFirst.value = money2(row.sell_paid_first) || '';
+      if (el.accPaidSecond) el.accPaidSecond.value = money2(row.sell_paid_second) || '';
+      // The split only means something once the account is sold, so it stays
+      // hidden otherwise rather than showing a balance against an asking price.
+      if (el.accPaySplitField) el.accPaySplitField.hidden = !(row && row.status === 'SOLD');
+      updateBalanceHint(el.accSell, el.accPaidFirst, el.accPaidSecond, el.accBalanceHint);
       if (el.accBuyerName) el.accBuyerName.value = row.buyer_name || '';
       if (el.accBuyerTelegram) el.accBuyerTelegram.value = row.buyer_telegram || '';
+      if (el.accSoldLink1) el.accSoldLink1.value = row.sold_link_1 || '';
+      if (el.accSoldLink2) el.accSoldLink2.value = row.sold_link_2 || '';
+      renderAccTokenState(row);
       if (el.accNotes) el.accNotes.value = row.notes || '';
       setAccBadges((row.badges || []).map(String));
     } else {
@@ -2858,6 +2911,650 @@ function syncBucketRoleFields() {
 
   function closeAccModal() {
     if (el.accModal) el.accModal.hidden = true;
+  }
+
+  /* -------- quick add: paste labels, preview, save, edit badges -------- */
+
+  function pad2(n) {
+    return (n < 10 ? '0' : '') + n;
+  }
+
+  // Money fields arrive as "510$", "1,250.00" or "1.250,00". Keep the first
+  // numeric run and normalise the separators, then reject negatives because
+  // none of the account money columns accept them.
+  function quickMoney(value) {
+    var raw = String(value == null ? '' : value).trim();
+    if (!raw) return null;
+    var cleaned = raw.replace(/[^\d.,-]/g, '');
+    if (!cleaned) return null;
+    var negative = cleaned.charAt(0) === '-';
+    cleaned = cleaned.replace(/-/g, '');
+    if (!cleaned) return null;
+    if (cleaned.indexOf(',') !== -1 && cleaned.indexOf('.') !== -1) {
+      if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
+        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+      } else {
+        cleaned = cleaned.replace(/,/g, '');
+      }
+    } else if ((cleaned.match(/,/g) || []).length === 1 && /,\d{3}$/.test(cleaned)) {
+      cleaned = cleaned.replace(',', '');
+    } else if (cleaned.indexOf(',') !== -1 && cleaned.indexOf('.') === -1 &&
+      (cleaned.match(/,/g) || []).length > 1) {
+      // "1,234,567" is a thousands-separated amount, not a decimal comma.
+      cleaned = cleaned.replace(/,/g, '');
+    } else {
+      cleaned = cleaned.replace(',', '.');
+    }
+    var n = Number(cleaned);
+    if (!isFinite(n)) return null;
+    if (negative && n !== 0) return null;
+    return Math.round(n * 100) / 100;
+  }
+
+  // "Nov 8, 2026", "2026-11-08" and "08/11/2026" all become YYYY-MM-DD. Slash
+  // and dot dates are read day-first, matching the format the pasted blocks
+  // from sellers usually use.
+  function quickDate(value) {
+    var raw = String(value == null ? '' : value).trim();
+    if (!raw) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      var iso = new Date(raw + 'T00:00:00');
+      if (isNaN(iso.getTime())) return '';
+      // A date like 2026-02-31 rolls into March. Reject it instead of saving
+      // a date the operator never typed.
+      return iso.getFullYear() + '-' + pad2(iso.getMonth() + 1) + '-' + pad2(iso.getDate()) === raw ? raw : '';
+    }
+    var d = null;
+    var numeric = raw.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})$/);
+    if (numeric) {
+      var day = Number(numeric[1]);
+      var month = Number(numeric[2]);
+      var year = Number(numeric[3]);
+      if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+      if (year < 100) year += 2000;
+      d = new Date(year, month - 1, day);
+      if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return '';
+    } else {
+      d = new Date(raw);
+    }
+    if (!d || isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function quickTelegram(value) {
+    var raw = String(value == null ? '' : value).trim();
+    var link = raw.match(/(?:https?:\/\/)?(?:www\.)?t\.me\/([A-Za-z0-9_]{3,})/i);
+    if (link) return '@' + link[1];
+    if (/^@[A-Za-z0-9_]{3,}$/.test(raw)) return raw;
+    return '';
+  }
+
+  function quickParse(text) {
+    var out = {
+      email: '',
+      emailPassword: '',
+      discordPassword: '',
+      statusLabel: '',
+      nitroRaw: '',
+      nitroEnds: '',
+      buyPrice: null,
+      source: '',
+      buyerName: '',
+      buyerTelegram: '',
+      sellPrice: null,
+      sellPaidFirst: null,
+      sellPaidSecond: null,
+      soldLink1: '',
+      soldLink2: '',
+      discordId: '',
+      username: '',
+      notes: '',
+      recognized: 0,
+      unknown: []
+    };
+    var aliases = {
+      'email': 'email',
+      'mail': 'email',
+      'email password': 'emailPassword',
+      'email pass': 'emailPassword',
+      'email pw': 'emailPassword',
+      'discord password': 'discordPassword',
+      'discord pass': 'discordPassword',
+      'discord pw': 'discordPassword',
+      'status': 'statusLabel',
+      'nitro end': 'nitroEnds',
+      'nitro ends': 'nitroEnds',
+      'nitro expiration': 'nitroEnds',
+      'nitro expires': 'nitroEnds',
+      'nitro': 'nitroTier',
+      'paid': 'buyPrice',
+      'buy': 'buyPrice',
+      'buy price': 'buyPrice',
+      'purchase price': 'buyPrice',
+      'cost': 'buyPrice',
+      'from': 'source',
+      'source': 'source',
+      'bought from': 'source',
+      'buyer': 'buyer',
+      'buyer name': 'buyerName',
+      'buyer telegram': 'buyerTelegram',
+      'sold': 'sellPrice',
+      'sold price': 'sellPrice',
+      'sell price': 'sellPrice',
+      'sold 1': 'sold1',
+      'sold 2': 'sold2',
+      'payment 1': 'sold1',
+      'payment 2': 'sold2',
+      'discord id': 'discordId',
+      'account id': 'discordId',
+      'id': 'discordId',
+      'username': 'username',
+      'notes': 'notes',
+      'note': 'notes'
+    };
+
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      var trimmed = line.trim();
+      if (!trimmed) return;
+      var match = trimmed.match(/^([A-Za-z][A-Za-z0-9 _\/-]{0,40}?)\s*[:=]\s*(.*)$/);
+      if (!match) {
+        // A bare email is common when a seller sends one line per value.
+        if (!out.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)) {
+          out.email = trimmed;
+          out.recognized++;
+        }
+        return;
+      }
+      var key = match[1].toLowerCase().replace(/\s+/g, ' ').trim();
+      var value = match[2].trim();
+      if (!value) return;
+      var field = aliases[key];
+      if (!field) {
+        out.unknown.push(key);
+        return;
+      }
+      out.recognized++;
+      if (field === 'email') out.email = value;
+      else if (field === 'emailPassword') out.emailPassword = value;
+      else if (field === 'discordPassword') out.discordPassword = value;
+      else if (field === 'statusLabel') out.statusLabel = value;
+      else if (field === 'nitroTier') {
+        // Not every block calls it "Nitro tier"; keep only a recognised tier.
+        if (/^(none|nitro|nitro classic|nitro basic)$/i.test(value)) out.nitroTier = value;
+      } else if (field === 'nitroEnds') {
+        out.nitroRaw = value;
+        out.nitroEnds = quickDate(value);
+      } else if (field === 'buyPrice') out.buyPrice = quickMoney(value);
+      else if (field === 'source') out.source = value;
+      else if (field === 'buyer' || field === 'buyerName') {
+        var buyerTag = quickTelegram(value);
+        out.buyerName = buyerTag || value;
+        out.buyerTelegram = out.buyerTelegram || buyerTag;
+      } else if (field === 'buyerTelegram') out.buyerTelegram = quickTelegram(value) || value;
+      else if (field === 'sellPrice') out.sellPrice = quickMoney(value);
+      else if (field === 'sold1') {
+        out.soldLink1 = value;
+        // A link or a note is kept as text; only a value that reads as money
+        // becomes the first instalment. Otherwise the digits inside a URL
+        // would be mistaken for a payment.
+        out.sellPaidFirst = /https?:\/\/|t\.me\//i.test(value) ? null : quickMoney(value);
+      } else if (field === 'sold2') {
+        out.soldLink2 = value;
+        out.sellPaidSecond = /https?:\/\/|t\.me\//i.test(value) ? null : quickMoney(value);
+      } else if (field === 'discordId') out.discordId = value;
+      else if (field === 'username') out.username = value;
+      else if (field === 'notes') out.notes = value;
+    });
+
+    // A pasted block sometimes records only the two payments and leaves the
+    // total implicit. Summing them keeps the row internally consistent: the
+    // account is sold, and the sale total is what was actually received.
+    if (out.sellPrice == null) {
+      var payments = (out.sellPaidFirst || 0) + (out.sellPaidSecond || 0);
+      if (payments > 0) {
+        out.sellPrice = Math.round(payments * 100) / 100;
+      }
+    }
+
+    return out;
+  }
+
+  function quickWarnings(p) {
+    var warnings = [];
+    if (!p.email && !p.discordId && !p.username) {
+      warnings.push('No email, Discord ID or username was found, so the record has no identity.');
+    }
+    if (p.nitroRaw && !p.nitroEnds) {
+      warnings.push('Could not read the nitro end date "' + p.nitroRaw + '".');
+    }
+    if (p.sellPrice != null && p.sellPrice > 0) {
+      warnings.push('A sold price was found, so the record will be saved as SOLD.');
+    }
+    return warnings;
+  }
+
+  function quickPreviewHtml(p) {
+    if (!p.recognized) {
+      return '<p class="quick-empty">Nothing parsed yet. Paste a block above to see the fields.</p>';
+    }
+    var rows = [
+      ['Email', p.email],
+      ['Email password', p.emailPassword],
+      ['Discord password', p.discordPassword],
+      ['Status', p.statusLabel],
+      ['Nitro end', p.nitroEnds],
+      ['Paid', p.buyPrice == null ? '' : accMoney(p.buyPrice)],
+      ['From', p.source],
+      ['Buyer', p.buyerName],
+      ['Buyer Telegram', p.buyerTelegram],
+      ['Sold', p.sellPrice == null ? '' : accMoney(p.sellPrice)],
+      ['Sold 1', p.soldLink1 + (p.sellPaidFirst == null ? '' : ' (' + accMoney(p.sellPaidFirst) + ')')],
+      ['Sold 2', p.soldLink2 + (p.sellPaidSecond == null ? '' : ' (' + accMoney(p.sellPaidSecond) + ')')],
+      ['Discord ID', p.discordId],
+      ['Username', p.username]
+    ];
+    var html = '<div class="quick-grid">' + rows.map(function (row) {
+      var value = String(row[1] == null ? '' : row[1]).trim();
+      return '<div class="quick-row">'
+        + '<span class="quick-key">' + esc(row[0]) + '</span>'
+        + '<span class="quick-val' + (value ? '' : ' quick-empty-val') + '">'
+        + esc(value || 'not found') + '</span>'
+        + '</div>';
+    }).join('') + '</div>';
+    var warnings = quickWarnings(p);
+    if (warnings.length) {
+      html += '<ul class="quick-warn">' + warnings.map(function (w) {
+        return '<li>' + esc(w) + '</li>';
+      }).join('') + '</ul>';
+    }
+    return html;
+  }
+
+  function setQuickAddMsg(text, kind) {
+    if (!el.quickAddMsg) return;
+    el.quickAddMsg.textContent = text || '';
+    el.quickAddMsg.className = 'msg' + (kind ? ' msg-' + kind : '');
+  }
+
+  function renderQuickPreview() {
+    var parsed = quickParse(el.quickAddText ? el.quickAddText.value : '');
+    if (el.quickAddPreview) el.quickAddPreview.innerHTML = quickPreviewHtml(parsed);
+    if (el.quickAddSummary) {
+      if (!parsed.recognized) {
+        el.quickAddSummary.textContent = '';
+      } else {
+        var status = parsed.sellPrice != null && parsed.sellPrice > 0 ? 'SOLD' : 'AVAILABLE';
+        el.quickAddSummary.textContent = parsed.recognized + ' field'
+          + (parsed.recognized === 1 ? '' : 's') + ' found - will save as ' + status;
+      }
+    }
+    if (el.quickAddSaveBtn) {
+      el.quickAddSaveBtn.disabled = !parsed.recognized;
+    }
+    return parsed;
+  }
+
+  function resetQuickAdd() {
+    if (el.quickAddText) el.quickAddText.value = '';
+    if (el.quickAddPreview) {
+      el.quickAddPreview.innerHTML = '<p class="quick-empty">Nothing parsed yet. Paste a block above to see the fields.</p>';
+    }
+    if (el.quickAddSummary) el.quickAddSummary.textContent = '';
+    if (el.quickAddSaveBtn) el.quickAddSaveBtn.disabled = true;
+    setQuickAddMsg('');
+  }
+
+  function openQuickAddModal() {
+    resetQuickAdd();
+    if (el.quickAddModal) el.quickAddModal.hidden = false;
+    if (el.quickAddText) el.quickAddText.focus();
+  }
+
+  function closeQuickAddModal() {
+    if (el.quickAddModal) el.quickAddModal.hidden = true;
+  }
+
+  async function submitQuickAdd(e) {
+    e.preventDefault();
+    if (quickAddSaving) return;
+    setQuickAddMsg('');
+    var parsed = renderQuickPreview();
+    if (!parsed.recognized) {
+      setQuickAddMsg('Paste at least one labelled field first.', 'error');
+      return;
+    }
+    var warnings = quickWarnings(parsed);
+    var identityWarning = warnings.filter(function (w) { return w.indexOf('no identity') !== -1; })[0];
+    if (identityWarning) {
+      setQuickAddMsg(identityWarning, 'error');
+      return;
+    }
+
+    var payload = {
+      email: parsed.email,
+      emailPassword: parsed.emailPassword,
+      discordPassword: parsed.discordPassword,
+      statusLabel: parsed.statusLabel,
+      nitroEnds: parsed.nitroEnds,
+      source: parsed.source,
+      notes: parsed.notes,
+      discordId: parsed.discordId,
+      username: parsed.username,
+      buyerName: parsed.buyerName,
+      buyerTelegram: parsed.buyerTelegram,
+      soldLink1: parsed.soldLink1,
+      soldLink2: parsed.soldLink2,
+      // Quick Add does not ask for badges; the record opens straight into the
+      // editor so they can be attached immediately.
+      badges: []
+    };
+    if (parsed.nitroTier) payload.nitroTier = parsed.nitroTier;
+    payload.buyPrice = parsed.buyPrice == null ? 0 : parsed.buyPrice;
+    payload.sellPrice = parsed.sellPrice == null ? 0 : parsed.sellPrice;
+    payload.sellPaidFirst = parsed.sellPaidFirst == null ? 0 : parsed.sellPaidFirst;
+    payload.sellPaidSecond = parsed.sellPaidSecond == null ? 0 : parsed.sellPaidSecond;
+    if (parsed.sellPrice != null && parsed.sellPrice > 0) {
+      payload.status = 'SOLD';
+      payload.soldAt = new Date().toISOString();
+    }
+
+    quickAddSaving = true;
+    if (el.quickAddSaveBtn) el.quickAddSaveBtn.disabled = true;
+    setQuickAddMsg('Saving...');
+    try {
+      var res = await api('/api/summary', { method: 'POST', body: payload });
+      closeQuickAddModal();
+      toast('Account added. Attach badges in the editor.', 'ok');
+      await loadAccounts();
+      var created = (res && res.data) || {};
+      var row = created.id
+        ? acc.rows.filter(function (r) { return r.id === created.id; })[0]
+        : null;
+      if (!row && created.discord_id) {
+        row = acc.rows.filter(function (r) { return r.discord_id === created.discord_id; })[0];
+      }
+      if (!row && created.email) {
+        row = acc.rows.filter(function (r) { return r.email === created.email; })[0];
+      }
+      if (row) openAccModal(row);
+    } catch (err) {
+      setQuickAddMsg(err.message || 'Could not save the account.', 'error');
+    } finally {
+      quickAddSaving = false;
+      if (el.quickAddSaveBtn) el.quickAddSaveBtn.disabled = false;
+    }
+  }
+
+  /* -------- add via Discord token -------- */
+
+  function setTokenMsg(text, kind) {
+    if (!el.tokenMsg) return;
+    el.tokenMsg.textContent = text || '';
+    el.tokenMsg.className = 'msg' + (kind ? ' msg-' + kind : '');
+  }
+
+  function resetTokenAdd() {
+    tokenProfile = null;
+    if (el.tokenInput) el.tokenInput.value = '';
+    if (el.tokenHint) el.tokenHint.textContent = '';
+    if (el.tokenPreview) {
+      el.tokenPreview.hidden = true;
+      el.tokenPreview.innerHTML = '';
+    }
+    if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
+    setTokenMsg('');
+  }
+
+  function openTokenModal() {
+    resetTokenAdd();
+    if (el.tokenModal) el.tokenModal.hidden = false;
+    if (el.tokenInput) el.tokenInput.focus();
+  }
+
+  function closeTokenModal() {
+    if (el.tokenModal) el.tokenModal.hidden = true;
+    // Do not keep a live token in the DOM after the dialog closes.
+    resetTokenAdd();
+  }
+
+  function renderTokenPreview(profile) {
+    if (!el.tokenPreview) return;
+    var avatar = profile.avatarUrl
+      ? '<img class="token-avatar" src="' + esc(profile.avatarUrl) + '" alt="" referrerpolicy="no-referrer">'
+      : '<span class="token-avatar token-avatar-empty">' + esc((profile.username || '?').slice(0, 1).toUpperCase()) + '</span>';
+    var badges = (profile.badges || []).map(function (b) {
+      var art = badgeIcon(b);
+      return '<span class="badge badge-art" title="' + esc(b) + '">' + art
+        + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(b) + '</span></span>';
+    }).join('') || '<span class="muted-text">No public badges</span>';
+    var fields = [
+      ['Account ID', profile.discordId || '-'],
+      ['Username', profile.username ? '@' + profile.username : '-'],
+      ['Global name', profile.globalName || '-'],
+      ['Email', profile.email || 'not returned by Discord'],
+      ['Nitro', profile.nitroTier || 'None'],
+      ['2FA', profile.twoFactorEnabled ? 'Enabled' : 'Disabled'],
+      ['Verified', profile.verified ? 'Yes' : 'No'],
+      ['Created', profile.creationDate ? fmtDate(profile.creationDate) : '-']
+    ];
+    el.tokenPreview.innerHTML = '<div class="token-preview-head">' + avatar
+      + '<div><strong>' + esc(profile.globalName || profile.username || 'Discord account') + '</strong>'
+      + '<div class="muted-text">' + esc(profile.username ? '@' + profile.username : '') + '</div></div></div>'
+      + '<div class="token-fields">' + fields.map(function (f) {
+        return '<div class="token-field"><span class="token-key">' + esc(f[0]) + '</span>'
+          + '<span class="token-val">' + esc(f[1]) + '</span></div>';
+      }).join('') + '</div>'
+      + '<div class="tag-row token-badges">' + badges + '</div>';
+    el.tokenPreview.hidden = false;
+  }
+
+  async function fetchTokenProfile() {
+    if (tokenFetching) return;
+    setTokenMsg('');
+    tokenProfile = null;
+    if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
+    if (el.tokenPreview) el.tokenPreview.hidden = true;
+    var token = (el.tokenInput && el.tokenInput.value || '').trim();
+    if (!token) {
+      setTokenMsg('Paste the Discord token first.', 'error');
+      if (el.tokenInput) el.tokenInput.focus();
+      return;
+    }
+    if (/\s/.test(token)) {
+      setTokenMsg('The token contains spaces. Copy the whole token without spaces.', 'error');
+      return;
+    }
+    if (token.length < 20) {
+      setTokenMsg('That token looks too short. Check it and try again.', 'error');
+      return;
+    }
+    tokenFetching = true;
+    if (el.tokenFetchBtn) {
+      el.tokenFetchBtn.disabled = true;
+      el.tokenFetchBtn.classList.add('is-loading');
+    }
+    setTokenMsg('Checking with Discord...');
+    try {
+      await ensureAccAuth();
+      var res = await api('/api/summary?op=token-add', {
+        method: 'POST',
+        headers: { 'X-Owner-Key': getSecret() },
+        body: { token: token, previewOnly: true }
+      });
+      tokenProfile = { token: token, profile: res.data || {} };
+      renderTokenPreview(tokenProfile.profile);
+      if (el.tokenHint) el.tokenHint.textContent = 'Verified ' + (tokenProfile.profile.username ? '@' + tokenProfile.profile.username : 'account') + ' · token' + (token.length > 4 ? ' ...' + token.slice(-4) : '');
+      setTokenMsg('Profile fetched. Review it, then save the account.', 'success');
+      if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = false;
+    } catch (err) {
+      tokenProfile = null;
+      if (el.tokenHint) el.tokenHint.textContent = '';
+      setTokenMsg(err.message || 'Could not fetch the Discord profile.', 'error');
+    } finally {
+      tokenFetching = false;
+      if (el.tokenFetchBtn) {
+        el.tokenFetchBtn.disabled = false;
+        el.tokenFetchBtn.classList.remove('is-loading');
+      }
+    }
+  }
+
+  async function submitTokenForm(e) {
+    e.preventDefault();
+    if (tokenSaving) return;
+    setTokenMsg('');
+    if (!tokenProfile) {
+      setTokenMsg('Fetch the profile first, then save it.', 'error');
+      return;
+    }
+    var current = (el.tokenInput && el.tokenInput.value || '').trim();
+    if (current !== tokenProfile.token) {
+      tokenProfile = null;
+      if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
+      setTokenMsg('The token changed after the profile was fetched. Fetch it again.', 'error');
+      return;
+    }
+
+    tokenSaving = true;
+    if (el.tokenSaveBtn) {
+      el.tokenSaveBtn.disabled = true;
+      el.tokenSaveBtn.classList.add('is-loading');
+    }
+    setTokenMsg('Saving the account...');
+    try {
+      var res = await api('/api/summary?op=token-add', {
+        method: 'POST',
+        headers: { 'X-Owner-Key': getSecret() },
+        body: { token: tokenProfile.token }
+      });
+      var saved = (res && res.data) || {};
+      closeTokenModal();
+      toast(res && res.created === false
+        ? 'Existing account refreshed with the new token.'
+        : 'Account added. Set its prices in the editor.', 'ok');
+      await loadAccounts();
+      var row = saved.id
+        ? acc.rows.filter(function (r) { return r.id === saved.id; })[0]
+        : null;
+      if (row) openAccModal(row);
+    } catch (err) {
+      setTokenMsg(err.message || 'Could not save the token account.', 'error');
+      if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = false;
+    } finally {
+      tokenSaving = false;
+      if (el.tokenSaveBtn) el.tokenSaveBtn.classList.remove('is-loading');
+    }
+  }
+
+  /* -------- register a saved token in the tool and open it -------- */
+
+  var TOOL_ACCOUNTS_KEY = 'dmt.dsc.accounts';
+
+  function readToolAccounts() {
+    try {
+      var raw = localStorage.getItem(TOOL_ACCOUNTS_KEY);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // The tool and this admin console share an origin, so the tool's own
+  // localStorage account store is the native registration target. A configured
+  // TOOL_REGISTER_URL gets the token server-side instead, and then the browser
+  // only opens the tool.
+  function bindTokenIntoTool(profile, token) {
+    var list = readToolAccounts();
+    var user = {
+      id: String(profile.discord_id || ''),
+      username: profile.username || '',
+      global_name: profile.global_name || '',
+      avatar: profile.avatar || '',
+      discriminator: '0'
+    };
+    var account = {
+      username: profile.global_name || profile.username || profile.discord_id || 'account',
+      token: token,
+      user: user,
+      // The manager uses this to avoid re-validating a token it just received.
+      profileCheckedAt: Date.now()
+    };
+    var replaced = false;
+    var next = list.map(function (item) {
+      if (!item || typeof item !== 'object') return item;
+      var sameId = user.id && item.user && String(item.user.id || '') === user.id;
+      var sameToken = item.token === token;
+      if (sameId || sameToken) {
+        replaced = true;
+        return account;
+      }
+      return item;
+    });
+    if (!replaced) next.push(account);
+    localStorage.setItem(TOOL_ACCOUNTS_KEY, JSON.stringify(next));
+  }
+
+  async function registerAccInTool(row) {
+    if (!row) return;
+    if (!row.has_token) {
+      toast('This account has no saved Discord token. Add it via Discord Token first.', 'error');
+      return;
+    }
+
+    // Open the tab while we still have the click gesture, then point it at the
+    // tool once the server has registered the token. Opening after an await is
+    // what browsers block as a pop-up.
+    var win = window.open('about:blank', '_blank');
+    toast('Registering the token in the tool...', 'ok');
+    try {
+      var res = await api('/api/summary?op=register-tool', {
+        method: 'POST',
+        headers: { 'X-Owner-Key': getSecret() },
+        body: { id: row.id }
+      });
+      var saved = (res && res.data) || row;
+      if (res && res.toolToken) {
+        bindTokenIntoTool(saved, res.toolToken);
+      }
+      var toolUrl = (res && res.toolUrl) || '/index.html';
+      if (win) {
+        win.location.href = toolUrl;
+      } else {
+        toast('The token was registered, but the tool tab was blocked. Allow pop-ups and try again.', 'warning');
+      }
+      toast(res && res.registeredVia === 'api'
+        ? 'Registered through the tool API and opening it now.'
+        : 'Registered in the tool and opening it now.', 'ok');
+      await loadAccounts();
+      // The editor can stay open behind the new tool tab. Refresh just its token
+      // badge so it does not keep claiming "Not registered" after a success.
+      if (el.accModal && !el.accModal.hidden && el.accEditId && el.accEditId.value === saved.id) {
+        var current = acc.rows.filter(function (r) { return r.id === saved.id; })[0];
+        renderAccTokenState(current || saved);
+      }
+    } catch (err) {
+      if (win) {
+        try { win.close(); } catch (e) {}
+      }
+      toast(err.message || 'Could not register the token in the tool.', 'error');
+    }
+  }
+
+  function renderAccTokenState(row) {
+    if (!el.accTokenState) return;
+    if (!row || !row.has_token) {
+      el.accTokenState.hidden = true;
+      el.accTokenState.innerHTML = '';
+      return;
+    }
+    el.accTokenState.innerHTML = '<span class="token-state-label">Discord token saved</span>'
+      + (row.token_hint ? ' <span class="muted-text">' + esc(row.token_hint) + '</span>' : '')
+      + (row.is_registered_in_tool
+        ? ' <span class="badge badge-ok">Registered in tool</span>'
+        : ' <span class="badge badge-warn">Not registered</span>'
+          + ' <button type="button" class="btn btn-ghost mini-btn" data-acc-register="' + esc(row.id) + '">Register in Tool &amp; Open</button>');
+    el.accTokenState.hidden = false;
   }
 
   function validateAccForm() {
@@ -2929,6 +3626,10 @@ function syncBucketRoleFields() {
     // buyer on a record actually clears it instead of being ignored.
     if (el.accBuyerName) payload.buyerName = el.accBuyerName.value.trim();
     if (el.accBuyerTelegram) payload.buyerTelegram = el.accBuyerTelegram.value.trim();
+    // The raw "sold 1" / "sold 2" values are stored as text alongside the
+    // numeric instalments, so a note or invoice link is not lost.
+    if (el.accSoldLink1) payload.soldLink1 = el.accSoldLink1.value.trim();
+    if (el.accSoldLink2) payload.soldLink2 = el.accSoldLink2.value.trim();
 
     el.accSaveBtn.disabled = true;
     try {
@@ -3075,12 +3776,64 @@ function syncBucketRoleFields() {
     if (el.addAccountBtn) {
       el.addAccountBtn.addEventListener('click', function () { openAccModal(null); });
     }
+    if (el.quickAddBtn) {
+      el.quickAddBtn.addEventListener('click', openQuickAddModal);
+    }
+    if (el.tokenAddBtn) {
+      el.tokenAddBtn.addEventListener('click', openTokenModal);
+    }
+    if (el.quickAddText) {
+      el.quickAddText.addEventListener('input', function () {
+        renderQuickPreview();
+        if (el.quickAddMsg && el.quickAddMsg.classList.contains('msg-error')) setQuickAddMsg('');
+      });
+    }
+    if (el.quickAddClearBtn) {
+      el.quickAddClearBtn.addEventListener('click', function () {
+        resetQuickAdd();
+        if (el.quickAddText) el.quickAddText.focus();
+      });
+    }
+    if (el.quickAddCancelBtn) {
+      el.quickAddCancelBtn.addEventListener('click', closeQuickAddModal);
+    }
+    if (el.quickAddForm) {
+      el.quickAddForm.addEventListener('submit', submitQuickAdd);
+    }
+    if (el.quickAddModal) {
+      el.quickAddModal.addEventListener('click', function (e) {
+        if (e.target === el.quickAddModal) closeQuickAddModal();
+      });
+    }
+    if (el.tokenFetchBtn) {
+      el.tokenFetchBtn.addEventListener('click', fetchTokenProfile);
+    }
+    if (el.tokenCancelBtn) {
+      el.tokenCancelBtn.addEventListener('click', closeTokenModal);
+    }
+    if (el.tokenForm) {
+      el.tokenForm.addEventListener('submit', submitTokenForm);
+    }
+    if (el.tokenModal) {
+      el.tokenModal.addEventListener('click', function (e) {
+        if (e.target === el.tokenModal) closeTokenModal();
+      });
+    }
     if (el.accCancelBtn) {
       el.accCancelBtn.addEventListener('click', closeAccModal);
     }
     if (el.accModal) {
       el.accModal.addEventListener('click', function (e) {
         if (e.target === el.accModal) closeAccModal();
+      });
+    }
+    if (el.accTokenState) {
+      el.accTokenState.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-acc-register]');
+        if (!btn) return;
+        var id = btn.getAttribute('data-acc-register');
+        var row = acc.rows.filter(function (r) { return r.id === id; })[0];
+        if (row) registerAccInTool(row);
       });
     }
     if (el.accForm) {
@@ -3331,6 +4084,7 @@ function syncBucketRoleFields() {
         else if (act === 'sold') openSoldModal(row);
         else if (act === 'del') deleteAcc(row);
         else if (act === 'export') copyAccExport(row);
+        else if (act === 'register') registerAccInTool(row);
       });
     }
 
@@ -3347,6 +4101,12 @@ function syncBucketRoleFields() {
     });
 
     document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && el.quickAddModal && !el.quickAddModal.hidden) {
+        closeQuickAddModal();
+      }
+      if (e.key === 'Escape' && el.tokenModal && !el.tokenModal.hidden) {
+        closeTokenModal();
+      }
       if (e.key === 'Escape' && el.accModal && !el.accModal.hidden) {
         closeAccModal();
       }

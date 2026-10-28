@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=17">
+  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=18">
 </head>
 <body>
   <div id="loginView" class="view login-view">
@@ -166,6 +166,14 @@
             <button id="accountsRefreshBtn" class="btn btn-ghost head-btn" type="button" title="Refresh accounts">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
               <span class="btn-label">Refresh</span>
+            </button>
+            <button id="quickAddBtn" class="btn btn-ghost head-btn" type="button" title="Paste account details and fill the form automatically">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+              <span class="btn-label">Quick Add (Paste Text)</span>
+            </button>
+            <button id="tokenAddBtn" class="btn btn-ghost head-btn" type="button" title="Fetch a Discord profile and save its token">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 7a4 4 0 0 1 0 8h-2"/><path d="M9 17a4 4 0 0 1 0-8h2"/><path d="M8 12h8"/></svg>
+              <span class="btn-label">Add via Discord Token</span>
             </button>
             <button id="addAccountBtn" class="btn btn-primary head-btn" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -584,6 +592,22 @@
           </div>
         </div>
 
+        <!-- The raw "sold 1" / "sold 2" values from a pasted record. They are
+             kept separately from the numeric instalments because a payment note
+             or invoice link is not an amount. -->
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label" for="accSoldLink1">Sold 1 / payment note</label>
+            <input id="accSoldLink1" class="input" type="text" placeholder="first payment, invoice link..." autocomplete="off">
+          </div>
+          <div class="form-field">
+            <label class="field-label" for="accSoldLink2">Sold 2 / payment note</label>
+            <input id="accSoldLink2" class="input" type="text" placeholder="second payment, invoice link..." autocomplete="off">
+          </div>
+        </div>
+
+        <div id="accTokenState" class="token-state" hidden></div>
+
         <div class="form-field">
           <span class="field-label">Badges</span>
           <input id="accBadges" type="hidden">
@@ -703,6 +727,65 @@
         <div class="modal-actions">
           <button id="accCancelBtn" class="btn btn-ghost" type="button">Cancel</button>
           <button id="accSaveBtn" class="btn btn-primary" type="submit">Save Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Quick add: paste a block of account details, review the parsed fields,
+       then save and open the new record for badge editing. -->
+  <div id="quickAddModal" class="modal" hidden>
+    <div class="modal-card modal-card-wide">
+      <h3 class="modal-title">Quick Add (Paste Text)</h3>
+      <p class="page-sub">Paste the account block exactly as you received it. Labels such as
+        <strong>email</strong>, <strong>email password</strong>, <strong>discord password</strong>,
+        <strong>Status</strong>, <strong>nitro end</strong>, <strong>paid</strong>, <strong>from</strong>,
+        <strong>buyer</strong>, <strong>sold</strong>, <strong>sold 1</strong> and <strong>sold 2</strong>
+        are recognised.</p>
+      <form id="quickAddForm" novalidate>
+        <div class="form-field">
+          <label class="field-label" for="quickAddText">Pasted account text</label>
+          <textarea id="quickAddText" class="input textarea quick-text" rows="10" spellcheck="false"
+            placeholder="email : user@example.com&#10;email password : hidden&#10;discord password : hidden&#10;Status : Register Mail&#10;nitro end : Nov 8, 2026&#10;paid : 510$&#10;from : https://t.me/source&#10;buyer : https://t.me/buyer&#10;sold : 650$&#10;sold 1 : first payment&#10;sold 2 : first payment"></textarea>
+        </div>
+        <div class="quick-preview-head">
+          <span class="field-label">Live preview</span>
+          <span id="quickAddSummary" class="muted-text"></span>
+        </div>
+        <div id="quickAddPreview" class="quick-preview">
+          <p class="quick-empty">Nothing parsed yet. Paste a block above to see the fields.</p>
+        </div>
+        <div id="quickAddMsg" class="msg" role="status"></div>
+        <div class="modal-actions">
+          <button id="quickAddClearBtn" class="btn btn-ghost" type="button">Clear</button>
+          <button id="quickAddCancelBtn" class="btn btn-ghost" type="button">Cancel</button>
+          <button id="quickAddSaveBtn" class="btn btn-primary" type="submit" disabled>Save &amp; Edit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add via Discord token: the token is sent to the server, which fetches
+       the profile, previews it, then saves it encrypted. -->
+  <div id="tokenModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">Add via Discord Token</h3>
+      <p class="page-sub">The owner key is checked before the token is read. The token is stored
+        encrypted and is never returned by the account list.</p>
+      <form id="tokenForm" novalidate>
+        <div class="form-field">
+          <label class="field-label" for="tokenInput">Discord token</label>
+          <input id="tokenInput" class="input" type="password" placeholder="Paste the account token" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="token-actions">
+          <button id="tokenFetchBtn" class="btn btn-ghost mini-btn" type="button">Fetch Profile</button>
+          <span id="tokenHint" class="muted-text"></span>
+        </div>
+        <div id="tokenPreview" class="token-preview" hidden></div>
+        <div id="tokenMsg" class="msg" role="status"></div>
+        <div class="modal-actions">
+          <button id="tokenCancelBtn" class="btn btn-ghost" type="button">Cancel</button>
+          <button id="tokenSaveBtn" class="btn btn-primary" type="submit" disabled>Save Account</button>
         </div>
       </form>
     </div>
@@ -1085,7 +1168,7 @@
 
   <script src="/js/badge-icons.js?v=9"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=24"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=25"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {

@@ -128,6 +128,90 @@ Source, Actions.
 `Paid` is `buy_price`, `Sold` is the received instalments, `Net` is the per-row
 difference. Badges and Nitro are rendered from the account's badge payload.
 
+### Quick Add (Paste Text)
+
+`Quick Add (Paste Text)` parses a pasted account block instead of making the
+operator retype it. Every value is shown in a live preview before the Save
+button is enabled, and the saved row opens immediately in the account editor so
+badges can be attached.
+
+Recognised labels (case-insensitive, `:` or `=`):
+
+| Label | Stored as |
+| --- | --- |
+| `email`, `mail` | `email` |
+| `email password`, `email pass`, `email pw` | `email_password` |
+| `discord password`, `discord pass`, `discord pw` | `discord_password` |
+| `status` | `status_label` |
+| `nitro end`, `nitro ends`, `nitro expiration` | `nitro_ends` (normalised to `YYYY-MM-DD`) |
+| `nitro` | `nitro_tier` when it is a known tier |
+| `paid`, `buy`, `cost`, `purchase price` | `buy_price` |
+| `from`, `source`, `bought from` | `source` |
+| `buyer`, `buyer name` | `buyer_name` (Telegram links become `@handle`) |
+| `buyer telegram` | `buyer_telegram` |
+| `sold`, `sold price`, `sell price` | `sell_price` |
+| `sold 1`, `payment 1` | `sold_link_1` plus `sell_paid_first` when numeric |
+| `sold 2`, `payment 2` | `sold_link_2` plus `sell_paid_second` when numeric |
+| `discord id`, `account id`, `id` | `discord_id` |
+| `username` | `username` |
+| `notes`, `note` | `notes` |
+
+A positive `sold` value creates the row as `SOLD` with `sold_at` set, so its
+revenue is counted from the first render. If `sold` is missing but `sold 1` and
+`sold 2` contain amounts, their sum becomes the sale total and the row is still
+saved as `SOLD`. `sold 1` / `sold 2` are stored verbatim as text because they may
+be payment notes or invoice links; only a value that reads as money also becomes
+an instalment. Dates are read day-first for `DD/MM/YYYY` and `DD.MM.YYYY`.
+
+### Discord token accounts
+
+- **Add via Discord Token** fetches `/users/@me`, shows the resolved account,
+  then saves the token. It requires an owner/master key in `X-Owner-Key`
+  (`LICENSE_OWNER_KEY` or `LICENSE_ADMIN_SECRET`); the account list session
+  alone is not enough.
+- The token is encrypted with AES-256-GCM (`api/_lib/token-crypto.js`). The
+  list endpoint never returns the ciphertext, IV or tag; it exposes only
+  `has_token` and `token_hint` (last four characters).
+- Re-adding a token for an existing Discord ID refreshes the profile fields and
+  encrypted token but leaves prices, buyer, status, notes and sold values
+  untouched.
+- **Register in Tool & Open** calls `POST /api/summary?op=register-tool`, marks
+  `is_registered_in_tool`, then either posts the token to `TOOL_REGISTER_URL`
+  or binds it into the tool's own `localStorage` key `dmt.dsc.accounts` before
+  opening `TOOL_OPEN_URL`.
+- Token-added rows start with empty purchase and sale prices. That needs the
+  nullable-price change in `sql/quick_add_and_discord_token.sql`; without it
+  the API reports the missing migration instead of a raw `23502`.
+
+### Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `LICENSE_ADMIN_SECRET` | Admin login; also a fallback owner key and fallback encryption key. |
+| `LICENSE_OWNER_KEY` | Optional dedicated key for token operations. The admin secret is still accepted. |
+| `OWNER_KEY_LABEL` | Label written to `owner_context` (defaults to `Owner`). |
+| `TOKEN_ENCRYPTION_KEY` | Preferred AES-256-GCM key source. Falls back to `LICENSE_ADMIN_SECRET`. Keep it stable: changing it makes saved tokens undecryptable. |
+| `TOOL_REGISTER_URL` | Optional external tool registration endpoint. |
+| `TOOL_REGISTER_API_KEY` | Bearer token sent to `TOOL_REGISTER_URL`. |
+| `TOOL_OPEN_URL` | Page opened by **Register in Tool & Open** (default `/index.html`). |
+
+### Schema migration
+
+Run `sql/quick_add_and_discord_token.sql` after `sql/summary_account_fields.sql`.
+It is re-runnable and adds:
+
+- `sold_link_1`, `sold_link_2` (text)
+- `buyer` (generated alias of `buyer_name`) and `sold_price` (generated alias of
+  `sell_price`) so the requested names exist without duplicating the state
+- `global_name`, `avatar`, `avatar_url`
+- encrypted token columns (`discord_token_enc`, `discord_token_iv`,
+  `discord_token_tag`, `token_hint`)
+- `owner_context`, `is_registered_in_tool`, `tool_registered_at`
+- nullable `buy_price` / `sell_price` so token-added accounts can have no price
+
+It ends with `notify pgrst, 'reload schema'` so the API sees the new columns
+without waiting for PostgREST's cache refresh.
+
 ## Money
 
 Named balances plus the ledger behind them. Isolated from Accounts: its own state
@@ -156,6 +240,9 @@ modal.
 | --- | --- |
 | `GET /api/summary?op=check` | Session probe on load. |
 | `POST /api/summary?op=login` | Exchange the secret for a session. |
+| `POST /api/summary?op=fetch` | Fetch a Discord profile for the token preview (session required). |
+| `POST /api/summary?op=token-add` | Preview or save an account from a Discord token (owner key required). |
+| `POST /api/summary?op=register-tool` | Bind a saved token into the tool and mark it registered (owner key required). |
 | `GET /api/summary` | Load all accounts. |
 | `POST /api/summary` | Create an account. |
 | `PATCH /api/summary?id=<uuid>` | Update an account, including mark-as-sold. |

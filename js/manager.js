@@ -574,7 +574,6 @@ window.manager = {
   const GUILD_META_TTL_MS = 30 * 60 * 1000;
   const GUILD_META_MAX_PER_PASS = 200;
   const GUILD_META_REQUEST_INTERVAL_MS = 1100;
-  const MAX_GUILD_META_AUTO_RETRIES = 3;
 
   const MAX_RATE_RETRIES = 3;
 
@@ -601,8 +600,6 @@ window.manager = {
   let inFlightController = null;
   let accountDataRequest = null;
   let guildMetaRequest = null;
-  let guildMetaRetryTimer = null;
-  let guildMetaRetryAttempts = 0;
   let lastGuildMetaRequestAt = 0;
   let lastRateLimitToastAt = 0;
 
@@ -850,11 +847,6 @@ window.manager = {
   }
 
   function setActiveAccount(token, user) {
-    if (guildMetaRetryTimer) {
-      clearTimeout(guildMetaRetryTimer);
-      guildMetaRetryTimer = null;
-    }
-    guildMetaRetryAttempts = 0;
     lastGuildMetaRequestAt = 0;
     state.token = normalizeToken(token);
     state.user = user;
@@ -882,11 +874,6 @@ window.manager = {
 
   function clearActiveAccount() {
     abortInFlight();
-    if (guildMetaRetryTimer) {
-      clearTimeout(guildMetaRetryTimer);
-      guildMetaRetryTimer = null;
-    }
-    guildMetaRetryAttempts = 0;
     lastGuildMetaRequestAt = 0;
     state.token = '';
     state.user = null;
@@ -1670,12 +1657,19 @@ window.manager = {
       const username = account && account.username || user.username || user.global_name || 'Unknown';
       const token = account && account.token ? normalizeToken(account.token) : '';
       const normalizedUser = user && user.id ? user : null;
+      // When the profile was last confirmed against Discord. Kept so a routine
+      // startup does not re-check every saved token and walk into a rate limit.
+      const profileCheckedAt = Number(account && account.profileCheckedAt) || 0;
       const normalized = { username: username, token: token };
       if (normalizedUser) {
         normalized.user = normalizedUser;
       }
+      if (profileCheckedAt > 0) {
+        normalized.profileCheckedAt = profileCheckedAt;
+      }
+      const expectedKeys = 2 + (normalizedUser ? 1 : 0) + (profileCheckedAt > 0 ? 1 : 0);
       if (!account || account.username !== normalized.username || account.token !== normalized.token ||
-        JSON.stringify(account.user || null) !== JSON.stringify(normalizedUser) || Object.keys(account).length !== (normalizedUser ? 3 : 2)) {
+        JSON.stringify(account.user || null) !== JSON.stringify(normalizedUser) || Object.keys(account).length !== expectedKeys) {
         changed = true;
       }
       return normalized;
@@ -1693,77 +1687,113 @@ window.manager = {
     renderSavedAccounts();
   }
 
-  // Refresh every saved token's Discord profile (name + avatar) on startup and
-  // drop the ones Discord definitively rejects.
-  //
-  // The previous version deleted an account on ANY rejection. A rate limit
-  // (429), a Discord 5xx, or a flaky connection therefore silently wiped saved
-  // accounts, and their tokens with them, which is unrecoverable. Only 401/403
-  // is treated as "token is dead"; every other failure keeps the account and is
-  // retried on the next load.
+  // Profile names and avatars change rarely, so a saved token is only checked
+  // once a day. Checking every saved token on every page load was what made an
+  // idle dashboard show "Rate Limited" toasts: several tokens were validated at
+  // once, each retrying three times with its own warning.
+  const PROFILE_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const PROFILE_REFRESH_GAP_MS = 1200;
+
+  function accountNeedsProfileRefresh(acc) {
+    if (!acc || !acc.token) {
+      return false;
+    }
+    if (!acc.user || !acc.user.id) {
+      return true;
+    }
+    const checkedAt = Number(acc.profileCheckedAt) || 0;
+    return !checkedAt || (Date.now() - checkedAt) > PROFILE_REFRESH_INTERVAL_MS;
+  }
+
+  function profileRefreshDelay(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  // Refresh stale saved profiles one at a time, without retries or warnings.
+  // Only 401/403 is treated as "token is dead"; a rate limit, a Discord 5xx or
+  // a flaky connection keeps the account and is tried again on a later load.
   function refreshSavedAccounts() {
-    const storedSnapshot = jsonGet(localStorage, CONFIG.dsc.accounts);
     const accounts = loadAccounts();
     if (!accounts.length) {
       return Promise.resolve(0);
     }
+    const targets = accounts.filter(accountNeedsProfileRefresh);
+    if (!targets.length) {
+      return Promise.resolve(0);
+    }
 
-    const checks = accounts.map(function (acc) {
-      return validateToken(acc.token)
+    const refreshed = Object.create(null);
+    const removedTokens = Object.create(null);
+    let removed = 0;
+    let index = 0;
+    let halted = false;
+
+    function step() {
+      if (halted || index >= targets.length) {
+        return Promise.resolve();
+      }
+      const acc = targets[index++];
+      return validateToken(acc.token, { maxRateRetries: 0, silentRateLimit: true })
         .then(function (res) {
           const profile = res && res.data && res.data.id ? res.data : null;
           if (profile) {
-            // The renderer reads name from acc.username and the avatar from
-            // acc.user (avatarUrl(acc.user)), so replacing the whole user
-            // object is what actually refreshes the avatar.
-            acc.user = profile;
-            acc.username = profile.global_name || profile.username || acc.username;
+            refreshed[acc.token] = {
+              user: profile,
+              username: profile.global_name || profile.username || acc.username,
+              profileCheckedAt: Date.now()
+            };
           }
-          return { ok: true, account: acc };
         })
         .catch(function (err) {
           const status = (err && err.status) || 0;
           const invalid = !!(err && err.invalidToken) || status === 401 || status === 403;
-          return { ok: false, invalid: invalid, account: acc };
+          if (invalid) {
+            removedTokens[acc.token] = true;
+            removed += 1;
+          } else if (status === 429) {
+            // Discord asked this address to slow down. Keep the rest exactly
+            // as they are and continue on the next load.
+            halted = true;
+          }
+        })
+        .then(function () {
+          if (halted || index >= targets.length) {
+            return null;
+          }
+          return profileRefreshDelay(PROFILE_REFRESH_GAP_MS).then(step);
         });
-    });
+    }
 
-    return Promise.all(checks).then(function (results) {
-      const kept = [];
-      let removed = 0;
-      let deferred = 0;
-      results.forEach(function (r) {
-        if (r.ok) {
-          kept.push(r.account);
-        } else if (r.invalid) {
-          removed += 1;
-        } else {
-          // Transient: keep the account exactly as it was stored.
-          kept.push(r.account);
-          deferred += 1;
-        }
-      });
-
+    return step().then(function () {
+      // Re-read before writing so an account added in another tab while the
+      // checks were running is not lost.
+      const current = loadAccounts();
+      const next = [];
       let changed = removed > 0;
-      for (let i = 0; i < kept.length && !changed; i++) {
-        const acc = kept[i];
-        const prev = (storedSnapshot || []).find(function (a) {
-          return a && a.token === acc.token;
-        });
-        if (prev && (JSON.stringify(prev.user || null) !== JSON.stringify(acc.user || null) ||
-          (prev.username || '') !== (acc.username || ''))) {
-          changed = true;
+      current.forEach(function (acc) {
+        if (removedTokens[acc.token]) {
+          return;
         }
-      }
+        const fresh = refreshed[acc.token];
+        if (fresh) {
+          if (JSON.stringify(acc.user || null) !== JSON.stringify(fresh.user || null) ||
+            (acc.username || '') !== fresh.username ||
+            Number(acc.profileCheckedAt || 0) !== fresh.profileCheckedAt) {
+            changed = true;
+          }
+          acc.user = fresh.user;
+          acc.username = fresh.username;
+          acc.profileCheckedAt = fresh.profileCheckedAt;
+        }
+        next.push(acc);
+      });
       if (changed) {
-        jsonSet(localStorage, CONFIG.dsc.accounts, kept);
-        renderSavedAccounts();
+        saveAccounts(next);
       }
       if (removed > 0) {
         toast(removed + ' saved account' + (removed === 1 ? '' : 's') + ' removed (token no longer valid).', 'error');
-      } else if (deferred > 0) {
-        // Quiet, non-alarming: the accounts are still there.
-        toast('Could not refresh ' + deferred + ' saved account' + (deferred === 1 ? '' : 's') + ' right now. Will retry later.', 'warning');
       }
       return removed;
     }).catch(function () {
@@ -1952,13 +1982,13 @@ window.manager = {
     return !!((isPlaceholderMarker || (idOkay && isDefaultPlaceholderName && noAvatar && defaultDiscriminator && hasNoRealIdentity)));
   }
 
-  function validateToken(rawToken) {
+  function validateToken(rawToken, requestSettings) {
     const token = normalizeToken(rawToken);
     if (!token) {
       return Promise.reject(new Error('Token cannot be empty.'));
     }
 
-    return makeRequest('GET', '/users/@me', undefined, token)
+    return makeRequest('GET', '/users/@me', undefined, token, undefined, requestSettings)
       .then(function (res) {
         const payload = res && res.data ? res.data : {};
         if (res && res.status >= 200 && res.status < 300 && payload && payload.id) {
@@ -2014,7 +2044,9 @@ window.manager = {
     existing.unshift({
       username: user.global_name || user.username || 'Unknown',
       token: normalizeToken(token),
-      user: user
+      user: user,
+      // This token was just verified, so the next startup can skip it.
+      profileCheckedAt: Date.now()
     });
     saveAccounts(existing.slice(0, 20));
   }
@@ -2142,11 +2174,13 @@ window.manager = {
     });
   }
 
-  function setMetrics(owned, joined, friends, dms) {
+  function setMetrics(owned, joined, friends, dms, boosted, boostsComplete) {
     const ownedEl = byId('metricOwned');
     const joinedEl = byId('metricJoined');
     const friendsEl = byId('metricFriends');
     const dmsEl = byId('metricDMs');
+    const boostedEl = byId('metricBoosted');
+    const boostedHintEl = byId('metricBoostedHint');
     if (ownedEl) {
       animateCounter(ownedEl, owned);
     }
@@ -2158,6 +2192,15 @@ window.manager = {
     }
     if (dmsEl) {
       animateCounter(dmsEl, dms);
+    }
+    if (boostedEl) {
+      boostedEl.textContent = boosted == null ? '\u2014' : String(boosted);
+      boostedEl.dataset.current = String(boosted == null ? 0 : boosted);
+    }
+    if (boostedHintEl) {
+      boostedHintEl.textContent = boosted == null
+        ? 'click to check boost status'
+        : (boostsComplete ? 'servers with your active boost' : 'confirmed so far - click to check all');
     }
   }
 
@@ -2175,23 +2218,35 @@ window.manager = {
     const dms = channels.filter(function (c) {
       return c.type === 1 || c.type === 3;
     }).length;
-    setMetrics(owned, joined, friends, dms);
+    // Only confirmed boosts are counted. Until at least one guild has boost
+    // metadata the honest answer is unknown, not zero, so the card shows an
+    // em dash and asks for a scan. A partial scan shows the confirmed count and
+    // says more servers still need checking.
+    const boostKnown = guilds.some(function (g) {
+      if (!g || !g.id) return false;
+      if (g.premium_since || g.user_premium_since || g.boosted_since) return true;
+      const meta = getGuildMeta(g.id);
+      return !!(meta && meta.boostKnown);
+    });
+    const boosted = boostKnown ? guilds.filter(isServerBoosted).length : null;
+    const boostsComplete = guildBoostStatusComplete(guilds);
+    setMetrics(owned, joined, friends, dms, boosted, boostsComplete);
   }
 
   function refreshMetrics() {
     if (!hasAccount()) {
-      setMetrics('-', '-', '-', '-');
+      setMetrics('-', '-', '-', '-', null, false);
       return;
     }
+    // Boost metadata is deliberately not fetched here. Scanning up to 200
+    // guilds on every dashboard load is what produced idle rate-limit toasts;
+    // the card and the Joined Servers inspector now start that scan on demand.
     loadAccountData()
       .then(function (data) {
         updateMetricsFrom(data);
-        return ensureGuildMetaLoaded().catch(function (err) {
-          toast(err.message || 'Could not check server boost status.', 'warning');
-        });
       })
       .catch(function () {
-        setMetrics('-', '-', '-', '-');
+        setMetrics('-', '-', '-', '-', null, false);
       });
   }
 
@@ -3416,38 +3471,13 @@ window.manager = {
     return next(0);
   }
 
-  function scheduleGuildMetaRetry(retryAfter) {
-    if (guildMetaRetryTimer) {
-      clearTimeout(guildMetaRetryTimer);
-      guildMetaRetryTimer = null;
-    }
-    const accountId = state.user && state.user.id ? String(state.user.id) : '';
-    const token = state.token;
-    const seconds = Number(retryAfter);
-    const waitMs = (isFinite(seconds) && seconds > 0 ? seconds : 60) * 1000 + 1000;
-    const retryAt = Date.now() + waitMs;
-    const schedule = function () {
-      const remaining = retryAt - Date.now();
-      if (remaining > 0) {
-        guildMetaRetryTimer = setTimeout(schedule, Math.min(remaining, 2147483000));
-        return;
-      }
-      guildMetaRetryTimer = null;
-      if (token === state.token && accountId && state.user && String(state.user.id) === accountId) {
-        ensureGuildMetaLoaded();
-      }
-    };
-    guildMetaRetryTimer = setTimeout(schedule, Math.min(waitMs, 2147483000));
+  function boostInspectorOpen() {
+    const modal = byId('inspectorModal');
+    return !!(modal && modal.classList.contains('active') &&
+      (state.inspectType === 'servers' || state.inspectType === 'owned' || state.inspectType === 'boosted'));
   }
 
-  function ensureGuildMetaLoaded(manualRetry) {
-    if (manualRetry && guildMetaRetryAttempts > MAX_GUILD_META_AUTO_RETRIES) {
-      guildMetaRetryAttempts = 0;
-      if (guildMetaRetryTimer) {
-        clearTimeout(guildMetaRetryTimer);
-        guildMetaRetryTimer = null;
-      }
-    }
+  function ensureGuildMetaLoaded(userInitiated) {
     if (guildMetaRequest) {
       return guildMetaRequest;
     }
@@ -3456,7 +3486,7 @@ window.manager = {
       updateMetricsFrom(state);
       const modal = byId('inspectorModal');
       if (modal && modal.classList.contains('active') &&
-          (state.inspectType === 'servers' || state.inspectType === 'owned')) {
+          (state.inspectType === 'servers' || state.inspectType === 'owned' || state.inspectType === 'boosted')) {
         const list = byId('inspectorList');
         const scrollTop = list ? list.scrollTop : 0;
         renderInspector();
@@ -3467,18 +3497,21 @@ window.manager = {
     }).then(function (result) {
       autoWhitelistBoostedServers();
       updateMetricsFrom(state);
+      const open = boostInspectorOpen();
+      // Only the operator who asked for a boost check needs the warning. A
+      // background caller (saving settings, preparing an operation) must not
+      // turn Discord's cooldown into an unsolicited "Rate Limited" toast.
       if (result.rateLimited) {
-        guildMetaRetryAttempts += 1;
-        if (guildMetaRetryAttempts <= MAX_GUILD_META_AUTO_RETRIES) {
-          toast("Discord rate-limited the boost lookup. Confirmed badges are shown; checking will resume after Discord's cooldown.", 'warning');
-          scheduleGuildMetaRetry(result.retryAfter);
-        } else {
-          toast('Boost checking paused after repeated rate limits. Open Joined Servers later to retry.', 'warning');
+        if (userInitiated || open) {
+          toast("Discord rate-limited the boost lookup. Confirmed boosts are shown; try again after Discord's cooldown to keep checking.", 'warning');
         }
       } else if (result.unavailable) {
-        toast('Discord did not return boost details for every server. Unconfirmed servers are not counted.', 'warning');
-      } else if (guildBoostStatusComplete(state.guilds)) {
-        guildMetaRetryAttempts = 0;
+        if (userInitiated || open) {
+          toast('Discord did not return boost details for every server. Unconfirmed servers are not counted.', 'warning');
+        }
+      }
+      if (open) {
+        renderInspector();
       }
     }).finally(function () {
       guildMetaRequest = null;
@@ -3522,7 +3555,9 @@ window.manager = {
     }
     const boosts = Number(guild.premium_subscription_count || guild.premiumSubscriptionCount || 0);
     const tier = Number(guild.premium_tier || guild.premiumTier || 0);
-    if (boosts || tier) {
+    if (isServerBoosted(guild)) {
+      parts.push('Boosted by you');
+    } else if (boosts || tier) {
       parts.push('Boost' + (tier ? ': L' + tier : '') + (boosts ? ' (' + boosts + ')' : ''));
     }
     if (guild.owner) {
@@ -5191,6 +5226,106 @@ window.manager = {
     return state.user && typeof state.user.bio === 'string' ? state.user.bio : '';
   }
 
+  function readAvatarDataUrl(blob, onProgress) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onprogress = function (event) {
+        if (onProgress && event.lengthComputable && event.total) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      };
+      reader.onload = function () {
+        const result = String(reader.result || '');
+        if (!/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(result)) {
+          reject(new Error('The selected file is not a supported image.'));
+          return;
+        }
+        resolve(result);
+      };
+      reader.onerror = function () {
+        reject(new Error('Could not read the image file.'));
+      };
+      reader.onabort = function () {
+        reject(new Error('Image reading was cancelled.'));
+      };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function prepareAvatarFile(file) {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+    if (!file || allowedTypes.indexOf(String(file.type || '').toLowerCase()) === -1) {
+      return Promise.reject(new Error('Choose a PNG, JPEG, WebP, or GIF image.'));
+    }
+    if (!file.size) {
+      return Promise.reject(new Error('The selected image is empty.'));
+    }
+    if (file.size > 16 * 1024 * 1024) {
+      return Promise.reject(new Error('Images must be 16MB or smaller.'));
+    }
+    if (file.type === 'image/gif') {
+      if (file.size > 6 * 1024 * 1024) {
+        return Promise.reject(new Error('Animated GIFs must be 6MB or smaller.'));
+      }
+      return Promise.resolve(file);
+    }
+
+    function decodeWithImage() {
+      return readAvatarDataUrl(file).then(function (dataUrl) {
+        return new Promise(function (resolve, reject) {
+          const image = new Image();
+          image.onload = function () { resolve(image); };
+          image.onerror = function () { reject(new Error('Could not decode the selected image.')); };
+          image.src = dataUrl;
+        });
+      });
+    }
+    const decode = typeof createImageBitmap === 'function'
+      ? Promise.resolve().then(function () { return createImageBitmap(file); }).catch(decodeWithImage)
+      : decodeWithImage();
+    return decode.then(function (bitmap) {
+      const maxDimension = 512;
+      const scale = Math.min(1, maxDimension / bitmap.width, maxDimension / bitmap.height);
+      if (scale === 1 && file.type !== 'image/webp' && file.size <= 2 * 1024 * 1024) {
+        if (typeof bitmap.close === 'function') {
+          bitmap.close();
+        }
+        return file;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) {
+        if (typeof bitmap.close === 'function') {
+          bitmap.close();
+        }
+        throw new Error('Could not prepare the selected image for upload.');
+      }
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      if (typeof bitmap.close === 'function') {
+        bitmap.close();
+      }
+      const outputType = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+      return new Promise(function (resolve, reject) {
+        canvas.toBlob(function (blob) {
+          if (!blob) {
+            reject(new Error('Could not prepare the selected image for upload.'));
+            return;
+          }
+          resolve(scale < 1 || file.type === 'image/webp' || file.size > 2 * 1024 * 1024
+            ? blob
+            : (blob.size < file.size ? blob : file));
+        }, outputType, 0.82);
+      });
+    }).catch(function (err) {
+      if (err instanceof Error && err.message) {
+        throw err;
+      }
+      throw new Error('Could not decode the selected image.');
+    });
+  }
+
   function syncProfileEditor() {
     const editName = byId('editProfileName');
     const editAvatarFile = byId('editProfileAvatarFile');
@@ -6575,6 +6710,8 @@ window.manager = {
   }
 
   let profileAvatarData = null;
+  let profileAvatarReadGeneration = 0;
+  let profileAvatarPreparing = false;
 
   function renderAvatarStrip(hashes) {
     const host = byId('editProfileAvatarHistory');
@@ -6659,6 +6796,9 @@ window.manager = {
     if (!state.user || !state.user.id || !hash) {
       return;
     }
+    const generation = ++profileAvatarReadGeneration;
+    profileAvatarPreparing = true;
+    setBusy(byId('editProfileSaveBtn'), true);
     const editAvatarPreview = byId('editProfileAvatarPreview');
     const editAvatarName = byId('editProfileAvatarName');
     setProfileStatus('Loading avatar image...');
@@ -6680,6 +6820,9 @@ window.manager = {
         });
       })
       .then(function (dataUrl) {
+        if (generation !== profileAvatarReadGeneration) {
+          return dataUrl;
+        }
         profileAvatarData = dataUrl;
         if (editAvatarPreview) {
           editAvatarPreview.style.backgroundImage = 'url("' + dataUrl + '")';
@@ -6691,9 +6834,16 @@ window.manager = {
         selectHistoryAvatar(hash);
         return dataUrl;
       })
-      .catch(function () {
-        setProfileStatus('Could not load that avatar - try uploading it instead.', 'err');
-        throw new Error('avatar download failed');
+      .catch(function (err) {
+        if (generation === profileAvatarReadGeneration) {
+          setProfileStatus((err && err.message) || 'Could not load that avatar - try uploading it instead.', 'err');
+        }
+      })
+      .finally(function () {
+        if (generation === profileAvatarReadGeneration) {
+          profileAvatarPreparing = false;
+          setBusy(byId('editProfileSaveBtn'), false);
+        }
       });
   }
 
@@ -6727,7 +6877,10 @@ window.manager = {
     if (file) {
       file.value = '';
     }
+    profileAvatarReadGeneration += 1;
+    profileAvatarPreparing = false;
     profileAvatarData = null;
+    setBusy(byId('editProfileSaveBtn'), false);
     setAvatarProgress(null, '');
     setProfileStatus('');
   }
@@ -6789,45 +6942,58 @@ window.manager = {
         if (!file) {
           return;
         }
-        if (file.size > 2 * 1024 * 1024) {
-          setProfileStatus('Image is larger than 2MB.', 'err');
-          editAvatarFile.value = '';
-          return;
-        }
-        const reader = new FileReader();
-        reader.onprogress = function (e) {
-          if (!e.lengthComputable || !e.total) {
-            return;
-          }
-          const pct = Math.round((e.loaded / e.total) * 100);
-          setAvatarProgress(pct, 'Reading ' + pct + '%');
-        };
-        reader.onload = function () {
-          profileAvatarData = String(reader.result || '');
-          if (editAvatarPreview) {
-            editAvatarPreview.style.backgroundImage = 'url("' + profileAvatarData + '")';
-          }
-          if (editAvatarName) {
-            editAvatarName.textContent = file.name;
-          }
-          selectHistoryAvatar('');
-          setAvatarProgress(null, '');
-          setProfileStatus('');
-        };
-        reader.onerror = function () {
-          setAvatarProgress(null, '');
-          setProfileStatus('Could not read the image file.', 'err');
-        };
-        reader.onabort = function () {
-          setAvatarProgress(null, '');
-        };
-        reader.readAsDataURL(file);
+        const generation = ++profileAvatarReadGeneration;
+        profileAvatarPreparing = true;
+        setBusy(editSave, true);
+        setProfileStatus('Preparing image...');
+        setAvatarProgress(-1, 'Preparing image...');
+        prepareAvatarFile(file)
+          .then(function (preparedFile) {
+            return readAvatarDataUrl(preparedFile, function (pct) {
+              if (generation === profileAvatarReadGeneration) {
+                setAvatarProgress(pct, 'Reading ' + pct + '%');
+              }
+            });
+          })
+          .then(function (dataUrl) {
+            if (generation !== profileAvatarReadGeneration) {
+              return;
+            }
+            if (dataUrl.length > 8 * 1024 * 1024) {
+              throw new Error('The prepared image is still too large. Choose a smaller image.');
+            }
+            profileAvatarData = dataUrl;
+            if (editAvatarPreview) {
+              editAvatarPreview.style.backgroundImage = 'url("' + profileAvatarData + '")';
+            }
+            if (editAvatarName) {
+              editAvatarName.textContent = file.name;
+            }
+            selectHistoryAvatar('');
+            setAvatarProgress(null, '');
+            setProfileStatus('');
+          })
+          .catch(function (err) {
+            if (generation !== profileAvatarReadGeneration) {
+              return;
+            }
+            profileAvatarData = null;
+            editAvatarFile.value = '';
+            setAvatarProgress(null, '');
+            setProfileStatus((err && err.message) || 'Could not prepare the image.', 'err');
+          })
+          .finally(function () {
+            if (generation === profileAvatarReadGeneration) {
+              profileAvatarPreparing = false;
+              setBusy(editSave, false);
+            }
+          });
       });
     }
 
     if (editSave) {
       editSave.addEventListener('click', function () {
-        if (profileEditing) {
+        if (profileEditing || profileAvatarPreparing) {
           return;
         }
         if (!hasAccount()) {
@@ -6841,7 +7007,7 @@ window.manager = {
         const currentName = (state.user && (state.user.global_name || state.user.username)) || '';
         const plainStyle = !!byId('editProfilePlainStyle') && byId('editProfilePlainStyle').checked;
         const statusText = statusInput ? String(statusInput.value || '').trim() : '';
-        const bio = bioInput ? String(bioInput.value || '').trim() : '';
+        const bio = bioInput ? String(bioInput.value || '') : '';
         const currentStatusText = currentCustomStatusText();
         // Cannot be named currentBio: that shadows the currentBio() helper
         // declared above, so `const currentBio = currentBio()` throws a
@@ -6881,64 +7047,119 @@ window.manager = {
         profileEditing = true;
         setBusy(editSave, true);
         setProfileStatus('Updating profile...');
-        // An avatar rides along as base64 in the same JSON body, so a large
-        // file makes this the slowest call in the app and the one most likely
-        // to stall. It gets a deadline, and the bar slides because the PATCH
-        // reports no bytes to count.
         const sendingAvatar = !!profileAvatarData;
         if (sendingAvatar) {
           setAvatarProgress(-1, 'Sending avatar...');
         }
         const deadline = 45000;
-        const jobs = [];
-        if (profileAvatarData || nameChanged || bioChanged || styleChanged) {
-          jobs.push(apiCall('PATCH', '/users/@me', body, deadline));
+        const writes = [];
+        const profileChanged = !!profileAvatarData || nameChanged || bioChanged || styleChanged;
+        let customStatus = null;
+        if (profileChanged) {
+          writes.push(function () {
+            return apiCall('PATCH', '/users/@me', body, deadline);
+          });
         }
         if (statusChanged) {
           const existing = (state.userSettings && state.userSettings.custom_status) || {};
-          jobs.push(apiCall('PATCH', '/users/@me/settings', {
-            custom_status: statusText
-              ? {
-                  text: statusText,
-                  emoji_id: existing.emoji_id || null,
-                  emoji_name: existing.emoji_name || null,
-                  expires_at: existing.expires_at || null
-                }
-              : null
-          }, deadline));
-        }
-        Promise.all(jobs).then(function (results) {
-          const bad = (results || []).find(function (res) {
-            return !res || res.status < 200 || res.status >= 300;
+          customStatus = statusText
+            ? {
+                text: statusText,
+                emoji_id: existing.emoji_id || null,
+                emoji_name: existing.emoji_name || null,
+                expires_at: existing.expires_at || null
+              }
+            : null;
+          writes.push(function () {
+            return apiCall('PATCH', '/users/@me/settings', {
+              custom_status: customStatus
+            }, deadline);
           });
-          if (bad) {
-            const reason = describeProfileWriteError(bad.data || {});
-            throw new Error(reason || 'Profile update failed.');
+        }
+        const failures = [];
+        let successfulWrites = 0;
+        let profileSaved = false;
+        let statusSaved = false;
+        let refreshFailed = false;
+        let writeChain = Promise.resolve();
+        writes.forEach(function (write, index) {
+          writeChain = writeChain.then(function () {
+            return write().then(function (res) {
+              if (!res || res.status < 200 || res.status >= 300) {
+                throw new Error(describeProfileWriteError((res && res.data) || {}) || 'Profile update failed.');
+              }
+              successfulWrites += 1;
+              if (index === 0 && profileChanged) {
+                profileSaved = true;
+                const responseUser = res.data && typeof res.data === 'object' ? res.data : {};
+                state.user = Object.assign({}, state.user || {}, responseUser);
+                if (nameChanged && !Object.prototype.hasOwnProperty.call(responseUser, 'global_name')) {
+                  state.user.global_name = body.global_name;
+                }
+                if (bioChanged && !Object.prototype.hasOwnProperty.call(responseUser, 'bio')) {
+                  state.user.bio = body.bio;
+                }
+                profileAvatarData = null;
+              } else {
+                statusSaved = true;
+                state.userSettings = Object.assign({}, state.userSettings || {}, {
+                  custom_status: customStatus
+                });
+              }
+            }).catch(function (err) {
+              failures.push((err && err.message) || 'Profile update failed.');
+            });
+          });
+        });
+        writeChain.then(function () {
+          let refresh = Promise.resolve();
+          if (profileSaved) {
+            refresh = refresh.then(function () {
+              return reloadActiveProfile().catch(function () {
+                refreshFailed = true;
+              });
+            });
           }
-          return reloadActiveProfile();
-        }).then(function () {
-          return reloadUserSettings();
+          if (statusSaved) {
+            refresh = refresh.then(function () {
+              return reloadUserSettings().then(function (res) {
+                if (!res || res.status < 200 || res.status >= 300) {
+                  refreshFailed = true;
+                }
+              }).catch(function () {
+                refreshFailed = true;
+              });
+            });
+          }
+          return refresh;
         }).then(function () {
           applyAccountState();
           if (state.user) {
             upsertAccount(state.token, state.user);
           }
           renderSavedAccounts();
-          syncProfileEditor();
-          setProfileStatus('Profile updated successfully.', 'ok');
-          toast('Profile updated.', 'success');
-          closeEditProfileModal();
-        }).catch(function (err) {
-          setProfileStatus((err && err.message) || 'Profile update failed.', 'err');
-          toast((err && err.message) || 'Profile update failed.', 'error');
+          if (!failures.length) {
+            setProfileStatus(refreshFailed ? 'Changes saved, but the profile could not be refreshed.' : 'Profile updated successfully.', refreshFailed ? 'err' : 'ok');
+            toast(refreshFailed ? 'Changes saved, but the profile could not be refreshed.' : 'Profile updated.', refreshFailed ? 'warning' : 'success');
+            closeEditProfileModal();
+          } else {
+            const message = successfulWrites
+              ? 'Some changes were saved, but another update failed: ' + failures.join(' ')
+              : failures.join(' ');
+            setProfileStatus(message, 'err');
+            toast(message, 'error');
+            if (profileSaved) {
+              syncProfileEditor();
+              if (statusChanged && !statusSaved && statusInput) {
+                statusInput.value = statusText;
+              }
+              setProfileStatus(message, 'err');
+            }
+          }
         }).finally(function () {
           profileEditing = false;
           setBusy(editSave, false);
-          // Only a failure needs the bar left visible, so the reason it stopped
-          // is still on screen next to the error.
-          if (!sendingAvatar) {
-            setAvatarProgress(null, '');
-          }
+          setAvatarProgress(null, '');
         });
       });
     }
@@ -6989,7 +7210,7 @@ window.manager = {
         list.innerHTML = '<li class="inspector-empty"><div class="brand-dot" style="margin-bottom:8px;"></div><span>Fetching fresh data from Discord...</span></li>';
       }
     }
-    const needsBoostDetails = type === 'servers' || type === 'owned';
+    const needsBoostDetails = type === 'servers' || type === 'owned' || type === 'boosted';
     const accountLoad = stale ? loadAccountData().then(function (data) {
       updateMetricsFrom(data);
     }) : Promise.resolve();
@@ -7099,6 +7320,21 @@ window.manager = {
           isBoosted: isServerBoosted(g)
         };
       });
+    } else if (type === 'boosted') {
+      items = (state.guilds || []).filter(isServerBoosted).map(function (g) {
+        return {
+          id: g.id,
+          raw: g,
+          title: g.name || 'Server',
+          subtitle: serverSubtitle(g),
+          avatar: guildIconUrl(g, 128),
+          initials: (g.name || 'S').slice(0, 1).toUpperCase(),
+          isServer: true,
+          isOwned: !!g.owner,
+          isBoosted: true,
+          relationshipType: g.owner ? 'Owner' : 'Member'
+        };
+      });
     } else if (type === 'dms') {
       items = (state.channels || []).filter(function (c) {
         return c.type === 1 || c.type === 3;
@@ -7183,6 +7419,10 @@ window.manager = {
       if (titleEl) titleEl.textContent = 'Owned Servers';
       if (subtitleEl) subtitleEl.textContent = 'Servers where you have ownership privileges';
       if (iconEl) iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>';
+    } else if (type === 'boosted') {
+      if (titleEl) titleEl.textContent = 'Servers Boosted';
+      if (subtitleEl) subtitleEl.textContent = 'Servers with a confirmed active boost from this account';
+      if (iconEl) iconEl.innerHTML = '<img class="inspector-header-boost-icon" src="assets/images/badges/boost_badges/discordboost1.svg" alt="" aria-hidden="true">';
     } else if (type === 'dms') {
       if (titleEl) titleEl.textContent = 'Private DMs';
       if (subtitleEl) subtitleEl.textContent = 'Direct messages and group conversations';
@@ -7247,9 +7487,17 @@ window.manager = {
 
     listEl.innerHTML = '';
     if (!items.length) {
+      let emptyText = 'No ' + type + ' found matching your search.';
+      if (type === 'boosted') {
+        emptyText = guildBoostStatusComplete(state.guilds)
+          ? 'No servers boosted by this account.'
+          : (guildMetaRequest
+            ? 'Checking Discord for boost status...'
+            : 'No confirmed boosts yet. Open this card again to check.');
+      }
       const emptyLi = document.createElement('li');
       emptyLi.className = 'inspector-empty';
-      emptyLi.innerHTML = '<div class="inspector-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div><span>No ' + type + ' found matching your search.</span>';
+      emptyLi.innerHTML = '<div class="inspector-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div><span>' + emptyText + '</span>';
       listEl.appendChild(emptyLi);
       return;
     }
@@ -7341,7 +7589,7 @@ window.manager = {
       const actions = document.createElement('div');
       actions.className = 'inspector-item-actions';
 
-      if (type === 'friends' || type === 'servers' || type === 'dms') {
+      if (type === 'friends' || type === 'servers' || type === 'dms' || type === 'boosted') {
         const whitelistBtn = document.createElement('button');
         const itemKind = whitelistKindForItem(item);
         const whitelisted = inWl(itemKind, item.id);
@@ -7903,7 +8151,7 @@ window.manager = {
       return Promise.resolve(false);
     }
 
-    return validateToken(token)
+    return validateToken(token, { maxRateRetries: 0, silentRateLimit: true })
       .then(function (res) {
         const profile = res && res.data && res.data.id ? res.data : null;
         if (!profile) {
