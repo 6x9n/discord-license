@@ -27,7 +27,9 @@ const {
   clearAuthCookie
 } = require('./_lib/summary-auth.js');
 
-const DISCORD_API = 'https://discord.com/api/v10';
+const DISCORD_API = 'https://discord.com/api/v9';
+const DISCORD_CLIENT_BUILD_NUMBER = 625378;
+const DISCORD_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 const BADGE_MAP = [
   { bit: 1 << 0, label: 'Discord Staff' },
@@ -218,39 +220,117 @@ function mapDiscordUser(user) {
 
 // One place for the Discord call so the profile preview and the save path can
 // never disagree about which account a token belongs to.
-async function fetchDiscordUser(token) {
+function normalizeDiscordToken(raw) {
+  let token = String(raw || '')
+    .trim()
+    .replace(/^["']+|["']+$/g, '')
+    .replace(/[\u200B\u200C\u200D\uFEFF\u00A0\u2060]+/g, '');
+  if (token.toLowerCase().indexOf('bot ') === 0) {
+    token = token.slice(4).trim();
+  }
+  if (token.toLowerCase().indexOf('bearer ') === 0) {
+    token = token.slice(7).trim();
+  }
+  return token;
+}
+
+function discordSuperProperties() {
+  return Buffer.from(JSON.stringify({
+    os: 'Windows',
+    browser: 'Chrome',
+    device: '',
+    system_locale: 'en-US',
+    browser_user_agent: DISCORD_USER_AGENT,
+    browser_version: '131.0.0.0',
+    os_version: '10',
+    referrer: '',
+    referring_domain: '',
+    referrer_current: '',
+    referring_domain_current: '',
+    release_channel: 'stable',
+    client_build_number: DISCORD_CLIENT_BUILD_NUMBER,
+    client_event_source: null
+  })).toString('base64');
+}
+
+function discordHeaders(token) {
+  // Mirror the browser client used by the tool. Discord is stricter about
+  // user-token requests that look like bare server-side traffic and can answer
+  // a valid token with 401 when the client headers are missing.
+  return {
+    Authorization: token,
+    'User-Agent': DISCORD_USER_AGENT,
+    'X-Super-Properties': discordSuperProperties(),
+    'X-Discord-Locale': 'en-US',
+    'X-Debug-Options': 'bugReporterEnabled',
+    Accept: '*/*',
+    'Accept-Language': 'en-US,en;q=0.9'
+  };
+}
+
+async function fetchDiscordUser(rawToken) {
   if (typeof fetch !== 'function') {
     const err = new Error('Fetch API not available in this runtime.');
     err.status = 502;
     throw err;
   }
-  let response;
-  let raw;
-  try {
-    response = await fetch(DISCORD_API + '/users/@me', {
+
+  const token = normalizeDiscordToken(rawToken);
+  if (!token) {
+    const err = new Error('Discord token is required.');
+    err.status = 400;
+    throw err;
+  }
+
+  const request = async function (auth) {
+    const response = await fetch(DISCORD_API + '/users/@me', {
       method: 'GET',
-      headers: {
-        Authorization: token,
-        'Content-Type': 'application/json'
-      }
+      headers: discordHeaders(auth)
     });
-    raw = await response.text();
+    const body = await response.text();
+    return { response: response, body: body };
+  };
+
+  let result;
+  try {
+    result = await request(token);
   } catch (e) {
     const err = new Error('Could not reach the Discord API. Check your network and try again.');
     err.status = 502;
     err.detail = (e && e.message) || null;
     throw err;
   }
+
+  // Some saved credentials are OAuth2 bearer tokens rather than user tokens.
+  // Retry once with the scheme Discord expects for those before declaring the
+  // token invalid. A real user token already succeeded on the first call.
+  if (result.response.status === 401) {
+    try {
+      const bearer = await request('Bearer ' + token);
+      if (bearer.response.ok) result = bearer;
+    } catch (e) {
+      // Keep the original 401; the network failure is not the useful error.
+    }
+  }
+
+  const response = result.response;
+  const raw = result.body;
   if (!response.ok) {
     let message = 'Discord rejected the token.';
-    if (response.status === 401) message = 'Invalid or expired token. Check that you pasted the full token.';
-    else if (response.status === 403) message = 'Discord blocked this token. It may have been flagged or the account requires verification.';
-    else if (response.status === 429) message = 'Discord is rate-limiting requests right now. Wait a moment and try again.';
+    if (response.status === 401) {
+      message = 'Invalid or expired token. Check that you pasted the full token, without quotes or hidden characters.';
+    } else if (response.status === 403) {
+      message = 'Discord blocked this token. It may have been flagged or the account requires verification.';
+    } else if (response.status === 429) {
+      message = 'Discord is rate-limiting requests right now. Wait a moment and try again.';
+    }
     const err = new Error(message);
     err.status = response.status === 429 ? 429 : (response.status === 401 || response.status === 403 ? 400 : 502);
     err.discordStatus = response.status;
+    err.detail = String(raw || '').slice(0, 200);
     throw err;
   }
+
   try {
     return JSON.parse(raw);
   } catch (e) {
@@ -501,7 +581,7 @@ function opLogout(req, res) {
 async function opFetch(req, res) {
   if (!authGuard(req, res)) return;
   const body = await readBody(req);
-  const token = String(body.token || '').trim();
+  const token = normalizeDiscordToken(body.token);
   if (!token) {
     return json(res, 400, { success: false, error: 'Discord token is required.' });
   }
@@ -529,7 +609,7 @@ async function opTokenAdd(req, res) {
   if (!ownerGuard(req, res)) return;
 
   const body = await readBody(req);
-  const token = String(body.token || '').trim();
+  const token = normalizeDiscordToken(body.token);
   if (!token) {
     return json(res, 400, { success: false, error: 'Discord token is required.' });
   }

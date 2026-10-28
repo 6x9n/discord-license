@@ -267,6 +267,23 @@
     return sessionStorage.getItem(SES_KEY) || '';
   }
 
+  // Tokens copied from Discord tools often carry surrounding quotes, a "Bot "
+  // prefix, a non-breaking space, or zero-width characters. Strip those before
+  // the preview so the server sees exactly the credential Discord issued.
+  function normalizeTokenValue(raw) {
+    var token = String(raw || '')
+      .trim()
+      .replace(/^["']+|["']+$/g, '')
+      .replace(/[\u200B\u200C\u200D\uFEFF\u00A0\u2060]+/g, '');
+    if (token.toLowerCase().indexOf('bot ') === 0) {
+      token = token.slice(4).trim();
+    }
+    if (token.toLowerCase().indexOf('bearer ') === 0) {
+      token = token.slice(7).trim();
+    }
+    return token;
+  }
+
   function toast(text, kind) {
     if (!el.toastContainer) {
       return;
@@ -3354,7 +3371,10 @@ function syncBucketRoleFields() {
     tokenProfile = null;
     if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
     if (el.tokenPreview) el.tokenPreview.hidden = true;
-    var token = (el.tokenInput && el.tokenInput.value || '').trim();
+    var token = normalizeTokenValue(el.tokenInput && el.tokenInput.value || '');
+    if (el.tokenInput && token !== el.tokenInput.value) {
+      el.tokenInput.value = token;
+    }
     if (!token) {
       setTokenMsg('Paste the Discord token first.', 'error');
       if (el.tokenInput) el.tokenInput.focus();
@@ -3407,7 +3427,7 @@ function syncBucketRoleFields() {
       setTokenMsg('Fetch the profile first, then save it.', 'error');
       return;
     }
-    var current = (el.tokenInput && el.tokenInput.value || '').trim();
+    var current = normalizeTokenValue(el.tokenInput && el.tokenInput.value || '');
     if (current !== tokenProfile.token) {
       tokenProfile = null;
       if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
