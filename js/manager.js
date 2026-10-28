@@ -575,6 +575,14 @@ window.manager = {
   const GUILD_META_TTL_MS = 30 * 60 * 1000;
   const GUILD_META_MAX_PER_PASS = 200;
   const GUILD_META_REQUEST_INTERVAL_MS = 1100;
+  // A 429 on the member endpoint means Discord wants the whole lookup to pause,
+  // not just the one guild. Short cooldowns are waited out inline so a scan can
+  // finish in one go; longer ones are resumed by a timer instead of freezing
+  // the operation that asked for the check.
+  const GUILD_META_INLINE_COOLDOWN_MAX_MS = 20000;
+  const GUILD_META_DEFAULT_COOLDOWN_MS = 10000;
+  const GUILD_META_MAX_COOLDOWN_MS = 5 * 60 * 1000;
+  const GUILD_META_MAX_AUTO_RETRIES = 4;
 
   const MAX_RATE_RETRIES = 3;
 
@@ -602,6 +610,10 @@ window.manager = {
   let accountDataRequest = null;
   let guildMetaRequest = null;
   let lastGuildMetaRequestAt = 0;
+  let guildMetaCooldownUntil = 0;
+  let guildMetaRetryTimer = null;
+  let guildMetaRetryAttempts = 0;
+  let guildMetaNoticeAt = 0;
   let lastRateLimitToastAt = 0;
 
   function delay(ms) {
@@ -847,8 +859,19 @@ window.manager = {
     return null;
   }
 
+  function resetGuildMetaSchedule() {
+    guildMetaCooldownUntil = 0;
+    guildMetaRetryAttempts = 0;
+    guildMetaNoticeAt = 0;
+    if (guildMetaRetryTimer) {
+      clearTimeout(guildMetaRetryTimer);
+      guildMetaRetryTimer = null;
+    }
+  }
+
   function setActiveAccount(token, user) {
     lastGuildMetaRequestAt = 0;
+    resetGuildMetaSchedule();
     state.token = normalizeToken(token);
     state.user = user;
     rememberAvatar(user);
@@ -876,6 +899,7 @@ window.manager = {
   function clearActiveAccount() {
     abortInFlight();
     lastGuildMetaRequestAt = 0;
+    resetGuildMetaSchedule();
     state.token = '';
     state.user = null;
     state.legacyUsernameOverride = null;
@@ -3367,6 +3391,28 @@ window.manager = {
     });
   }
 
+  function guildMetaCooldownRemaining() {
+    return Math.max(0, guildMetaCooldownUntil - Date.now());
+  }
+
+  // Discord's retry_after is per route, but pausing the whole sequential scan
+  // is safer than immediately asking the next guild and collecting another 429.
+  function setGuildMetaCooldown(retryAfter) {
+    const seconds = Number(retryAfter);
+    const waitMs = isFinite(seconds) && seconds > 0
+      ? Math.ceil(seconds * 1000) + 500
+      : GUILD_META_DEFAULT_COOLDOWN_MS;
+    guildMetaCooldownUntil = Math.max(
+      guildMetaCooldownUntil,
+      Date.now() + Math.min(waitMs, GUILD_META_MAX_COOLDOWN_MS)
+    );
+  }
+
+  function waitForGuildMetaCooldown() {
+    const remaining = guildMetaCooldownRemaining();
+    return remaining > 0 ? delay(remaining) : Promise.resolve();
+  }
+
   function fetchGuildMeta(guild) {
     const key = guildMetaKey(guild.id);
     const prev = getGuildMeta(guild.id);
@@ -3392,6 +3438,7 @@ window.manager = {
           if (res && res.status === 429) {
             rateLimited = true;
             retryAfter = res.retryAfter;
+            setGuildMetaCooldown(res.retryAfter);
           } else if (res && res.status === 200 && res.data) {
             meta.boosted = !!(res.data.premium_since || res.data.user_premium_since);
             meta.boostKnown = true;
@@ -3415,6 +3462,7 @@ window.manager = {
           if (res && res.status === 429) {
             rateLimited = true;
             retryAfter = res.retryAfter;
+            setGuildMetaCooldown(res.retryAfter);
             return;
           }
           if (!res || res.status !== 200 || !res.data) {
@@ -3443,24 +3491,30 @@ window.manager = {
   }
 
   // Check guilds sequentially because the guild list does not expose per-user
-  // boost state. Stop as soon as Discord rate-limits the lookup.
-  function enrichGuildDetails(guilds, onGuildUpdated) {
+  // boost state. A 429 pauses the scan; a short cooldown is waited out and the
+  // same guild retried so one click can still finish the check.
+  function enrichGuildDetails(guilds, onGuildUpdated, options) {
+    const empty = { rateLimited: false, unavailable: false, retryAfter: null, cooldownMs: 0 };
     if (!hasAccount()) {
-      return Promise.resolve({ rateLimited: false, unavailable: false, retryAfter: null });
+      return Promise.resolve(empty);
     }
+    const opts = options || {};
+    const maxCooldownWaits = opts.maxCooldownWaits == null
+      ? 2
+      : Math.max(0, Number(opts.maxCooldownWaits) || 0);
     const stale = (guilds || []).filter(function (g) {
       return g && g.id && !getGuildMeta(g.id);
     }).slice(0, GUILD_META_MAX_PER_PASS);
     if (!stale.length) {
-      return Promise.resolve({ rateLimited: false, unavailable: false, retryAfter: null });
+      return Promise.resolve(empty);
     }
-    const result = { rateLimited: false, unavailable: false, retryAfter: null };
+    const result = { rateLimited: false, unavailable: false, retryAfter: null, cooldownMs: 0 };
+    let cooldownWaits = 0;
     function next(index) {
-      if (index >= stale.length || result.rateLimited) {
+      if (index >= stale.length) {
         return Promise.resolve(result);
       }
       return fetchGuildMeta(stale[index]).then(function (entry) {
-        result.rateLimited = result.rateLimited || entry.rateLimited;
         result.unavailable = result.unavailable || entry.unavailable;
         if (entry.retryAfter != null) {
           result.retryAfter = entry.retryAfter;
@@ -3468,7 +3522,21 @@ window.manager = {
         if (typeof onGuildUpdated === 'function') {
           onGuildUpdated(stale[index]);
         }
-        return next(index + 1);
+        if (!entry.rateLimited) {
+          return next(index + 1);
+        }
+        const waitMs = guildMetaCooldownRemaining();
+        result.cooldownMs = Math.max(result.cooldownMs, waitMs);
+        // A long cooldown, or too many pauses, must not freeze the caller. Keep
+        // the confirmed results and let the scheduler resume the rest later.
+        if (cooldownWaits >= maxCooldownWaits || waitMs > GUILD_META_INLINE_COOLDOWN_MAX_MS) {
+          result.rateLimited = true;
+          return result;
+        }
+        cooldownWaits += 1;
+        return waitForGuildMetaCooldown().then(function () {
+          return next(index);
+        });
       });
     }
     return next(0);
@@ -3480,44 +3548,116 @@ window.manager = {
       (state.inspectType === 'servers' || state.inspectType === 'owned' || state.inspectType === 'boosted'));
   }
 
+  function scheduleGuildMetaRetry() {
+    if (guildMetaRetryTimer || guildMetaRequest) {
+      return;
+    }
+    if (!hasAccount() || guildMetaRetryAttempts >= GUILD_META_MAX_AUTO_RETRIES) {
+      return;
+    }
+    const remaining = guildMetaCooldownRemaining();
+    if (remaining <= 0) {
+      return;
+    }
+    guildMetaRetryAttempts += 1;
+    guildMetaRetryTimer = setTimeout(function () {
+      guildMetaRetryTimer = null;
+      if (!hasAccount()) {
+        return;
+      }
+      if (guildBoostStatusComplete(state.guilds)) {
+        guildMetaRetryAttempts = 0;
+        return;
+      }
+      // Background continuation. The open inspector, if any, is refreshed by
+      // the normal pass callbacks; no new toast is forced on the operator.
+      ensureGuildMetaLoaded(false).catch(function () {});
+    }, remaining + 250);
+  }
+
   function ensureGuildMetaLoaded(userInitiated) {
     if (guildMetaRequest) {
       return guildMetaRequest;
     }
-    guildMetaRequest = enrichGuildDetails(state.guilds, function () {
-      autoWhitelistBoostedServers();
-      updateMetricsFrom(state);
-      const modal = byId('inspectorModal');
-      if (modal && modal.classList.contains('active') &&
-          (state.inspectType === 'servers' || state.inspectType === 'owned' || state.inspectType === 'boosted')) {
-        const list = byId('inspectorList');
-        const scrollTop = list ? list.scrollTop : 0;
-        renderInspector();
-        if (list) {
-          list.scrollTop = scrollTop;
-        }
+    const open = boostInspectorOpen();
+    const cooldown = guildMetaCooldownRemaining();
+    // An operator-triggered check earns a fresh automatic-retry budget;
+    // otherwise reopening the inspector a few times during one long cooldown
+    // would exhaust the scheduled retries before Discord clears the limit.
+    if (userInitiated) {
+      guildMetaRetryAttempts = 0;
+    }
+    if (cooldown > GUILD_META_INLINE_COOLDOWN_MAX_MS) {
+      scheduleGuildMetaRetry();
+      if ((userInitiated || open) && Date.now() - guildMetaNoticeAt >= 5000) {
+        guildMetaNoticeAt = Date.now();
+        toast('Discord is cooling down the boost check. Confirmed boosts are shown; the rest will continue automatically in ' +
+          Math.max(1, Math.ceil(cooldown / 1000)) + 's.', 'warning');
       }
+      return Promise.resolve({ rateLimited: true, unavailable: false, retryAfter: cooldown / 1000, cooldownMs: cooldown });
+    }
+    if (cooldown > 0 && (userInitiated || open) && Date.now() - guildMetaNoticeAt >= 5000) {
+      guildMetaNoticeAt = Date.now();
+      toast('Discord is cooling down the boost check. Resuming in ' +
+        Math.max(1, Math.ceil(cooldown / 1000)) + 's...', 'warning');
+    }
+
+    // Starting a pass now; a pending timer would duplicate the same work.
+    if (guildMetaRetryTimer) {
+      clearTimeout(guildMetaRetryTimer);
+      guildMetaRetryTimer = null;
+    }
+
+    let retryNeeded = false;
+    guildMetaRequest = waitForGuildMetaCooldown().then(function () {
+      return enrichGuildDetails(state.guilds, function () {
+        autoWhitelistBoostedServers();
+        updateMetricsFrom(state);
+        const modal = byId('inspectorModal');
+        if (modal && modal.classList.contains('active') &&
+            (state.inspectType === 'servers' || state.inspectType === 'owned' || state.inspectType === 'boosted')) {
+          const list = byId('inspectorList');
+          const scrollTop = list ? list.scrollTop : 0;
+          renderInspector();
+          if (list) {
+            list.scrollTop = scrollTop;
+          }
+        }
+      }, { maxCooldownWaits: 2 });
     }).then(function (result) {
       autoWhitelistBoostedServers();
       updateMetricsFrom(state);
-      const open = boostInspectorOpen();
+      const isOpen = boostInspectorOpen();
       // Only the operator who asked for a boost check needs the warning. A
       // background caller (saving settings, preparing an operation) must not
-      // turn Discord's cooldown into an unsolicited "Rate Limited" toast.
+      // turn Discord's cooldown into an unsolicited warning toast.
       if (result.rateLimited) {
-        if (userInitiated || open) {
-          toast("Discord rate-limited the boost lookup. Confirmed boosts are shown; try again after Discord's cooldown to keep checking.", 'warning');
+        retryNeeded = true;
+        if ((userInitiated || isOpen) && Date.now() - guildMetaNoticeAt >= 5000) {
+          guildMetaNoticeAt = Date.now();
+          const remaining = guildMetaCooldownRemaining();
+          if (guildMetaRetryAttempts < GUILD_META_MAX_AUTO_RETRIES && remaining > 0) {
+            toast('Discord paused the boost check. Confirmed boosts are shown; the rest will keep checking automatically in ' +
+              Math.max(1, Math.ceil(remaining / 1000)) + 's.', 'warning');
+          } else {
+            toast('Discord is still rate-limiting boost checks. Confirmed boosts are shown; try again later.', 'warning');
+          }
         }
-      } else if (result.unavailable) {
-        if (userInitiated || open) {
+      } else {
+        guildMetaRetryAttempts = 0;
+        if (result.unavailable && (userInitiated || isOpen)) {
           toast('Discord did not return boost details for every server. Unconfirmed servers are not counted.', 'warning');
         }
       }
-      if (open) {
+      if (isOpen) {
         renderInspector();
       }
+      return result;
     }).finally(function () {
       guildMetaRequest = null;
+      if (retryNeeded) {
+        scheduleGuildMetaRetry();
+      }
     });
     return guildMetaRequest;
   }
@@ -4102,7 +4242,7 @@ window.manager = {
         if (title === 'All-in-One Cleanup' && leaveToggle && leaveToggle.checked) {
           return ensureGuildMetaLoaded().then(function () {
             if (!guildBoostStatusComplete(state.guilds)) {
-              throw new Error('Could not verify boost protection for every server. No cleanup actions were started; try again after Discord recovers.');
+              throw new Error('Discord is still cooling down the boost check. No cleanup actions were started; wait for the automatic retry and try again.');
             }
           });
         }
@@ -4903,7 +5043,9 @@ window.manager = {
     }
     const targetId = targetServer ? String(targetServer.id) : '';
     const accountLoad = state.dataLoaded ? Promise.resolve() : loadAccountData();
-    accountLoad.then(ensureGuildMetaLoaded).then(function () {
+    accountLoad.then(function () {
+      return ensureGuildMetaLoaded(true);
+    }).then(function () {
       if (!modal || !modal.classList.contains('active') || modal.dataset.leaveTargetId !== targetId) {
         return;
       }
@@ -7512,7 +7654,9 @@ window.manager = {
           ? 'No servers boosted by this account.'
           : (guildMetaRequest
             ? 'Checking Discord for boost status...'
-            : 'No confirmed boosts yet. Reopen Joined Servers to check.');
+            : (guildMetaRetryTimer
+              ? 'Discord paused the boost check. Confirmed boosts will appear automatically after the cooldown.'
+              : 'No confirmed boosts yet. Reopen Joined Servers to check.'));
       }
       const emptyLi = document.createElement('li');
       emptyLi.className = 'inspector-empty';

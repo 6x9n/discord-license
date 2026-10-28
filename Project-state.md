@@ -24,6 +24,7 @@ Use this pattern for Friends, Leave Servers, Close DMs, and future destructive o
 
 - `makeRequest()` handles JSON responses, `Retry-After`, bounded retries, and rate-limit warnings.
 - Rate-limit retries are capped at `MAX_RATE_RETRIES` and use a bounded fallback delay when Discord does not send a retry value.
+- Guild boost lookups pause when Discord answers with 429, wait out short `retry_after` windows, and resume longer cooldowns from a scheduled retry instead of making the operator reopen the inspector.
 - Operation stop aborts the active controller and cancels retry waits and nested deletion delays.
 - `prepareOperation()` loads current account data before building operation items.
 - `runOperation()` is the canonical sequential operation runner for generic destructive actions.
