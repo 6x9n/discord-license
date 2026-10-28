@@ -196,6 +196,7 @@
       tokenCancelBtn: g('tokenCancelBtn'),
       tokenBuyPrice: g('tokenBuyPrice'),
       tokenStatus: g('tokenStatus'),
+      tokenSource: g('tokenSource'),
       tokenSoldFields: g('tokenSoldFields'),
       tokenSellPrice: g('tokenSellPrice'),
       tokenBuyerName: g('tokenBuyerName'),
@@ -3341,7 +3342,7 @@ function syncBucketRoleFields() {
     }
     // Prices start empty on purpose. The operator types what was actually paid
     // or received; the account editor stays available for later edits.
-    [el.tokenBuyPrice, el.tokenSellPrice, el.tokenBuyerName, el.tokenBuyerTelegram].forEach(function (node) {
+    [el.tokenBuyPrice, el.tokenSellPrice, el.tokenSource, el.tokenBuyerName, el.tokenBuyerTelegram].forEach(function (node) {
       if (node) node.value = '';
     });
     if (el.tokenStatus) el.tokenStatus.value = 'AVAILABLE';
@@ -3372,6 +3373,11 @@ function syncBucketRoleFields() {
       return '<span class="badge badge-art" title="' + esc(b) + '">' + art
         + '<span class="badge-label' + (art ? ' sr-only' : ' badge-label-show') + '">' + esc(b) + '</span></span>';
     }).join('') || '<span class="muted-text">No badges reported by Discord</span>';
+    // The profile endpoint can fail (rate limit, scope) while /users/@me still
+    // succeeds. Say so instead of presenting the flag bits as the full list.
+    var badgeNote = profile.badgesComplete === false
+      ? '<div class="muted-text token-badge-note">Discord did not return the full profile badge list, so only account flags are shown. Fetch again in a moment.</div>'
+      : '';
     var fields = [
       ['Account ID', profile.discordId || '-'],
       ['Username', profile.username ? '@' + profile.username : '-'],
@@ -3392,7 +3398,8 @@ function syncBucketRoleFields() {
         return '<div class="token-field"><span class="token-key">' + esc(f[0]) + '</span>'
           + '<span class="token-val">' + esc(f[1]) + '</span></div>';
       }).join('') + '</div>'
-      + '<div class="tag-row token-badges">' + badges + '</div>';
+      + '<div class="tag-row token-badges">' + badges + '</div>'
+      + badgeNote;
     el.tokenPreview.hidden = false;
   }
 
@@ -3480,10 +3487,12 @@ function syncBucketRoleFields() {
     }
     var status = el.tokenStatus ? String(el.tokenStatus.value || 'AVAILABLE').toUpperCase() : 'AVAILABLE';
     if (status !== 'SOLD') status = 'AVAILABLE';
+    var source = el.tokenSource ? String(el.tokenSource.value || '').trim() : '';
     var payload = {
       token: tokenProfile.token,
       buyPrice: buyPrice,
       status: status,
+      source: source,
       // Reuse the date the preview already fetched, so the save does not need a
       // second Discord billing request and cannot lose a valid expiry.
       nitroEnds: (tokenProfile.profile && tokenProfile.profile.nitroEnds) || ''

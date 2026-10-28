@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=19">
+  <link rel="stylesheet" href="/mythicisadminofthisapp/admin.css?v=20">
 </head>
 <body>
   <div id="loginView" class="view login-view">
@@ -798,6 +798,11 @@
               <span class="field-hint">New accounts only. Refreshing an existing account keeps its sale record.</span>
             </div>
           </div>
+          <div class="form-field token-source-field">
+            <label class="field-label" for="tokenSource">Source / seller</label>
+            <input id="tokenSource" class="input" type="text" maxlength="300" placeholder="Seller name, @telegram, or where you bought it" autocomplete="off">
+            <span class="field-hint">Who you bought the account from. Saved on new accounts, and updates an existing account when filled.</span>
+          </div>
           <div id="tokenSoldFields" class="form-grid token-sold-fields" hidden>
             <div class="form-field">
               <label class="field-label" for="tokenSellPrice">Sold price ($) <span class="muted-text">(optional)</span></label>
@@ -1199,7 +1204,7 @@
 
   <script src="/js/badge-icons.js?v=10"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=27"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=28"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {

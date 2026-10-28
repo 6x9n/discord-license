@@ -43,7 +43,7 @@ const BADGE_MAP = [
   { bit: 1 << 10, label: 'Team User' },
   { bit: 1 << 14, label: 'Bug Hunter Level 2' },
   { bit: 1 << 17, label: 'Verified Developer' },
-  { bit: 1 << 18, label: 'Certified Moderator' },
+  { bit: 1 << 18, label: 'Discord Certified Moderator' },
   { bit: 1 << 22, label: 'Active Developer' }
 ];
 
@@ -155,6 +155,233 @@ function decodeFlags(flags) {
   return out;
 }
 
+/* ---------------- profile badges ---------------- */
+
+// `/users/@me` only carries flag bits and the Nitro tier. Most of the artwork
+// shown on a Discord profile (boosts, gifts, quests and the newer activity
+// tiers) lives on `/users/{id}/profile`, so this translates that list into the
+// same canonical labels the admin badge picker and artwork already use.
+const PROFILE_BADGE_LABELS = {
+  staff: 'Discord Staff',
+  discord_staff: 'Discord Staff',
+  partner: 'Partner',
+  partnered_server_owner: 'Partner',
+  hypesquad: 'HypeSquad Events',
+  hypesquad_events: 'HypeSquad Events',
+  hypesquad_house_1: 'HypeSquad Bravery',
+  hypesquad_bravery: 'HypeSquad Bravery',
+  bravery: 'HypeSquad Bravery',
+  hypesquad_house_2: 'HypeSquad Brilliance',
+  hypesquad_brilliance: 'HypeSquad Brilliance',
+  brilliance: 'HypeSquad Brilliance',
+  hypesquad_house_3: 'HypeSquad Balance',
+  hypesquad_balance: 'HypeSquad Balance',
+  balance: 'HypeSquad Balance',
+  bug_hunter_level_1: 'Bug Hunter Level 1',
+  bughunter1: 'Bug Hunter Level 1',
+  bug_hunter_level_2: 'Bug Hunter Level 2',
+  bughunter2: 'Bug Hunter Level 2',
+  early_supporter: 'Early Supporter',
+  earlysupporter: 'Early Supporter',
+  verified_developer: 'Verified Developer',
+  verified_bot_developer: 'Verified Developer',
+  early_verified_bot_developer: 'Verified Developer',
+  botdev: 'Verified Developer',
+  certified_moderator: 'Discord Certified Moderator',
+  moderator_programs_alumni: 'Discord Certified Moderator',
+  moderator: 'Discord Certified Moderator',
+  active_developer: 'Active Developer',
+  activedeveloper: 'Active Developer',
+  nitro_basic: 'Nitro Basic',
+  nitro_classic: 'Nitro Classic',
+  quest_completed: 'Completed a Quest',
+  quest: 'Completed a Quest',
+  quest_badge: 'Completed a Quest',
+  premium: 'Nitro',
+  nitro: 'Nitro',
+  last_meadow: 'Last Meadow Online',
+  lastmeadow: 'Last Meadow Online',
+  orb: 'Orb',
+  orbs_apprentice: 'Orb',
+  leaf: 'Leaf',
+  leaves: 'Leaf'
+};
+
+// Discord's beta activity badges level up, and the profile response gives the
+// threshold in the description ("5,000+ hours"). The arrays below mirror the
+// labels and thresholds in js/badge-icons.js.
+const ACCOUNT_AGE_BADGES = [
+  { value: 1, label: 'Seed' },
+  { value: 2, label: 'Sprout' },
+  { value: 3, label: 'Bud' },
+  { value: 4, label: 'Sapling' },
+  { value: 5, label: 'Blossom' },
+  { value: 6, label: 'Redwood' },
+  { value: 7, label: 'Sequoia' },
+  { value: 8, label: 'Bristlecone' },
+  { value: 9, label: 'Stromatolite' },
+  { value: 10, label: 'Primordial' }
+];
+
+const STREAMING_BADGES = [
+  { value: 1, label: 'Newcomer' },
+  { value: 5, label: 'Fledgling' },
+  { value: 20, label: 'Breakout' },
+  { value: 75, label: 'Standout' },
+  { value: 150, label: 'Trendsetter' },
+  { value: 300, label: 'Headliner' },
+  { value: 500, label: 'Star' },
+  { value: 1000, label: 'Sensation' },
+  { value: 2000, label: 'Visionary' },
+  { value: 5000, label: 'Phenomenon' }
+];
+
+const GAME_TIME_BADGES = [
+  { value: 1, label: 'Casual' },
+  { value: 5, label: 'Recreational' },
+  { value: 20, label: 'Dedicated' },
+  { value: 75, label: 'Committed' },
+  { value: 150, label: 'Serious' },
+  { value: 300, label: 'Devoted' },
+  { value: 500, label: 'Seasoned' },
+  { value: 1000, label: 'Ironclad' },
+  { value: 2000, label: 'Unshakeable' },
+  { value: 5000, label: 'Eternal' }
+];
+
+const GAME_VARIETY_BADGES = [
+  { value: 2, label: 'Sampler' },
+  { value: 5, label: 'Dabbler' },
+  { value: 10, label: 'Enthusiast' },
+  { value: 15, label: 'Ranger' },
+  { value: 20, label: 'Explorer' },
+  { value: 30, label: 'Adventurer' },
+  { value: 40, label: 'Voyager' },
+  { value: 60, label: 'Maverick' },
+  { value: 80, label: 'Polymath' },
+  { value: 100, label: 'Universalist' }
+];
+
+const GIFT_BADGE_NAMES = ['Patron', 'Champion', 'Luminary', 'Icon', 'Hero', 'Legend'];
+
+function pickBadgeTier(tiers, value) {
+  let chosen = '';
+  tiers.forEach(function (tier) {
+    if (value >= tier.value) chosen = tier.label;
+  });
+  return chosen;
+}
+
+function badgeTierFromId(tiers, idStr) {
+  const text = String(idStr || '');
+  const match = text.match(/(?:level|lvl|tier|age)[_ -]?(\d+)/) || text.match(/(\d+)$/);
+  if (!match) return '';
+  let index = Number(match[1]);
+  if (!isFinite(index) || index < 1) return '';
+  index = Math.min(tiers.length, index);
+  return tiers[index - 1].label;
+}
+
+function activityBadgeLabel(idStr, description) {
+  const id = String(idStr || '').toLowerCase();
+  const text = String(description || '');
+  const lower = text.toLowerCase();
+  const numberMatch = text.match(/([\d,]+)\+?/);
+  const numberValue = numberMatch ? Number(numberMatch[1].replace(/,/g, '')) : null;
+
+  if (id.indexOf('account_age') !== -1 || id.indexOf('accountage') !== -1 || id.indexOf('account-age') !== -1 ||
+    (lower.indexOf('account') !== -1 && lower.indexOf('year') !== -1)) {
+    const yearsMatch = text.match(/([\d,]+)\+?\s*year/i);
+    const years = yearsMatch ? Number(yearsMatch[1].replace(/,/g, '')) : numberValue;
+    return years != null && isFinite(years)
+      ? pickBadgeTier(ACCOUNT_AGE_BADGES, years)
+      : badgeTierFromId(ACCOUNT_AGE_BADGES, id);
+  }
+
+  if (id.indexOf('stream') !== -1 || lower.indexOf('stream') !== -1) {
+    const hoursMatch = text.match(/([\d,]+)\+?\s*hour/i);
+    const hours = hoursMatch ? Number(hoursMatch[1].replace(/,/g, '')) : numberValue;
+    return hours != null && isFinite(hours)
+      ? pickBadgeTier(STREAMING_BADGES, hours)
+      : badgeTierFromId(STREAMING_BADGES, id);
+  }
+
+  if (id.indexOf('game_time') !== -1 || id.indexOf('gametime') !== -1 || id.indexOf('game-time') !== -1 ||
+    (lower.indexOf('detectable pc games') !== -1 && lower.indexOf('hour') !== -1)) {
+    const hoursMatch = text.match(/([\d,]+)\+?\s*hour/i);
+    const hours = hoursMatch ? Number(hoursMatch[1].replace(/,/g, '')) : numberValue;
+    return hours != null && isFinite(hours)
+      ? pickBadgeTier(GAME_TIME_BADGES, hours)
+      : badgeTierFromId(GAME_TIME_BADGES, id);
+  }
+
+  if (id.indexOf('game_variety') !== -1 || id.indexOf('gamevariety') !== -1 || id.indexOf('game-variety') !== -1 ||
+    (lower.indexOf('detectable pc games') !== -1 && lower.indexOf('hour') === -1)) {
+    const gamesMatch = text.match(/([\d,]+)\+?\s*(?:different\s+)?(?:detectable\s+)?(?:pc\s+)?games/i);
+    const games = gamesMatch ? Number(gamesMatch[1].replace(/,/g, '')) : numberValue;
+    return games != null && isFinite(games)
+      ? pickBadgeTier(GAME_VARIETY_BADGES, games)
+      : badgeTierFromId(GAME_VARIETY_BADGES, id);
+  }
+
+  if (id.indexOf('last_meadow') !== -1 || id.indexOf('lastmeadow') !== -1 || lower.indexOf('last meadow') !== -1) {
+    return 'Last Meadow Online';
+  }
+  if (id.indexOf('orb') !== -1 || lower.indexOf('orbs apprentice') !== -1) {
+    return 'Orb';
+  }
+  if (id.indexOf('leaf') !== -1 || lower.indexOf('leaves') !== -1) {
+    return 'Leaf';
+  }
+  return '';
+}
+
+function isGiftBadgeId(idStr, description) {
+  const a = String(idStr || '').toLowerCase();
+  const b = String(description || '').toLowerCase();
+  if (a.indexOf('gift') !== -1 || a.indexOf('gifter') !== -1) return true;
+  return /gift(ing|er)?\s*badge/.test(b) || /^gift(ing|er)?\b/.test(b);
+}
+
+function giftBadgeLabel(idStr, description) {
+  const text = (String(idStr || '') + ' ' + String(description || '')).toLowerCase();
+  for (let i = 0; i < GIFT_BADGE_NAMES.length; i += 1) {
+    if (new RegExp('\\b' + GIFT_BADGE_NAMES[i].toLowerCase() + '\\b').test(text)) {
+      return GIFT_BADGE_NAMES[i];
+    }
+  }
+  const match = text.match(/(?:gift(?:ing)?(?:[_ -]?badge)?|level|lvl)[_ -]?([1-6])/);
+  return match ? GIFT_BADGE_NAMES[Number(match[1]) - 1] : '';
+}
+
+function profileBadgeLabel(entry) {
+  if (!entry) return '';
+  const rawId = typeof entry === 'object' ? (entry.id || '') : String(entry);
+  const id = String(rawId).toLowerCase();
+  const description = typeof entry === 'object' ? String(entry.description || '') : '';
+
+  if (PROFILE_BADGE_LABELS[id]) return PROFILE_BADGE_LABELS[id];
+
+  const activity = activityBadgeLabel(id, description);
+  if (activity) return activity;
+
+  if (isGiftBadgeId(id, description)) {
+    return giftBadgeLabel(id, description) || 'Patron';
+  }
+
+  if (id.indexOf('guild_booster') !== -1 || id.indexOf('boost') !== -1) {
+    const match = id.match(/(?:lvl|level|tier)[_ -]?(\d+)/) || id.match(/(\d+)$/);
+    let level = match ? Number(match[1]) : 1;
+    if (!isFinite(level) || level < 1) level = 1;
+    if (level > 9) level = 9;
+    return 'Boost Level ' + level;
+  }
+
+  // `legacy_username` is a real profile badge but has no entry in the admin
+  // badge catalogue, so it is skipped rather than drawn as a bare label.
+  return '';
+}
+
 function snowflakeToDate(id) {
   const clean = String(id || '').replace(/[^0-9]/g, '');
   if (!clean || clean.length > 20) return null;
@@ -185,23 +412,57 @@ function discordAvatarUrl(user) {
   return 'https://cdn.discordapp.com/embed/avatars/' + index + '.png';
 }
 
-function mapDiscordUser(user) {
+function mapDiscordUser(user, profileData) {
   // `flags` is the private set Discord returns to the account itself and
   // `public_flags` is the smaller public set. Either can be missing or zero, so
   // merge both instead of preferring one; otherwise a private badge (or any
   // badge when public_flags is 0) disappears from the preview.
   const privateFlags = Number(user.flags) || 0;
   const publicFlags = Number(user.public_flags) || 0;
-  const flags = privateFlags | publicFlags;
+  const profile = profileData && typeof profileData === 'object' ? profileData : null;
+  const profileUser = profile && profile.user && typeof profile.user === 'object' ? profile.user : null;
+  // The profile endpoint repeats the user object. Fold its flag bits in too:
+  // some token types omit them from /users/@me even though the profile has them.
+  const flags = privateFlags | publicFlags
+    | (Number(profileUser && profileUser.flags) || 0)
+    | (Number(profileUser && profileUser.public_flags) || 0);
   const badges = decodeFlags(flags);
-  const premiumType = Number(user.premium_type) || 0;
+  const seen = {};
+  badges.forEach(function (label) { seen[label] = true; });
+
+  function addBadge(label) {
+    if (!label || seen[label]) return;
+    seen[label] = true;
+    badges.push(label);
+  }
+
+  let nitroFromProfile = false;
+  if (profile && Array.isArray(profile.badges)) {
+    profile.badges.forEach(function (entry) {
+      const label = profileBadgeLabel(entry);
+      if (label === 'Nitro') {
+        nitroFromProfile = true;
+      } else if (label) {
+        addBadge(label);
+      }
+    });
+  }
+
+  const premiumType = Number(user.premium_type)
+    || Number(profile && profile.premium_type)
+    || Number(profileUser && profileUser.premium_type)
+    || 0;
   const nitroTier = PREMIUM_TIERS[premiumType] || 'Unknown';
   // Nitro is not a flag bit, so add the matching badge from premium_type. Keep
   // the union free of duplicates in case Discord ever reports both. An
   // unrecognised tier must not become an "Unknown" badge in the table.
-  if (premiumType > 0 && nitroTier !== 'Unknown' && badges.indexOf(nitroTier) === -1) {
-    badges.push(nitroTier);
+  if (premiumType > 0 && nitroTier !== 'Unknown') {
+    addBadge(nitroTier);
+  } else if (nitroFromProfile) {
+    // The profile can still report Nitro when premium_type is absent.
+    addBadge('Nitro');
   }
+
   const decorations = [];
   if (user.avatar_decoration_data && user.avatar_decoration_data.name) {
     decorations.push(String(user.avatar_decoration_data.name));
@@ -228,6 +489,10 @@ function mapDiscordUser(user) {
     // empty rather than being guessed from the tier or account age.
     nitroEnds: '',
     badges: badges,
+    // False means the profile call failed (or returned no badge list), so only
+    // the flag badges above are present. The admin preview uses this to say the
+    // list may be incomplete instead of silently presenting it as the whole set.
+    badgesComplete: !!(profile && Array.isArray(profile.badges)),
     decorations: decorations,
     avatar: user.avatar || '',
     avatarUrl: discordAvatarUrl(user),
@@ -390,8 +655,10 @@ function subscriptionEndDate(sub) {
 
 // Best-effort request for additional account data. A failure here must never
 // turn a valid token into an error, because the profile call already succeeded.
-async function discordGetJson(token, path, timeoutMs) {
-  if (typeof fetch !== 'function') return null;
+// The status is kept so callers can retry an OAuth bearer once, and so the UI
+// can tell "no badges" apart from "the badge list could not be read".
+async function discordGetJsonResult(token, path, timeoutMs) {
+  if (typeof fetch !== 'function') return { status: 0, data: null };
   let timer = null;
   let controller = null;
   if (typeof AbortController === 'function') {
@@ -406,18 +673,40 @@ async function discordGetJson(token, path, timeoutMs) {
       headers: discordHeaders(token),
       signal: controller ? controller.signal : undefined
     });
-    if (!response.ok) return null;
+    if (!response.ok) return { status: response.status, data: null };
     const text = await response.text();
     try {
-      return JSON.parse(text);
+      return { status: response.status, data: JSON.parse(text) };
     } catch (e) {
-      return null;
+      return { status: response.status, data: null };
     }
   } catch (e) {
-    return null;
+    return { status: 0, data: null };
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+async function discordGetJson(token, path, timeoutMs) {
+  const result = await discordGetJsonResult(token, path, timeoutMs);
+  return result.data;
+}
+
+// The profile endpoint is where the real badge list lives. It can fail without
+// invalidating the token, so a null result is allowed and only means the
+// preview falls back to the flag bits from /users/@me.
+async function fetchDiscordProfile(rawToken, userId) {
+  const token = normalizeDiscordToken(rawToken);
+  const id = String(userId || '').trim();
+  if (!token || !id) return null;
+  const path = '/users/' + encodeURIComponent(id) + '/profile';
+  let result = await discordGetJsonResult(token, path);
+  // Same OAuth2 fallback as fetchDiscordUser: a bearer token succeeds on the
+  // second attempt even when the raw token was rejected.
+  if (result.status === 401) {
+    result = await discordGetJsonResult('Bearer ' + token, path);
+  }
+  return result.data;
 }
 
 // Nitro's expiry is not part of /users/@me. Discord exposes it through the
@@ -716,9 +1005,13 @@ async function opFetch(req, res) {
     });
   }
 
+  // `/users/@me` alone does not carry the profile badge list. Read it here too,
+  // so the summary form's badge field matches what the account actually shows.
+  const discordProfile = await fetchDiscordProfile(token, user.id);
+
   return json(res, 200, {
     success: true,
-    data: mapDiscordUser(user)
+    data: mapDiscordUser(user, discordProfile)
   });
 }
 
@@ -750,12 +1043,10 @@ async function opTokenAdd(req, res) {
     });
   }
 
-  const profile = mapDiscordUser(user);
-  if (!profile.discordId) {
-    return json(res, 502, { success: false, error: 'Discord did not return an account ID for this token.' });
-  }
-
-  // The profile preview and the saved row should show the same Nitro expiry.
+  // The profile preview and the saved row should show the same badges and
+  // Nitro expiry. Fetch the full profile badge list and the billing end in
+  // parallel so a save is not slower than the preview.
+  //
   // Reuse the date the preview already resolved so saving does not make a
   // second billing request (and cannot lose the date to a rate limit). A direct
   // API caller that sends no date gets a fresh best-effort lookup.
@@ -764,7 +1055,16 @@ async function opTokenAdd(req, res) {
   const suppliedNitroValid = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(suppliedNitroEnd)
     && !isNaN(suppliedNitroTs)
     && new Date(suppliedNitroTs).toISOString().slice(0, 10) === suppliedNitroEnd;
-  profile.nitroEnds = suppliedNitroValid ? suppliedNitroEnd : await fetchNitroEnd(token);
+  const [discordProfile, resolvedNitroEnd] = await Promise.all([
+    fetchDiscordProfile(token, user.id),
+    suppliedNitroValid ? Promise.resolve(suppliedNitroEnd) : fetchNitroEnd(token)
+  ]);
+
+  const profile = mapDiscordUser(user, discordProfile);
+  if (!profile.discordId) {
+    return json(res, 502, { success: false, error: 'Discord did not return an account ID for this token.' });
+  }
+  profile.nitroEnds = resolvedNitroEnd;
 
   // The preview call is deliberately read-only: the admin can look at what the
   // token resolves to before anything is written.
@@ -801,6 +1101,13 @@ async function opTokenAdd(req, res) {
   const buyerTelegram = String(body.buyerTelegram || '').trim();
   if (buyerTelegram.length > 200) {
     return json(res, 400, { success: false, error: 'Buyer telegram reference is too long (max 200 characters).' });
+  }
+  // Where the account came from (the seller). It is not sale data: a filled
+  // value updates an existing row too, while an empty one leaves the saved
+  // source untouched.
+  const source = String(body.source || '').trim();
+  if (source.length > 300) {
+    return json(res, 400, { success: false, error: 'Source is too long (max 300 characters).' });
   }
 
   let encrypted;
@@ -861,6 +1168,12 @@ async function opTokenAdd(req, res) {
     // operator already has rather than blanking it.
     if (!profile.email) delete patch.email;
     if (!profile.phone) delete patch.phone;
+    // A failed profile call only yields flag badges. Do not replace a saved
+    // badge list with that partial set; the next successful refresh updates it.
+    if (!profile.badgesComplete) delete patch.badges;
+    // Source is purchase provenance, not sale data, so a newly entered seller
+    // is useful on a refresh. Leaving the field empty keeps the saved value.
+    if (source) patch.source = source;
     if (!existing[0].creation_date && profile.creationDate) {
       patch.creation_date = profile.creationDate;
     }
@@ -892,7 +1205,7 @@ async function opTokenAdd(req, res) {
     status: requestedStatus,
     sold_at: requestedStatus === 'SOLD' ? new Date().toISOString() : null,
     status_label: '',
-    source: '',
+    source: source,
     notes: '',
     buyer_name: buyerName,
     buyer_telegram: buyerTelegram,
