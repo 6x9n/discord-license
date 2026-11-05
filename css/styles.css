@@ -3955,10 +3955,26 @@ html[data-theme="light"] .btn.btn-loading::after {
 
 #badgeGrid {
   display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  padding-inline: 18px;
   flex-wrap: wrap;
   justify-content: center;
   align-items: stretch;
   gap: 16px;
+}
+
+#badgeMembershipGrid {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-inline: 18px;
+}
+
+.badge-card {
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .badge-directory-card {
@@ -4107,6 +4123,15 @@ html[data-theme="light"] .btn.btn-loading::after {
 }
 
 @media (max-width: 600px) {
+  #badgeGrid {
+    padding-inline: 12px;
+  }
+
+  #badgeMembershipGrid {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 12px;
+  }
+
   .badge-directory-card {
     flex-basis: 100%;
     max-width: 420px;
@@ -4141,6 +4166,16 @@ html[data-theme="light"] .btn.btn-loading::after {
 
   .badge-directory-footer .actions-row .btn {
     flex: 1;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+  .badge-directory-card {
+    flex-basis: calc((100% - 16px) / 2);
+  }
+
+  #badgeMembershipGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
