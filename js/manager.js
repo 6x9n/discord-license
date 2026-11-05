@@ -3543,6 +3543,19 @@ window.manager = {
     });
   }
 
+  function friendWhitelisted(friendOrId) {
+    const relationship = friendOrId && typeof friendOrId === 'object'
+      ? friendOrId
+      : (state.rel || []).find(function (entry) {
+        return entry && String(entry.id) === String(friendOrId);
+      });
+    const user = relationship && relationship.user ? relationship.user : (relationship || {});
+    const id = relationship ? relationship.id : friendOrId;
+    return inWl('friends', id) ||
+      inWl('friends', user.username) ||
+      inWl('friends', user.global_name);
+  }
+
   // A DM is considered whitelisted if its channel ID, any recipient user ID, or
   // a display name/username matches an entry in the 'dms' whitelist. This keeps
   // the whitelist working regardless of whether the user stored a channel ID,
@@ -3562,6 +3575,36 @@ window.manager = {
       return true;
     }
     return false;
+  }
+
+  function dmTargetWhitelisted(channelId, recipientId, name) {
+    const channel = (state.channels || []).find(function (entry) {
+      return entry && String(entry.id) === String(channelId);
+    });
+    return (channel && dmWhitelisted(channel)) ||
+      inWl('dms', channelId) ||
+      inWl('dms', recipientId) ||
+      inWl('dms', name);
+  }
+
+  function dmHasWhitelistedFriend(channel) {
+    return !!(channel && (channel.recipients || []).some(friendWhitelisted));
+  }
+
+  function serverWhitelisted(serverOrId) {
+    const server = serverOrId && typeof serverOrId === 'object'
+      ? serverOrId
+      : (state.guilds || []).find(function (entry) {
+        return entry && String(entry.id) === String(serverOrId);
+      });
+    const id = server ? server.id : serverOrId;
+    if (server && isServerBoosted(server)) {
+      if (!inWl('servers', id)) {
+        setWhitelist('servers', id, true);
+      }
+      return true;
+    }
+    return inWl('servers', id);
   }
 
   function setWhitelist(kind, value, enabled) {
@@ -3599,6 +3642,25 @@ window.manager = {
       return 'dms';
     }
     return 'friends';
+  }
+
+  function whitelistValuesForItem(item, kind) {
+    const values = [item && item.id];
+    if (kind === 'friends') {
+      const user = item && item.raw && item.raw.user ? item.raw.user : {};
+      values.push(user.username, user.global_name);
+    } else if (kind === 'dms') {
+      const channel = item && item.raw ? item.raw : {};
+      values.push(channel.name);
+      (channel.recipients || []).forEach(function (recipient) {
+        values.push(recipient && recipient.id, recipient && recipient.username, recipient && recipient.global_name);
+      });
+    }
+    return values.filter(function (value, index, list) {
+      return value && list.findIndex(function (entry) {
+        return String(entry).trim().toLowerCase() === String(value).trim().toLowerCase();
+      }) === index;
+    });
   }
 
   function guildMetaKey(guildId) {
@@ -3930,9 +3992,7 @@ window.manager = {
       if (!guild || !guild.id) {
         return;
       }
-      if (isServerBoosted(guild) && !inWl('servers', guild.id)) {
-        setWhitelist('servers', guild.id, true);
-      }
+      serverWhitelisted(guild);
     });
   }
 
@@ -4010,18 +4070,8 @@ window.manager = {
   }
 
   function getRemoveFriendCandidates() {
-    const whitelist = function (rel) {
-      if (!rel || !rel.id) {
-        return false;
-      }
-      if (inWl('friends', rel.id) || inWl('friends', rel.user && rel.user.username)) {
-        return true;
-      }
-      return false;
-    };
-
     return (state.rel || []).filter(function (r) {
-      if (!r || !r.id || whitelist(r)) {
+      if (!r || !r.id || friendWhitelisted(r)) {
         return false;
       }
       return [1, 2, 3, 4, 5].indexOf(Number(r.type)) !== -1;
@@ -4044,11 +4094,14 @@ window.manager = {
   function getLeaveServerCandidates() {
     return (state.guilds || []).map(function (g) {
       const name = g.name || g.id;
-      const whitelisted = inWl('servers', g.id);
+      const boosted = isServerBoosted(g);
+      const whitelisted = serverWhitelisted(g);
       const leaveable = !g.owner && !whitelisted;
       let reason = 'Ready';
       if (g.owner) {
         reason = 'Owned by account';
+      } else if (boosted) {
+        reason = 'Boosted by this account';
       } else if (whitelisted) {
         reason = 'Whitelisted';
       }
@@ -4061,6 +4114,25 @@ window.manager = {
     });
   }
 
+  function leaveServerBlockReason(guildId) {
+    const guild = (state.guilds || []).find(function (entry) {
+      return String(entry.id) === String(guildId);
+    });
+    if (!guild) {
+      return 'Server is no longer available on this account.';
+    }
+    if (guild.owner) {
+      return 'Owned servers cannot be left.';
+    }
+    if (isServerBoosted(guild)) {
+      serverWhitelisted(guild);
+      return 'Boosted servers are protected from leaving.';
+    }
+    return serverWhitelisted(guild)
+      ? 'Server is whitelisted; remove it from the whitelist before leaving.'
+      : '';
+  }
+
   function buildLeaveItems() {
     return getLeaveServerCandidates().filter(function (entry) {
       return entry.leaveable;
@@ -4070,6 +4142,10 @@ window.manager = {
         name: entry.name,
         id: entry.id,
         action: function () {
+          const blockReason = leaveServerBlockReason(entry.id);
+          if (blockReason) {
+            return Promise.reject(new Error(blockReason));
+          }
           return apiCall('DELETE', '/users/@me/guilds/' + entry.id);
         }
       };
@@ -4084,6 +4160,9 @@ window.manager = {
         id: entry.id,
         type: entry.type,
         action: function () {
+          if (friendWhitelisted(entry.id)) {
+            return Promise.reject(new Error('Friend is whitelisted; remove it from the whitelist before removing.'));
+          }
           return apiCall('DELETE', '/users/@me/relationships/' + entry.id);
         }
       };
@@ -4106,6 +4185,9 @@ window.manager = {
           dmName: recipientName,
           dmId: c.id,
           action: function () {
+            if (dmWhitelisted(c)) {
+              return Promise.reject(new Error('DM is whitelisted; remove it from the whitelist before closing.'));
+            }
             return apiCall('DELETE', '/channels/' + c.id).then(function (res) {
               if (res.status >= 200 && res.status < 300) {
                 state.channels = (state.channels || []).filter(function (channel) {
@@ -4207,6 +4289,9 @@ window.manager = {
   }
 
   function deleteOwnMessagesInChannel(channelId, channelName, messages) {
+    if (dmTargetWhitelisted(channelId)) {
+      return Promise.reject(new Error('This DM is whitelisted; remove it from the whitelist before deleting messages.'));
+    }
     const queue = Array.isArray(messages) ? messages : [];
     let deleted = 0;
     let failed = 0;
@@ -4217,6 +4302,9 @@ window.manager = {
     queue.forEach(function (message) {
       sequence = sequence.then(function () {
         return delay(waitMs).then(function () {
+          if (dmTargetWhitelisted(channelId)) {
+            throw new Error('This DM was added to the whitelist; remaining messages were not deleted.');
+          }
           return apiCall('DELETE', '/channels/' + channelId + '/messages/' + message.id);
         }).then(function (res) {
           if (res && res.status === 404) {
@@ -4298,9 +4386,13 @@ window.manager = {
     const recipientName = ch
       ? (ch.type === 3 ? (ch.name || 'Group Chat') : ((ch.recipients && ch.recipients[0] && ch.recipients[0].username) || cleanId))
       : cleanId;
+    const label = 'Delete own messages with ' + recipientName + ' (' + channelId + ')';
+    if (dmTargetWhitelisted(channelId, ch && ch.recipients && ch.recipients[0] && ch.recipients[0].id, recipientName)) {
+      return [{ label: label, skip: 'Whitelisted' }];
+    }
 
     return [{
-      label: 'Delete own messages with ' + recipientName + ' (' + channelId + ')',
+      label: label,
       action: function () {
         const fetchMessages = fullHistory
           ? fetchAllMyDMMessages(channelId, recipientName)
@@ -4361,6 +4453,9 @@ window.manager = {
     return [{
       label: 'Close DM: ' + name + ' (' + ch.id + ')',
       action: function () {
+        if (dmWhitelisted(ch)) {
+          return Promise.reject(new Error('DM is whitelisted; remove it from the whitelist before closing.'));
+        }
         return apiCall('DELETE', '/channels/' + ch.id).then(function (res) {
           if (res && res.status >= 200 && res.status < 300) {
             state.channels = (state.channels || []).filter(function (c) { return c.id !== ch.id; });
@@ -4389,6 +4484,9 @@ window.manager = {
           channelId: c.id,
           channelName: recipientName,
           action: function () {
+            if (dmWhitelisted(c)) {
+              return Promise.reject(new Error('DM is whitelisted; message search was stopped.'));
+            }
             return fetchAllMyDMMessages(c.id, recipientName).then(function (myMessages) {
               if (state.stopped) {
                 return null;
@@ -4424,6 +4522,9 @@ window.manager = {
         items.push({
           label: (isGroup ? 'Leave Group DM: ' : 'Close DM: ') + recipientName + ' (' + c.id + ')',
           action: function () {
+            if (dmWhitelisted(c)) {
+              return Promise.reject(new Error('DM is whitelisted; remove it from the whitelist before closing.'));
+            }
             return apiCall('DELETE', '/channels/' + c.id).then(function (res) {
               if (res.status >= 200 && res.status < 300) {
                 state.channels = (state.channels || []).filter(function (channel) { return channel.id !== c.id; });
@@ -7904,7 +8005,11 @@ window.manager = {
         dmBadge.textContent = item.isGroup ? 'Group' : 'Direct';
         nameEl.appendChild(dmBadge);
       }
-      if (inWl(whitelistKindForItem(item), item.id)) {
+      const itemKind = whitelistKindForItem(item);
+      const itemWhitelisted = type === 'friends'
+        ? friendWhitelisted(item.raw)
+        : (type === 'dms' ? dmWhitelisted(item.raw) : serverWhitelisted(item.raw));
+      if (itemWhitelisted) {
         const whitelistBadge = document.createElement('span');
         whitelistBadge.className = 'inspector-tag-badge whitelist';
         whitelistBadge.textContent = 'Whitelisted';
@@ -7920,18 +8025,25 @@ window.manager = {
       const actions = document.createElement('div');
       actions.className = 'inspector-item-actions';
 
-      if (type === 'friends' || type === 'servers' || type === 'dms' || type === 'boosted') {
+      if (type === 'friends' || type === 'servers' || type === 'owned' || type === 'dms' || type === 'boosted') {
         const whitelistBtn = document.createElement('button');
-        const itemKind = whitelistKindForItem(item);
-        const whitelisted = inWl(itemKind, item.id);
+        const whitelisted = itemWhitelisted;
         whitelistBtn.type = 'button';
         whitelistBtn.className = 'btn btn-action-whitelist btn-small' + (whitelisted ? ' active' : '');
-        whitelistBtn.textContent = whitelisted ? 'Un whitelist' : 'Whitelist';
-        whitelistBtn.title = whitelisted ? 'Allow this item in operations' : 'Protect this item from operations';
+        whitelistBtn.disabled = !!(item.isBoosted && whitelisted);
+        whitelistBtn.textContent = item.isBoosted && whitelisted
+          ? 'Boost protected'
+          : (whitelisted ? 'Un whitelist' : 'Whitelist');
+        whitelistBtn.title = item.isBoosted && whitelisted
+          ? 'Active boosts are protected from operations'
+          : (whitelisted ? 'Allow this item in operations' : 'Protect this item from operations');
         whitelistBtn.setAttribute('aria-pressed', String(whitelisted));
         whitelistBtn.addEventListener('click', function (e) {
           e.stopPropagation();
-          setWhitelist(itemKind, item.id, !whitelisted);
+          const values = whitelistValuesForItem(item, itemKind);
+          (whitelisted ? values : [item.id]).forEach(function (value) {
+            setWhitelist(itemKind, value, !whitelisted);
+          });
           renderInspector();
           toast((!whitelisted ? 'Added to ' : 'Removed from ') + itemKind + ' whitelist.', 'success');
         });
@@ -8081,7 +8193,7 @@ window.manager = {
   /* Single Item Action Handlers */
 
   function handleSingleRemoveFriend(id, name, rowEl, actionLabel) {
-    if (inWl('friends', id)) {
+    if (friendWhitelisted(id)) {
       toast('This friend is whitelisted. Remove the whitelist first.', 'warning');
       return;
     }
@@ -8090,6 +8202,9 @@ window.manager = {
       return [{
         label: action + ': ' + name,
         action: function () {
+          if (friendWhitelisted(id)) {
+            throw new Error('Friend is whitelisted; remove it from the whitelist before removing.');
+          }
           if (rowEl) {
             rowEl.classList.add('removing');
           }
@@ -8116,7 +8231,7 @@ window.manager = {
   }
 
   function handleSingleBlockFriend(id, name, rowEl) {
-    if (inWl('friends', id)) {
+    if (friendWhitelisted(id)) {
       toast('This friend is whitelisted. Remove the whitelist first.', 'warning');
       return;
     }
@@ -8124,6 +8239,9 @@ window.manager = {
     startInspectorOperation('Block Friend', {
       label: 'Block user: ' + name,
       action: function () {
+        if (friendWhitelisted(id)) {
+          throw new Error('Friend is whitelisted; remove it from the whitelist before blocking.');
+        }
         rowEl.classList.add('removing');
         return apiCall('PUT', '/users/@me/relationships/' + id, { type: 2 })
           .then(function (res) {
@@ -8145,23 +8263,35 @@ window.manager = {
   }
 
   function handleSingleLeaveServer(id, name, rowEl) {
-    const server = (state.guilds || []).filter(function (g) { return g.id === id; })[0];
-    if (server && server.owner) {
-      toast('Owned servers cannot be left.', 'warning');
-      return;
-    }
-    if (inWl('servers', id)) {
-      toast('This server is boosted/whitelisted. Remove it from the whitelist first.', 'warning');
+    const blockReason = leaveServerBlockReason(id);
+    if (blockReason) {
+      toast(blockReason, 'warning');
       return;
     }
     openLeaveServersConfirmModal({ id: id, name: name, rowEl: rowEl });
   }
 
   function handleSingleDeleteServer(id, name, rowEl) {
+    const server = (state.guilds || []).find(function (guild) { return String(guild.id) === String(id); });
+    if (!server || !server.owner) {
+      toast('Only servers owned by this account can be deleted.', 'warning');
+      return;
+    }
+    if (serverWhitelisted(server)) {
+      toast('This server is whitelisted. Remove the whitelist first.', 'warning');
+      return;
+    }
     if (!window.confirm('Permanently delete owned server "' + name + '"? This cannot be undone.')) return;
     startInspectorOperation('Delete Server', {
       label: 'Delete server: ' + name,
       action: function () {
+        const currentServer = (state.guilds || []).find(function (guild) { return String(guild.id) === String(id); });
+        if (!currentServer || !currentServer.owner) {
+          throw new Error('Only servers owned by this account can be deleted.');
+        }
+        if (serverWhitelisted(currentServer)) {
+          throw new Error('Server is whitelisted; remove it from the whitelist before deleting.');
+        }
         rowEl.classList.add('removing');
         return apiCall('DELETE', '/guilds/' + id)
           .then(function (res) {
@@ -8196,6 +8326,13 @@ window.manager = {
   }
 
   function closeDmChannel(channelId) {
+    if (dmTargetWhitelisted(channelId)) {
+      return Promise.resolve({
+        ok: false,
+        status: 403,
+        data: { message: 'DM is whitelisted; remove it from the whitelist before closing.' }
+      });
+    }
     return apiCall('DELETE', '/channels/' + channelId).then(function (res) {
       if (res.status >= 200 && res.status < 300) {
         state.channels = (state.channels || []).filter(function (c) { return c.id !== channelId; });
@@ -8206,7 +8343,7 @@ window.manager = {
   }
 
   function handleSingleCloseDM(channelId, name, rowEl) {
-    if (inWl('dms', channelId) || inWl('dms', name)) {
+    if (dmTargetWhitelisted(channelId, null, name)) {
       toast('This DM is whitelisted. Remove the whitelist first.', 'warning');
       return;
     }
@@ -8231,13 +8368,21 @@ window.manager = {
   }
 
   function handleSingleIgnoreDM(channelId, recipientId, name, rowEl) {
-    if (inWl('dms', channelId) || inWl('dms', name)) {
-      toast('This DM is whitelisted. Remove the whitelist first.', 'warning');
+    if (dmTargetWhitelisted(channelId, recipientId, name) || (recipientId && friendWhitelisted(recipientId))) {
+      toast('This DM or recipient is whitelisted. Remove the whitelist first.', 'warning');
       return;
     }
     startInspectorOperation('Ignore & Close DM', {
       label: 'Ignore & close DM with ' + name,
       action: function () {
+        const channel = (state.channels || []).find(function (entry) {
+          return String(entry.id) === String(channelId);
+        });
+        if (dmTargetWhitelisted(channelId, recipientId, name) ||
+            (recipientId && friendWhitelisted(recipientId)) ||
+            dmHasWhitelistedFriend(channel)) {
+          throw new Error('DM or recipient is whitelisted; remove it from the whitelist before ignoring.');
+        }
         rowEl.classList.add('removing');
         const blockPromise = recipientId ? apiCall('PUT', '/users/@me/relationships/' + recipientId, { type: 2 }) : Promise.resolve();
         return blockPromise.then(function (res) {
@@ -8299,12 +8444,15 @@ window.manager = {
 
   function handleBatchRemoveFriends() {
     const ids = state.inspectSelected.filter(function (id) {
-      return !inWl('friends', id);
+      return !friendWhitelisted(id);
     });
     if (ids.length !== state.inspectSelected.length) {
       toast('Whitelisted friends were skipped.', 'warning');
     }
     executeBatchAction('Remove Friends', ids, function (id) {
+      if (friendWhitelisted(id)) {
+        throw new Error('Friend is whitelisted; remove it from the whitelist before removing.');
+      }
       return apiCall('DELETE', '/users/@me/relationships/' + id).then(function (res) {
         if (res.status >= 200 && res.status < 300) {
           state.rel = (state.rel || []).filter(function (r) { return r.id !== id; });
@@ -8317,12 +8465,15 @@ window.manager = {
   function handleBatchBlockFriends() {
     const ids = state.inspectSelected.filter(function (id) {
       const rel = (state.rel || []).filter(function (r) { return r.id === id; })[0];
-      return rel && Number(rel.type) === 1 && !inWl('friends', id);
+      return rel && Number(rel.type) === 1 && !friendWhitelisted(rel);
     });
     if (ids.length !== state.inspectSelected.length) {
       toast('Non-friends and whitelisted friends were skipped.', 'warning');
     }
     executeBatchAction('Block Friends', ids, function (id) {
+      if (friendWhitelisted(id)) {
+        throw new Error('Friend is whitelisted; remove it from the whitelist before blocking.');
+      }
       return apiCall('PUT', '/users/@me/relationships/' + id, { type: 2 }).then(function (res) {
         if (res.status >= 200 && res.status < 300) {
           state.rel = (state.rel || []).filter(function (r) { return r.id !== id; });
@@ -8338,14 +8489,16 @@ window.manager = {
       if (!server || server.owner) {
         return false;
       }
-      // Boosted servers are auto-whitelisted, so the whitelist is the single
-      // guard that must hold here: any whitelisted server is never left.
-      return !inWl('servers', id);
+      return !leaveServerBlockReason(id);
     });
     if (ids.length !== state.inspectSelected.length) {
       toast('Owned, boosted, or whitelisted servers were skipped.', 'warning');
     }
     executeBatchAction('Leave Servers', ids, function (id) {
+      const blockReason = leaveServerBlockReason(id);
+      if (blockReason) {
+        throw new Error(blockReason);
+      }
       return apiCall('DELETE', '/users/@me/guilds/' + id).then(function (res) {
         if (res.status >= 200 && res.status < 300) {
           state.guilds = (state.guilds || []).filter(function (g) { return g.id !== id; });
@@ -8356,8 +8509,21 @@ window.manager = {
   }
 
   function handleBatchDeleteOwnedServers() {
-    const ids = state.inspectSelected.slice();
+    const ids = state.inspectSelected.filter(function (id) {
+      const server = (state.guilds || []).find(function (guild) { return String(guild.id) === String(id); });
+      return !!(server && server.owner && !serverWhitelisted(server));
+    });
+    if (ids.length !== state.inspectSelected.length) {
+      toast('Non-owned or whitelisted servers were skipped.', 'warning');
+    }
     executeBatchAction('Delete Servers', ids, function (id) {
+      const server = (state.guilds || []).find(function (guild) { return String(guild.id) === String(id); });
+      if (!server || !server.owner) {
+        throw new Error('Only servers owned by this account can be deleted.');
+      }
+      if (serverWhitelisted(server)) {
+        throw new Error('Server is whitelisted; remove it from the whitelist before deleting.');
+      }
       return apiCall('DELETE', '/guilds/' + id).then(function (res) {
         if (res.status >= 200 && res.status < 300) {
           state.guilds = (state.guilds || []).filter(function (g) { return g.id !== id; });
@@ -8379,7 +8545,9 @@ window.manager = {
     executeBatchAction('Hide / Close DMs', ids, function (id) {
       return closeDmChannel(id).then(function (res) {
         if (!res.ok) {
-          throw new Error('Close DM failed');
+          throw new Error(handleAuthError(res.data || {}) ||
+            (res.data && res.data.message) ||
+            'Close DM failed (' + res.status + ').');
         }
         return res;
       });
@@ -8390,14 +8558,20 @@ window.manager = {
     const ids = state.inspectSelected.filter(function (id) {
       const ch = (state.channels || []).filter(function (c) { return c.id === id; })[0];
       const wl = ch ? dmWhitelisted(ch) : inWl('dms', id);
-      return !wl;
+      return !wl && !dmHasWhitelistedFriend(ch);
     });
     if (ids.length !== state.inspectSelected.length) {
-      toast('Whitelisted DMs were skipped.', 'warning');
+      toast('Whitelisted DMs or recipients were skipped.', 'warning');
     }
     executeBatchAction('Ignore & Close DMs', ids, function (channelId) {
       const ch = (state.channels || []).filter(function (c) { return c.id === channelId; })[0];
-      const recId = (ch && ch.recipients && ch.recipients[0]) ? ch.recipients[0].id : null;
+      const recipientId = ch && ch.recipients && ch.recipients[0] && ch.recipients[0].id;
+      if (dmTargetWhitelisted(channelId, recipientId, ch && ch.name) ||
+          (recipientId && friendWhitelisted(recipientId)) ||
+          dmHasWhitelistedFriend(ch)) {
+        throw new Error('DM or recipient is whitelisted; remove it from the whitelist before ignoring.');
+      }
+      const recId = recipientId || null;
       const blockPromise = recId ? apiCall('PUT', '/users/@me/relationships/' + recId, { type: 2 }) : Promise.resolve();
       return blockPromise.then(function (res) {
         if (res && (res.status < 200 || res.status >= 300)) {
