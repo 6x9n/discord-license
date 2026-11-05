@@ -3927,11 +3927,13 @@ html[data-theme="light"] .btn.btn-loading::after {
 
 .badge-directory-panel,
 .badge-membership-panel {
+  box-sizing: border-box;
+  min-width: 0;
   margin-bottom: 16px;
 }
 
 .badge-directory-intro {
-  margin: 0 0 14px;
+  margin: 16px 18px 14px;
   color: var(--muted);
   font-size: 0.88em;
   line-height: 1.55;
@@ -3939,7 +3941,7 @@ html[data-theme="light"] .btn.btn-loading::after {
 
 .badge-directory-status {
   min-height: 1.4em;
-  margin: 0 0 14px;
+  margin: 0 18px 14px;
   color: var(--muted);
   font-size: 0.84em;
 }
@@ -3950,12 +3952,12 @@ html[data-theme="light"] .btn.btn-loading::after {
 
 .badge-directory-card,
 #badgeGrid {
+  box-sizing: border-box;
   min-width: 0;
 }
 
 #badgeGrid {
   display: flex;
-  box-sizing: border-box;
   width: 100%;
   padding-inline: 18px;
   flex-wrap: wrap;
@@ -3965,16 +3967,18 @@ html[data-theme="light"] .btn.btn-loading::after {
 }
 
 #badgeMembershipGrid {
-  box-sizing: border-box;
   width: 100%;
   min-width: 0;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding-inline: 18px;
+  padding: 18px;
+  gap: 16px;
 }
 
 .badge-card {
   box-sizing: border-box;
   min-width: 0;
+  width: 100%;
+  padding: 24px 18px;
 }
 
 .badge-directory-card {
@@ -4102,8 +4106,8 @@ html[data-theme="light"] .btn.btn-loading::after {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 16px;
-  padding-top: 14px;
+  margin: 16px 18px 0;
+  padding: 14px 0 18px;
   border-top: 1px solid var(--border-glass);
 }
 
@@ -4113,12 +4117,18 @@ html[data-theme="light"] .btn.btn-loading::after {
 }
 
 .badge-directory-footer .actions-row {
+  min-width: 0;
   justify-content: flex-end;
+}
+
+.badge-membership-panel > .actions-row {
+  padding: 0 18px 18px;
 }
 
 .actions-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
 }
 
@@ -4129,7 +4139,12 @@ html[data-theme="light"] .btn.btn-loading::after {
 
   #badgeMembershipGrid {
     grid-template-columns: minmax(0, 1fr);
-    padding-inline: 12px;
+    padding: 12px;
+  }
+
+  .badge-directory-intro,
+  .badge-directory-status {
+    margin-inline: 12px;
   }
 
   .badge-directory-card {
@@ -4158,6 +4173,8 @@ html[data-theme="light"] .btn.btn-loading::after {
   .badge-directory-footer {
     align-items: flex-start;
     flex-direction: column;
+    margin-inline: 12px;
+    padding-bottom: 12px;
   }
 
   .badge-directory-footer .actions-row {
@@ -4166,6 +4183,10 @@ html[data-theme="light"] .btn.btn-loading::after {
 
   .badge-directory-footer .actions-row .btn {
     flex: 1;
+  }
+
+  .badge-membership-panel > .actions-row {
+    padding: 0 12px 12px;
   }
 }
 
