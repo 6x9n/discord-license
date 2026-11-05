@@ -3954,16 +3954,21 @@ html[data-theme="light"] .btn.btn-loading::after {
 }
 
 #badgeGrid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: stretch;
+  gap: 16px;
 }
 
 .badge-directory-card {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
+  flex: 0 1 calc((100% - 32px) / 3);
+  grid-template-columns: 48px minmax(0, 1fr) 82px;
   align-items: center;
   gap: 14px;
   min-width: 0;
+  min-height: 116px;
   padding: 18px;
   border: 1px solid var(--border-glass);
   border-radius: var(--radius);
@@ -4029,7 +4034,9 @@ html[data-theme="light"] .btn.btn-loading::after {
 }
 
 .badge-directory-toggle {
+  justify-self: end;
   min-width: 76px;
+  width: 82px;
   padding: 7px 10px;
   border: 1px solid var(--border-glass-strong);
   border-radius: 9px;
@@ -4101,6 +4108,8 @@ html[data-theme="light"] .btn.btn-loading::after {
 
 @media (max-width: 600px) {
   .badge-directory-card {
+    flex-basis: 100%;
+    max-width: 420px;
     grid-template-columns: 40px minmax(0, 1fr);
     gap: 10px;
     padding: 14px;
@@ -4115,6 +4124,10 @@ html[data-theme="light"] .btn.btn-loading::after {
   .badge-directory-protected {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .badge-directory-toggle {
+    width: auto;
   }
 
   .badge-directory-footer {
