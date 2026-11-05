@@ -409,6 +409,9 @@ window.manager = {
     if (enteringBadgeView && hasAccount()) {
       loadBadgeDirectory();
     }
+    if (meta.panel === 'dashboardView' && hasAccount() && !state.badgeCatalogLoaded) {
+      loadBadgeDirectory();
+    }
     if (meta.panel === 'accountDetailsView' && hasAccount()) {
       loadSupplementalAccountDetails();
     }
@@ -543,6 +546,7 @@ window.manager = {
     user: cleanedSavedUserObj,
     token: storageGet(localStorage, CONFIG.dsc.token) || '',
     profileData: {},
+    profileDataLoaded: false,
     accountDetailsData: null,
     accountDetailsLoading: false,
     guilds: [],
@@ -618,6 +622,8 @@ window.manager = {
   let accountDataRequest = null;
   let badgeDirectoryRequest = null;
   let badgeSettingsRequest = null;
+  let profileBadgesRequest = null;
+  let profileBadgesRequestRevision = -1;
   let activeAccountRevision = 0;
   let guildMetaRequest = null;
   let lastGuildMetaRequestAt = 0;
@@ -891,6 +897,7 @@ window.manager = {
       localStorage.removeItem('dmt.dsc.profile_' + user.id);
     }
     state.profileData = {};
+    state.profileDataLoaded = false;
     state.accountDetailsData = null;
     state.accountDetailsLoading = false;
     state.legacyUsernameOverride = null;
@@ -903,6 +910,8 @@ window.manager = {
     state.badgeSettingsSaving = false;
     badgeDirectoryRequest = null;
     badgeSettingsRequest = null;
+    profileBadgesRequest = null;
+    profileBadgesRequestRevision = -1;
     state.guilds = [];
     state.rel = [];
     state.channels = [];
@@ -924,6 +933,8 @@ window.manager = {
     resetGuildMetaSchedule();
     state.token = '';
     state.user = null;
+    state.profileData = {};
+    state.profileDataLoaded = false;
     state.legacyUsernameOverride = null;
     state.badgeCatalog = [];
     state.badgeCatalogLoaded = false;
@@ -934,6 +945,8 @@ window.manager = {
     state.badgeSettingsSaving = false;
     badgeDirectoryRequest = null;
     badgeSettingsRequest = null;
+    profileBadgesRequest = null;
+    profileBadgesRequestRevision = -1;
     state.guilds = [];
     state.rel = [];
     state.channels = [];
@@ -1634,6 +1647,13 @@ window.manager = {
     if (!host) {
       return;
     }
+    const signature = (badges || []).map(function (badge) {
+      return [badge && badge.key, badge && badge.id, badge && badge.hash, badge && badge.imageUrl, badge && badge.path, badge && badge.title].join('|');
+    }).join('||');
+    if (host.dataset.badgeSignature === signature) {
+      return;
+    }
+    host.dataset.badgeSignature = signature;
     host.innerHTML = '';
     badges.forEach(function (b) {
       const img = document.createElement('img');
@@ -1656,10 +1676,22 @@ window.manager = {
     if (!state.user || !state.user.id) {
       return;
     }
-    makeRequest('GET', '/users/' + state.user.id + '/profile')
+    if (state.profileDataLoaded || accountDataRequest) {
+      return;
+    }
+    if (profileBadgesRequest && profileBadgesRequestRevision === activeAccountRevision) {
+      return;
+    }
+
+    const accountId = String(state.user.id);
+    const accountRevision = activeAccountRevision;
+    const request = makeRequest('GET', '/users/' + accountId + '/profile')
       .then(function (res) {
-        if (res && res.data && typeof res.data === 'object') {
+        if (activeAccountRevision === accountRevision &&
+            String(state.user && state.user.id || '') === accountId &&
+            res && res.data && typeof res.data === 'object') {
           state.profileData = res.data;
+          state.profileDataLoaded = true;
           let badges = getUserBadges(state.user, res.data);
           const legacyHidden = !state.badgeCatalogLoaded &&
             (state.legacyUsernameOverride === false || getLegacyUsernameSetting() === 'hidden');
@@ -1676,8 +1708,9 @@ window.manager = {
         }
       })
       .catch(function () {
-        state.profileData = {};
-        if (host) {
+        if (activeAccountRevision === accountRevision &&
+            String(state.user && state.user.id || '') === accountId) {
+          state.profileDataLoaded = true;
           let badges = getUserBadges(state.user, {});
           if (!state.badgeCatalogLoaded &&
               (state.legacyUsernameOverride === false || getLegacyUsernameSetting() === 'hidden')) {
@@ -1687,7 +1720,15 @@ window.manager = {
           }
           renderBadgeImages(host, badges);
         }
+      })
+      .finally(function () {
+        if (profileBadgesRequest === request) {
+          profileBadgesRequest = null;
+          profileBadgesRequestRevision = -1;
+        }
       });
+    profileBadgesRequest = request;
+    profileBadgesRequestRevision = accountRevision;
   }
 
   function renderProfileBadges() {
@@ -1698,7 +1739,14 @@ window.manager = {
     if (hasAccount() && !state.accountDetailsData && !state.accountDetailsLoading) {
       loadSupplementalAccountDetails();
     }
-    renderBadgeImages(host, []);
+    let badges = getUserBadges(state.user, state.profileData);
+    if (!state.badgeCatalogLoaded &&
+        (state.legacyUsernameOverride === false || getLegacyUsernameSetting() === 'hidden')) {
+      badges = badges.filter(function (badge) {
+        return !badge || badge.key !== 'legacy_username';
+      });
+    }
+    renderBadgeImages(host, badges);
     fetchProfileBadges(host);
   }
 
@@ -1791,10 +1839,13 @@ window.manager = {
     }
   }
 
-  function loadBadgeDirectory() {
+  function loadBadgeDirectory(forceRefresh) {
     if (!hasAccount()) {
       setBadgeDirectoryStatus('Log in to load your profile badges.', true);
       return Promise.resolve(false);
+    }
+    if (state.badgeCatalogLoaded && !forceRefresh) {
+      return Promise.resolve(true);
     }
     if (badgeDirectoryRequest) {
       return badgeDirectoryRequest;
@@ -2341,7 +2392,6 @@ window.manager = {
     if (state.user && state.user.id) {
       promises.push(apiCall('GET', '/users/' + state.user.id + '/profile').catch(function () { return { status: 400 }; }));
     }
-    state.profileData = {};
     accountDataRequest = Promise.all(promises).then(function (results) {
       const guildsRes = results[0];
       const relRes = results[1];
@@ -2387,6 +2437,7 @@ window.manager = {
       }
       if (profileRes && profileRes.status < 400 && profileRes.data && typeof profileRes.data === 'object') {
         state.profileData = profileRes.data;
+        state.profileDataLoaded = true;
         renderProfileBadges();
         renderDashboardEvolution();
       } else {
@@ -6451,7 +6502,7 @@ window.manager = {
 
     if (refreshBtn) {
       refreshBtn.addEventListener('click', function () {
-        loadBadgeDirectory();
+        loadBadgeDirectory(true);
       });
     }
     if (saveBtn) {
