@@ -562,6 +562,7 @@ window.manager = {
     allInOneCooldown: 0,
     selectedHouse: null,
     selectedLegacy: null,
+    hypesquadHouseOverride: undefined,
     opLines: [],
     inspectType: null,
     inspectSelected: [],
@@ -898,6 +899,7 @@ window.manager = {
     }
     state.profileData = {};
     state.profileDataLoaded = false;
+    state.hypesquadHouseOverride = undefined;
     state.accountDetailsData = null;
     state.accountDetailsLoading = false;
     state.legacyUsernameOverride = null;
@@ -935,6 +937,7 @@ window.manager = {
     state.user = null;
     state.profileData = {};
     state.profileDataLoaded = false;
+    state.hypesquadHouseOverride = undefined;
     state.legacyUsernameOverride = null;
     state.badgeCatalog = [];
     state.badgeCatalogLoaded = false;
@@ -5352,32 +5355,56 @@ window.manager = {
   function getEquippedBadgeInfo() {
     const u = state.user || {};
     const prof = state.profileData || {};
-    let equippedHouseId = null;
-    const flags = u.flags || u.public_flags || 0;
-    if (flags & (1 << 6)) {
+    let equippedHouseId = state.hypesquadHouseOverride;
+    const flags = (u.flags || 0) | (u.public_flags || 0);
+    if (equippedHouseId === undefined && (flags & (1 << 6))) {
       equippedHouseId = 1;
-    } else if (flags & (1 << 7)) {
+    } else if (equippedHouseId === undefined && (flags & (1 << 7))) {
       equippedHouseId = 2;
-    } else if (flags & (1 << 8)) {
+    } else if (equippedHouseId === undefined && (flags & (1 << 8))) {
       equippedHouseId = 3;
     }
-    const badgeList = Array.isArray(prof.badges) ? prof.badges : [];
-    badgeList.forEach(function (b) {
-      if (!b) return;
-      const badgeId = String(b.id || b.key || b.name || '').toLowerCase();
-      
-      if (badgeId.indexOf('hypesquad_house_1') !== -1 || badgeId === 'bravery') {
-        equippedHouseId = 1;
-      } else if (badgeId.indexOf('hypesquad_house_2') !== -1 || badgeId === 'brilliance') {
-        equippedHouseId = 2;
-      } else if (badgeId.indexOf('hypesquad_house_3') !== -1 || badgeId === 'balance') {
-        equippedHouseId = 3;
-      }
-    });
+    if (equippedHouseId === undefined) {
+      const badgeList = Array.isArray(prof.badges) ? prof.badges : [];
+      badgeList.forEach(function (b) {
+        if (!b) return;
+        const badgeId = String(b.id || b.key || b.name || '').toLowerCase();
+
+        if (badgeId.indexOf('hypesquad_house_1') !== -1 || badgeId === 'bravery') {
+          equippedHouseId = 1;
+        } else if (badgeId.indexOf('hypesquad_house_2') !== -1 || badgeId === 'brilliance') {
+          equippedHouseId = 2;
+        } else if (badgeId.indexOf('hypesquad_house_3') !== -1 || badgeId === 'balance') {
+          equippedHouseId = 3;
+        }
+      });
+    }
     
     return {
-      equippedHouseId: equippedHouseId
+      equippedHouseId: equippedHouseId === undefined ? null : equippedHouseId
     };
+  }
+
+  function setHypeSquadHouseState(houseId) {
+    const houseFlags = { 1: 1 << 6, 2: 1 << 7, 3: 1 << 8 };
+    const allHouseFlags = houseFlags[1] | houseFlags[2] | houseFlags[3];
+    state.hypesquadHouseOverride = houseId;
+    if (state.user) {
+      state.user.flags = (state.user.flags || 0) & ~allHouseFlags;
+      state.user.public_flags = (state.user.public_flags || 0) & ~allHouseFlags;
+      if (houseId !== null) {
+        const flag = houseFlags[houseId] || 0;
+        state.user.flags |= flag;
+        state.user.public_flags |= flag;
+      }
+    }
+    if (state.profileData && Array.isArray(state.profileData.badges)) {
+      state.profileData.badges = state.profileData.badges.filter(function (badge) {
+        const badgeId = String(badge && (badge.id || badge.key || badge.name) || '').toLowerCase();
+        return badgeId.indexOf('hypesquad_house_') === -1 &&
+          badgeId !== 'bravery' && badgeId !== 'brilliance' && badgeId !== 'balance';
+      });
+    }
   }
 
   function pickHouse(houseId) {
@@ -6531,16 +6558,13 @@ window.manager = {
         apiCall('POST', '/hypesquad/online', { house_id: Number(state.selectedHouse) })
           .then(function (res) {
             if (res.status >= 200 && res.status < 300) {
-              toast('HypeSquad badge equipped.', 'success');
               const equippedHouse = Number(state.selectedHouse);
-              const houseFlags = { 1: 1 << 6, 2: 1 << 7, 3: 1 << 8 };
-              state.user.flags = (state.user.flags || 0) | (houseFlags[equippedHouse] || 0);
-              state.user.public_flags = (state.user.public_flags || 0) | (houseFlags[equippedHouse] || 0);
+              setHypeSquadHouseState(equippedHouse);
               state.selectedHouse = null;
               renderBadgeCards();
               updateButtonState();
-              // Refresh account data to get updated profile
-              return loadAccountData().then(function () {
+              toast('HypeSquad badge equipped.', 'success');
+              return refreshAccountStateAfterOp().then(function () {
                 renderBadgeCards();
                 updateButtonState();
               });
@@ -6571,9 +6595,12 @@ window.manager = {
         apiCall('DELETE', '/hypesquad/online')
           .then(function (res) {
             if (res.status >= 200 && res.status < 300) {
+              setHypeSquadHouseState(null);
+              state.selectedHouse = null;
+              renderBadgeCards();
+              updateButtonState();
               toast('HypeSquad badge removed.', 'success');
-              return loadAccountData().then(function () {
-                state.selectedHouse = null;
+              return refreshAccountStateAfterOp().then(function () {
                 renderBadgeCards();
                 updateButtonState();
               });

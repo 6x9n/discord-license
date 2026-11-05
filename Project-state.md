@@ -48,6 +48,7 @@ Use this pattern for Friends, Leave Servers, Close DMs, and future destructive o
 - Badge directory requests are isolated by active-account revision so late responses cannot overwrite another account's state.
 - The badge catalog is loaded on Dashboard/Manage Badges, then reused for navigation; profile badge rendering keeps cached icons visible while data refreshes instead of clearing the row.
 - Manage Badges cards have responsive internal spacing, and the HypeSquad Equipped label is positioned relative to its own card.
+- HypeSquad join/leave success immediately updates local house flags and the equipped-house override, then runs the full account/details refresh. The override prevents stale profile/flag responses from restoring the old Equipped state until the account changes.
 - Legacy Username protobuf visibility remains available to the fallback profile renderer when the badge catalog is unavailable; it is no longer an editable card in Manage Badges.
 - The new badge directory has only been syntax-checked; authenticated API behavior still needs a logged-in Discord session because the endpoints are undocumented and may be account/experiment gated.
 
