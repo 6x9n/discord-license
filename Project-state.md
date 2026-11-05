@@ -41,12 +41,13 @@ Use this pattern for Friends, Leave Servers, Close DMs, and future destructive o
 
 ## Badge Management
 
-- Manage Badges supports HypeSquad Bravery, Brilliance, Balance, and Legacy Username.
-- `getEquippedBadgeInfo()` detects Legacy Username from protobuf visibility settings, normalized profile badges, and direct profile fields.
-- `legacyUsernameOverride` gives immediate UI feedback after successful equip/remove actions and resets when accounts are changed or cleared.
-- Removing Legacy Username clears stale local profile badge data before the refresh completes.
-- Equipping/removing badges updates card selection, Equipped labels, action buttons, and profile/dashboard rendering.
-- The live flow was tested: Legacy Username correctly changed between Equipped, Remove, and Equip states across navigation.
+- Manage Badges provides an earned-badge directory with independent show/hide drafts, discard, refresh, and save controls.
+- The directory reads Discord's `GET /users/@me/badges` catalog and saves `display_order`/`hidden_badges` through `PATCH /users/@me/badges/settings`.
+- Nitro tenure and staff badges are shown as protected; HypeSquad house membership remains a separate join/leave control.
+- Saved badge visibility and ordering are reflected in profile and dashboard badge rendering. Unknown IDs returned in settings are retained in save payloads.
+- Badge directory requests are isolated by active-account revision so late responses cannot overwrite another account's state.
+- Legacy Username protobuf visibility remains available to the fallback profile renderer when the badge catalog is unavailable; it is no longer an editable card in Manage Badges.
+- The new badge directory has only been syntax-checked; authenticated API behavior still needs a logged-in Discord session because the endpoints are undocumented and may be account/experiment gated.
 
 ## Close DMs
 
@@ -85,8 +86,8 @@ Use this pattern for Friends, Leave Servers, Close DMs, and future destructive o
 
 - Live browser checks confirmed the Close DMs popup opens with counts and ETA.
 - Live whitelist toggle test saved a DM ID, changed the label to `Un whitelist`, then restored it to `Whitelist`.
-- Live badge tests confirmed Legacy Username removal and re-equip update the card and action controls immediately.
-- `node --check js/manager.js` passes after the implementation changes.
+- Earlier Legacy Username badge controls were live-tested before the new profile-badge directory replaced them.
+- `npm run check` and `git diff --check` pass for the current changes.
 - Editor diagnostics report no errors in `index.html`, `css/styles.css`, `js/manager.js`, or this document.
 
 ## Future Implementation Rules

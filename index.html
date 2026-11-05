@@ -358,50 +358,55 @@
               </button>
             </div>
 
-            <div id="badgeGrid" class="badge-grid">
-              <button class="badge-card" type="button" data-house="1">
-                <div class="badge-emblem">
-                  <img src="assets/images/badges/hypesquadbravery.svg" alt="Bravery Badge" />
+            <div class="panel badge-directory-panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Your Profile Badges</h2>
+                <button id="badgeRefreshBtn" class="btn btn-ghost btn-small" type="button">Refresh</button>
+              </div>
+              <p class="badge-directory-intro">Choose which earned badges appear on your profile. Hiding a badge does not remove it from your account. Nitro and staff badges cannot be hidden.</p>
+              <p id="badgeDirectoryStatus" class="badge-directory-status" role="status" aria-live="polite">Load your account to view badges.</p>
+              <div id="badgeGrid" class="badge-grid" aria-live="polite"></div>
+              <div class="badge-directory-footer">
+                <span id="badgeSettingsSummary" class="badge-settings-summary"></span>
+                <div class="actions-row">
+                  <button id="badgeResetBtn" class="btn btn-ghost" type="button" disabled>Discard changes</button>
+                  <button id="badgeSaveBtn" class="btn btn-primary" type="button" disabled>Save visibility</button>
                 </div>
-                <div class="badge-name">Bravery</div>
-                <div class="badge-desc">HypeSquad house of courage</div>
-              </button>
-              <button class="badge-card" type="button" data-house="2">
-                <div class="badge-emblem">
-                  <img src="assets/images/badges/hypesquadbrilliance.svg" alt="Brilliance Badge" />
-                </div>
-                <div class="badge-name">Brilliance</div>
-                <div class="badge-desc">HypeSquad house of intellect</div>
-              </button>
-              <button class="badge-card" type="button" data-house="3">
-                <div class="badge-emblem">
-                  <img src="assets/images/badges/hypesquadbalance.svg" alt="Balance Badge" />
-                </div>
-                <div class="badge-name">Balance</div>
-                <div class="badge-desc">HypeSquad house of harmony</div>
-              </button>
-              <button class="badge-card" type="button" data-legacy="username">
-                <div class="badge-emblem">
-                  <img src="assets/images/badges/username.png" alt="Legacy Username Badge" />
-                </div>
-                <div class="badge-name">Legacy Username</div>
-                <div class="badge-desc">Originally known as...</div>
-              </button>
+              </div>
             </div>
 
-            <div class="actions-row">
-              <button id="equipBadgeBtn" class="btn btn-primary" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                <span>Equip Selected Badge</span>
-              </button>
-              <button id="removeBadgeBtn" class="btn btn-secondary" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                <span>Remove HypeSquad Badge</span>
-              </button>
-              <button id="hideAllBadgesBtn" class="btn btn-secondary" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
-                <span>Hide All Badges</span>
-              </button>
+            <div class="panel badge-membership-panel">
+              <div class="panel-head">
+                <h2 class="panel-title">HypeSquad House</h2>
+                <span class="panel-hint">Join or leave a house</span>
+              </div>
+              <div id="badgeMembershipGrid" class="badge-grid">
+                <button class="badge-card" type="button" data-house="1">
+                  <div class="badge-emblem"><img src="assets/images/badges/hypesquadbravery.svg" alt="" /></div>
+                  <div class="badge-name">Bravery</div>
+                  <div class="badge-desc">Courage</div>
+                </button>
+                <button class="badge-card" type="button" data-house="2">
+                  <div class="badge-emblem"><img src="assets/images/badges/hypesquadbrilliance.svg" alt="" /></div>
+                  <div class="badge-name">Brilliance</div>
+                  <div class="badge-desc">Intellect</div>
+                </button>
+                <button class="badge-card" type="button" data-house="3">
+                  <div class="badge-emblem"><img src="assets/images/badges/hypesquadbalance.svg" alt="" /></div>
+                  <div class="badge-name">Balance</div>
+                  <div class="badge-desc">Harmony</div>
+                </button>
+              </div>
+              <div class="actions-row">
+                <button id="equipBadgeBtn" class="btn btn-primary" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                  <span>Join Selected House</span>
+                </button>
+                <button id="removeBadgeBtn" class="btn btn-secondary" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  <span>Leave HypeSquad</span>
+                </button>
+              </div>
             </div>
           </div>
         </section>

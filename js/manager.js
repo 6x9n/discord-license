@@ -406,6 +406,9 @@ window.manager = {
     if (accountViews.indexOf(meta.panel) !== -1 && hasAccount() && (previousPanel !== meta.panel || enteringBadgeView)) {
       refreshAccountStateAfterOp();
     }
+    if (enteringBadgeView && hasAccount()) {
+      loadBadgeDirectory();
+    }
     if (meta.panel === 'accountDetailsView' && hasAccount()) {
       loadSupplementalAccountDetails();
     }
@@ -563,6 +566,13 @@ window.manager = {
     inspectBoostedOnly: false,
     evolutionType: 'nitro',
     legacyUsernameOverride: null,
+    badgeCatalog: [],
+    badgeCatalogLoaded: false,
+    badgeDirectoryLoading: false,
+    badgeDirectoryError: '',
+    badgeSettings: { display_order: [], hidden_badges: [] },
+    badgeSettingsDraft: null,
+    badgeSettingsSaving: false,
     closeDmResults: [],
     guildMeta: {},
     currentOperationTitle: '',
@@ -589,11 +599,9 @@ window.manager = {
   // Discord binds some session sensitive endpoints, including PATCH /users/@me,
   // to the client build a token was issued against. The header used to carry a
   // made up 9999, which matches no Discord release and can come back as
-  // "Unknown Session". 625378 is the current stable web build. When a profile
-  // save starts failing this way again, refresh it from Discord rather than
-  // guessing: fetch https://discord.com/app, pull assets/sentry.*.js out of the
-  // markup, then read buildNumber from that asset.
-  const CLIENT_BUILD_NUMBER = 625378;
+  // "Unknown Session". Refresh this from https://discord.com/app when Discord
+  // publishes a new stable web build.
+  const CLIENT_BUILD_NUMBER = 663810;
 
   // Discord also answers a profile write with 10020 while it decides whether a
   // session is allowed to make one, which happens right after another change on
@@ -608,6 +616,9 @@ window.manager = {
 
   let inFlightController = null;
   let accountDataRequest = null;
+  let badgeDirectoryRequest = null;
+  let badgeSettingsRequest = null;
+  let activeAccountRevision = 0;
   let guildMetaRequest = null;
   let lastGuildMetaRequestAt = 0;
   let guildMetaCooldownUntil = 0;
@@ -870,6 +881,7 @@ window.manager = {
   }
 
   function setActiveAccount(token, user) {
+    activeAccountRevision += 1;
     lastGuildMetaRequestAt = 0;
     resetGuildMetaSchedule();
     state.token = normalizeToken(token);
@@ -882,6 +894,15 @@ window.manager = {
     state.accountDetailsData = null;
     state.accountDetailsLoading = false;
     state.legacyUsernameOverride = null;
+    state.badgeCatalog = [];
+    state.badgeCatalogLoaded = false;
+    state.badgeDirectoryLoading = false;
+    state.badgeDirectoryError = '';
+    state.badgeSettings = { display_order: [], hidden_badges: [] };
+    state.badgeSettingsDraft = null;
+    state.badgeSettingsSaving = false;
+    badgeDirectoryRequest = null;
+    badgeSettingsRequest = null;
     state.guilds = [];
     state.rel = [];
     state.channels = [];
@@ -897,12 +918,22 @@ window.manager = {
   }
 
   function clearActiveAccount() {
+    activeAccountRevision += 1;
     abortInFlight();
     lastGuildMetaRequestAt = 0;
     resetGuildMetaSchedule();
     state.token = '';
     state.user = null;
     state.legacyUsernameOverride = null;
+    state.badgeCatalog = [];
+    state.badgeCatalogLoaded = false;
+    state.badgeDirectoryLoading = false;
+    state.badgeDirectoryError = '';
+    state.badgeSettings = { display_order: [], hidden_badges: [] };
+    state.badgeSettingsDraft = null;
+    state.badgeSettingsSaving = false;
+    badgeDirectoryRequest = null;
+    badgeSettingsRequest = null;
     state.guilds = [];
     state.rel = [];
     state.channels = [];
@@ -1343,6 +1374,9 @@ window.manager = {
   }
 
   function getBadgeImageUrl(badge) {
+    if (badge && badge.imageUrl && /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//i.test(badge.imageUrl)) {
+      return badge.imageUrl;
+    }
     if (badge && badge.hash) {
       return CDN_BADGE_BASE + '/' + badge.hash + '.png';
     }
@@ -1417,6 +1451,9 @@ window.manager = {
   function getUserBadges(userData, profileData) {
     const user = userData || {};
     const profile = profileData || {};
+    if (state.badgeCatalogLoaded) {
+      return getCatalogProfileBadges();
+    }
     const out = [];
     const seen = {};
 
@@ -1624,7 +1661,8 @@ window.manager = {
         if (res && res.data && typeof res.data === 'object') {
           state.profileData = res.data;
           let badges = getUserBadges(state.user, res.data);
-          const legacyHidden = state.legacyUsernameOverride === false || getLegacyUsernameSetting() === 'hidden';
+          const legacyHidden = !state.badgeCatalogLoaded &&
+            (state.legacyUsernameOverride === false || getLegacyUsernameSetting() === 'hidden');
           if (legacyHidden) {
             badges = badges.filter(function (badge) {
               return !badge || badge.key !== 'legacy_username';
@@ -1641,7 +1679,8 @@ window.manager = {
         state.profileData = {};
         if (host) {
           let badges = getUserBadges(state.user, {});
-          if (state.legacyUsernameOverride === false || getLegacyUsernameSetting() === 'hidden') {
+          if (!state.badgeCatalogLoaded &&
+              (state.legacyUsernameOverride === false || getLegacyUsernameSetting() === 'hidden')) {
             badges = badges.filter(function (badge) {
               return !badge || badge.key !== 'legacy_username';
             });
@@ -1661,6 +1700,173 @@ window.manager = {
     }
     renderBadgeImages(host, []);
     fetchProfileBadges(host);
+  }
+
+  function getCatalogProfileBadges() {
+    const rank = new Map();
+    copyBadgeSettings(state.badgeSettings).display_order.forEach(function (id, index) {
+      rank.set(Number(id), index);
+    });
+    return (state.badgeCatalog || [])
+      .filter(function (badge) {
+        const id = Number(badge && badge.badge_id);
+        return badge && badge.owned === true && (!badge.hidden || id === 1 || id === 22);
+      })
+      .sort(function (a, b) {
+        const aId = Number(a.badge_id);
+        const bId = Number(b.badge_id);
+        if (aId === 22 || bId === 22) {
+          return aId === 22 ? -1 : 1;
+        }
+        const aRank = rank.has(aId) ? rank.get(aId) : Number.MAX_SAFE_INTEGER;
+        const bRank = rank.has(bId) ? rank.get(bId) : Number.MAX_SAFE_INTEGER;
+        return aRank === bRank ? 0 : aRank - bRank;
+      })
+      .slice(0, 6)
+      .map(function (badge) {
+        const imageUrl = badge.simple_icon_raster_url || badge.simple_icon_url || badge.complex_icon_static_url || '';
+        const title = badge.name || badge.description || 'Profile badge';
+        return {
+          key: 'catalog_' + badge.badge_id,
+          id: String(badge.badge_id),
+          imageUrl: imageUrl,
+          title: badge.info_label ? title + ' - ' + badge.info_label : title
+        };
+      });
+  }
+
+  function copyBadgeSettings(settings) {
+    return {
+      display_order: (settings && Array.isArray(settings.display_order) ? settings.display_order : []).slice(),
+      hidden_badges: (settings && Array.isArray(settings.hidden_badges) ? settings.hidden_badges : []).slice()
+    };
+  }
+
+  function badgeSettingsFromCatalog(badges, response) {
+    const data = response && typeof response === 'object' ? response : {};
+    const source = data.settings && typeof data.settings === 'object' ? data.settings : data;
+    const settings = {
+      display_order: Array.isArray(source.display_order)
+        ? source.display_order.map(Number).filter(function (id) { return Number.isInteger(id) && id > 0 && id !== 22; })
+        : [],
+      hidden_badges: Array.isArray(source.hidden_badges)
+        ? source.hidden_badges.map(Number).filter(function (id) { return Number.isInteger(id) && id > 0 && !badgeIsProtected(id); })
+        : []
+    };
+    const hasDisplayOrder = Array.isArray(source.display_order);
+    const hasHiddenBadges = Array.isArray(source.hidden_badges);
+    (Array.isArray(badges) ? badges : []).forEach(function (badge) {
+      const id = Number(badge && badge.badge_id);
+      if (!badge || badge.owned !== true || !Number.isInteger(id) || id <= 0 || id === 22) {
+        return;
+      }
+      if (!hasHiddenBadges && badge.hidden === true && id !== 1) {
+        settings.hidden_badges.push(id);
+      }
+      if (!hasDisplayOrder && badge.hidden !== true) {
+        settings.display_order.push(id);
+      }
+    });
+    return settings;
+  }
+
+  function badgeIsProtected(id) {
+    return Number(id) === 1 || Number(id) === 22;
+  }
+
+  function badgeSettingsEqual(a, b) {
+    const left = copyBadgeSettings(a);
+    const right = copyBadgeSettings(b);
+    return left.display_order.length === right.display_order.length &&
+      left.hidden_badges.length === right.hidden_badges.length &&
+      left.display_order.every(function (id, index) { return Number(id) === Number(right.display_order[index]); }) &&
+      left.hidden_badges.every(function (id, index) { return Number(id) === Number(right.hidden_badges[index]); });
+  }
+
+  function setBadgeDirectoryStatus(message, isError) {
+    const status = byId('badgeDirectoryStatus');
+    if (status) {
+      status.textContent = message;
+      status.classList.toggle('is-error', !!isError);
+    }
+  }
+
+  function loadBadgeDirectory() {
+    if (!hasAccount()) {
+      setBadgeDirectoryStatus('Log in to load your profile badges.', true);
+      return Promise.resolve(false);
+    }
+    if (badgeDirectoryRequest) {
+      return badgeDirectoryRequest;
+    }
+
+    const accountId = String(state.user.id);
+    const accountRevision = activeAccountRevision;
+    const hadCatalog = state.badgeCatalogLoaded;
+    state.badgeDirectoryLoading = true;
+    state.badgeDirectoryError = '';
+    setBadgeDirectoryStatus('Loading badges from Discord...', false);
+    renderBadgeDirectory();
+
+    const request = apiCall('GET', '/users/@me/badges')
+      .then(function (res) {
+        if (activeAccountRevision !== accountRevision || String(state.user && state.user.id || '') !== accountId) {
+          return false;
+        }
+        if (!res || res.status < 200 || res.status >= 300) {
+          throw new Error(handleAuthError((res && res.data) || {}) || 'Discord could not load your badge directory.');
+        }
+        const badges = res.data && res.data.badges;
+        if (!Array.isArray(badges)) {
+          throw new Error('Discord returned an unexpected badge directory response.');
+        }
+        state.badgeCatalog = badges.filter(function (badge) {
+          return badge && Number.isInteger(Number(badge.badge_id)) && Number(badge.badge_id) > 0;
+        });
+        state.badgeSettings = badgeSettingsFromCatalog(state.badgeCatalog, res.data);
+        state.badgeSettingsDraft = copyBadgeSettings(state.badgeSettings);
+        state.badgeCatalog.forEach(function (badge) {
+          const id = Number(badge.badge_id);
+          if (badge.owned === true) {
+            badge.hidden = !badgeIsProtected(id) && state.badgeSettings.hidden_badges.indexOf(id) !== -1;
+          }
+        });
+        state.badgeCatalogLoaded = true;
+        state.badgeDirectoryError = '';
+        const ownedCount = state.badgeCatalog.filter(function (badge) { return badge.owned === true; }).length;
+        setBadgeDirectoryStatus(
+          ownedCount
+            ? ownedCount + (ownedCount === 1 ? ' badge earned' : ' badges earned') + '. Changes stay on your profile; hiding never removes a badge.'
+            : 'No earned badges were returned for this account.',
+          false
+        );
+        renderBadgeDirectory();
+        renderProfileBadges();
+        renderDetailsView();
+        renderDashboardEvolution();
+        return true;
+      })
+      .catch(function (err) {
+        if (activeAccountRevision !== accountRevision || String(state.user && state.user.id || '') !== accountId) {
+          return false;
+        }
+        if (!hadCatalog) {
+          state.badgeCatalogLoaded = false;
+        }
+        state.badgeDirectoryError = (err && err.message) || 'Could not load your badge directory.';
+        setBadgeDirectoryStatus(state.badgeDirectoryError + ' Use Refresh to try again.', true);
+        renderBadgeDirectory();
+        return false;
+      })
+      .finally(function () {
+        if (badgeDirectoryRequest === request) {
+          badgeDirectoryRequest = null;
+          state.badgeDirectoryLoading = false;
+          updateBadgeDirectoryActions();
+        }
+      });
+    badgeDirectoryRequest = request;
+    return request;
   }
 
   /* ---------- Accounts list ---------- */
@@ -4238,14 +4444,6 @@ window.manager = {
     loadAccountData()
       .then(function (data) {
         updateMetricsFrom(data);
-        const leaveToggle = byId('allInOneLeave');
-        if (title === 'All-in-One Cleanup' && leaveToggle && leaveToggle.checked) {
-          return ensureGuildMetaLoaded().then(function () {
-            if (!guildBoostStatusComplete(state.guilds)) {
-              throw new Error('Discord is still cooling down the boost check. No cleanup actions were started; wait for the automatic retry and try again.');
-            }
-          });
-        }
       })
       .then(function () {
         if (state.stopped) {
@@ -4253,6 +4451,7 @@ window.manager = {
           setCurrentOperation('', '');
           unlockOperationButtons();
           abortInFlight();
+          emitLine('Operation stopped before any actions started.');
           toast('Operation stopped.', 'info');
           return;
         }
@@ -4274,6 +4473,7 @@ window.manager = {
         setCurrentOperation('', '');
         unlockOperationButtons();
         abortInFlight();
+        emitLine('Could not prepare the operation: ' + ((err && err.message) || 'Unknown error') + '. No actions were started.');
         toast((err && err.message) || 'Could not prepare the operation. No actions were started.', 'error');
       });
   }
@@ -4283,102 +4483,17 @@ window.manager = {
       toast('An operation is already running.', 'error');
       return;
     }
-    const candidates = getLeaveServerCandidates();
-    const leaveable = targetServer
-      ? candidates.filter(function (server) { return String(server.id) === String(targetServer.id) && server.leaveable; })
-      : candidates.filter(function (server) { return server.leaveable; });
-    const results = candidates.map(function (server) {
-      return {
-        name: server.name,
-        status: !server.leaveable ? 'skipped' : 'pending',
-        reason: server.reason
-      };
-    });
-
-    if (!leaveable.length) {
-      closeLeaveServersConfirmModal();
-      showView('operation', { persist: true });
-      resetTerminal('Leave Servers');
-      emitLine('No leaveable servers found.');
-      toast('No leaveable servers found.', 'info');
-      return;
-    }
-
-    state.running = true;
-    state.stopped = false;
-    setCurrentOperation('Leave Servers', '0 / ' + leaveable.length + ' • 0%');
-    closeLeaveServersConfirmModal();
-    lockOperationButtons(byId('leaveServersBtn'));
     showView('operation', { persist: true });
     resetTerminal('Leave Servers');
-    emitLine('Starting Leave Servers');
-    emitLine('Total leaveable servers: ' + leaveable.length);
-
-    let index = 0;
-    const step = function () {
-      if (state.stopped || !state.running) {
-        emitLine('Operation stopped by user.');
-        if (opPill) {
-          opPill.textContent = 'stopped';
-        }
-        state.running = false;
-        setCurrentOperation('', '');
-        unlockOperationButtons();
-        if (state.user && state.user.id) {
-          recordOperationHistory('Leave Servers');
-        }
-        toast('Operation stopped.', 'info');
-        return;
-      }
-      if (index >= leaveable.length) {
-        emitLine('Leave Servers completed.');
-        if (opPill) {
-          opPill.textContent = 'done';
-        }
-        updateProgress(leaveable.length, leaveable.length);
-        state.running = false;
-        setCurrentOperation('', '');
-        unlockOperationButtons();
-        recordOperationHistory('Leave Servers');
-        toast('Leave Servers finished.', 'success');
-        return;
-      }
-      const server = leaveable[index];
-      index += 1;
-      const resultIndex = results.findIndex(function (entry) { return entry.name === server.name; });
-      if (resultIndex !== -1) {
-        results[resultIndex].status = 'pending';
-      }
-      emitLine('[' + index + '/' + leaveable.length + '] Leaving server: ' + server.name);
-      updateProgress(index, leaveable.length);
-      apiCall('DELETE', '/users/@me/guilds/' + server.id)
-        .then(function (res) {
-          if (res.status >= 200 && res.status < 300) {
-            if (resultIndex !== -1) {
-              results[resultIndex].status = 'left';
-              results[resultIndex].reason = 'Left successfully';
-            }
-            emitLine('Left server: ' + server.name);
-            setTimeout(step, currentDelay());
-          } else {
-            if (resultIndex !== -1) {
-              results[resultIndex].status = 'failed';
-              results[resultIndex].reason = handleAuthError(res.data || {});
-            }
-            emitLine('Could not leave server: ' + server.name + ' (' + (handleAuthError(res.data || {}) || 'error') + ')');
-            setTimeout(step, currentDelay());
-          }
-        })
-        .catch(function () {
-          if (resultIndex !== -1) {
-            results[resultIndex].status = 'failed';
-            results[resultIndex].reason = 'Cannot reach Discord API';
-          }
-          emitLine('Could not leave server: ' + server.name + ' (Cannot reach Discord API)');
-          setTimeout(step, currentDelay());
-        });
+    if (opPill) opPill.textContent = 'preparing';
+    emitLine('Preparing Leave Servers...');
+    const buildItems = function () {
+      const items = buildLeaveItems();
+      return targetServer
+        ? items.filter(function (item) { return String(item.id) === String(targetServer.id); })
+        : items;
     };
-    step();
+    prepareOperation('Leave Servers', buildItems, byId('leaveServersBtn'));
   }
 
   function runRemoveFriendsOperation() {
@@ -4386,107 +4501,14 @@ window.manager = {
       toast('An operation is already running.', 'error');
       return;
     }
-    const candidates = getRemoveFriendCandidates();
-    const results = candidates.map(function (entry) {
-      return {
-        name: entry.name + ' (' + entry.relationshipType + ')',
-        status: 'pending'
-      };
-    });
-
-    if (!candidates.length) {
-      closeRemoveFriendsConfirmModal();
-      showView('operation', { persist: true });
-      resetTerminal('Remove Friends');
-      emitLine('No removable friends, blocked users, ignored users, or pending requests found.');
-      toast('No removable friends, blocked users, ignored users, or pending requests found.', 'info');
-      return;
-    }
-
-    state.running = true;
-    state.stopped = false;
-    setCurrentOperation('Remove Friends', '0 / ' + candidates.length + ' • 0%');
-    closeRemoveFriendsConfirmModal();
-    lockOperationButtons(byId('removeFriendsBtn'));
     showView('operation', { persist: true });
     resetTerminal('Remove Friends');
-    emitLine('Starting Remove Friends');
-    emitLine('Total removable relationships: ' + candidates.length);
-    emitLine('Estimated processing time: ~' + Math.max(1, Math.ceil((candidates.length * currentDelay()) / 1000)) + 's');
-
-    let index = 0;
-    const step = function () {
-      if (state.stopped || !state.running) {
-        emitLine('Operation stopped by user.');
-        if (opPill) {
-          opPill.textContent = 'stopped';
-        }
-        state.running = false;
-        setCurrentOperation('', '');
-        unlockOperationButtons();
-        if (state.user && state.user.id) {
-          recordOperationHistory('Remove Friends');
-        }
-        toast('Operation stopped.', 'info');
-        return;
-      }
-
-      if (index >= candidates.length) {
-        emitLine('Remove Friends completed.');
-        if (opPill) {
-          opPill.textContent = 'done';
-        }
-        updateProgress(candidates.length, candidates.length);
-        state.running = false;
-        setCurrentOperation('', '');
-        unlockOperationButtons();
-        recordOperationHistory('Remove Friends');
-        toast('Remove Friends finished.', 'success');
-        return;
-      }
-
-      const entry = candidates[index];
-      index += 1;
-      const resultIndex = results.findIndex(function (result) {
-        return result.name === (entry.name + ' (' + entry.relationshipType + ')');
-      });
-      if (resultIndex !== -1) {
-        results[resultIndex].status = 'pending';
-      }
-      emitLine('[' + index + '/' + candidates.length + '] Removing: ' + entry.name + ' (' + entry.relationshipType + ')');
-      updateProgress(index, candidates.length);
-
-      apiCall('DELETE', '/users/@me/relationships/' + entry.id)
-        .then(function (res) {
-          if (res.status >= 200 && res.status < 300) {
-            if (resultIndex !== -1) {
-              results[resultIndex].status = 'removed';
-            }
-            emitLine('Removed relationship: ' + entry.name + ' (' + entry.relationshipType + ')');
-            state.rel = (state.rel || []).filter(function (r) { return r.id !== entry.id; });
-            updateMetricsFrom(state);
-            setTimeout(step, currentDelay());
-          } else {
-            if (resultIndex !== -1) {
-              results[resultIndex].status = 'failed';
-            }
-            emitLine('Could not remove relationship: ' + entry.name + ' (' + (handleAuthError(res.data || {}) || 'error') + ')');
-            setTimeout(step, currentDelay());
-          }
-        })
-        .catch(function () {
-          if (resultIndex !== -1) {
-            results[resultIndex].status = 'failed';
-          }
-          emitLine('Could not remove relationship: ' + entry.name + ' (Cannot reach Discord API)');
-          setTimeout(step, currentDelay());
-        });
-    };
-
-    step();
+    if (opPill) opPill.textContent = 'preparing';
+    emitLine('Preparing Remove Friends...');
+    prepareOperation('Remove Friends', buildFriendItems, byId('removeFriendsBtn'));
   }
 
-  function runOperation(title, items, triggerBtn, allowRunning) {
+  function runOperation(title, items, triggerBtn, allowRunning, onFinish) {
     const safeItems = Array.isArray(items) ? items.filter(function (entry) { return !!entry; }) : [];
     if (!allowRunning && state.running) {
       toast('An operation is already running.', 'error');
@@ -4503,6 +4525,7 @@ window.manager = {
       } else {
         toast('No matching targets found — nothing to do.', 'info');
       }
+      emitLine('No matching targets found. No actions were started.');
       return;
     }
     state.running = true;
@@ -4515,13 +4538,17 @@ window.manager = {
     resetTerminal(title);
     emitLine('Starting: ' + title);
     emitLine('Delay between calls: ' + currentDelay() + 'ms');
-    const finish = function () {
+    let failedCount = 0;
+    const finish = function (completed) {
       state.running = false;
       setCurrentOperation('', '');
       recordOperationHistory(title);
       unlockOperationButtons();
       abortInFlight();
       refreshAccountStateAfterOp();
+      if (completed && typeof onFinish === 'function') {
+        onFinish();
+      }
     };
 
     let index = 0;
@@ -4531,7 +4558,7 @@ window.manager = {
         if (opPill) {
           opPill.textContent = 'stopped';
         }
-        finish();
+        finish(false);
         toast('Operation stopped.', 'info');
         return;
       }
@@ -4539,10 +4566,15 @@ window.manager = {
       if (!item) {
         emitLine('Operation completed (' + safeItems.length + ' items).');
         if (opPill) {
-          opPill.textContent = 'done';
+          opPill.textContent = failedCount ? 'failed' : 'done';
         }
-        finish();
-        toast('Operation completed.', 'success');
+        finish(true);
+        toast(
+          failedCount
+            ? 'Operation completed with ' + failedCount + ' error(s).'
+            : 'Operation completed.',
+          failedCount ? 'warning' : 'success'
+        );
         return;
       }
       index += 1;
@@ -4559,7 +4591,7 @@ window.manager = {
           if (res && typeof res.status === 'number' && (res.status < 200 || res.status >= 300)) {
             throw new Error(res.status === 429
               ? 'Discord rate limit persisted after retries.'
-              : handleAuthError(res.data || {}));
+              : (handleAuthError(res.data || {}) || 'Request failed (' + res.status + ').'));
           }
           return res;
         });
@@ -4569,12 +4601,19 @@ window.manager = {
         .then(function () {
           emitLine('Completed: ' + item.label);
           if (index >= safeItems.length) {
-            emitLine('Operation completed (' + safeItems.length + ' items).');
+            emitLine(failedCount
+              ? 'Operation completed with ' + failedCount + ' error(s).'
+              : 'Operation completed (' + safeItems.length + ' items).');
             if (opPill) {
-              opPill.textContent = 'done';
+              opPill.textContent = failedCount ? 'failed' : 'done';
             }
-            finish();
-            toast('Operation completed.', 'success');
+            finish(true);
+            toast(
+              failedCount
+                ? 'Operation completed with ' + failedCount + ' error(s).'
+                : 'Operation completed.',
+              failedCount ? 'warning' : 'success'
+            );
             return;
           }
           const nextItem = safeItems[index];
@@ -4585,14 +4624,19 @@ window.manager = {
           setTimeout(step, waitMs);
         })
         .catch(function (err) {
+          if (state.stopped || !state.running) {
+            step();
+            return;
+          }
+          failedCount += 1;
           emitLine('Failed: ' + (item.label || 'item') + ' (' + (err && err.message ? err.message : 'request error') + ')');
           if (index >= safeItems.length) {
-            emitLine('Operation completed (' + safeItems.length + ' items).');
+            emitLine('Operation completed with ' + failedCount + ' error(s).');
             if (opPill) {
-              opPill.textContent = 'done';
+              opPill.textContent = 'failed';
             }
-            finish();
-            toast('Operation completed with errors.', 'warning');
+            finish(true);
+            toast('Operation completed with ' + failedCount + ' error(s).', 'warning');
             return;
           }
           const nextItem = safeItems[index];
@@ -5254,26 +5298,10 @@ window.manager = {
 
   /* ---------- Badge view ---------- */
 
-  function patchLegacyUsernameBadge(enabled) {
-    const payload = {
-      settings: enabled ? 'QgWyAQIIAA==' : 'QgWyAQIIAQ=='
-    };
-    return apiCall('PATCH', '/users/@me/settings-proto/1', payload);
-  }
-
   function getEquippedBadgeInfo() {
     const u = state.user || {};
     const prof = state.profileData || {};
     let equippedHouseId = null;
-    const profileBadges = getUserBadges(u, prof);
-    const profileShowsLegacyUsername = profileBadges.some(function (badge) {
-      return badge && (badge.key === 'legacy_username' || badge.id === 'legacy_username');
-    });
-    const hasLegacyUsername = state.legacyUsernameOverride !== null
-      ? state.legacyUsernameOverride
-      : getLegacyUsernameSetting() === 'visible' ||
-      profileShowsLegacyUsername ||
-      !!(u.legacy_username || prof.legacy_username || (prof.user && prof.user.legacy_username));
     const flags = u.flags || u.public_flags || 0;
     if (flags & (1 << 6)) {
       equippedHouseId = 1;
@@ -5297,35 +5325,18 @@ window.manager = {
     });
     
     return {
-      equippedHouseId: equippedHouseId,
-      hasLegacyUsername: hasLegacyUsername
+      equippedHouseId: equippedHouseId
     };
   }
 
   function pickHouse(houseId) {
     state.selectedHouse = houseId;
     state.selectedLegacy = null;
-    const cards = document.querySelectorAll('.badge-card');
+    const membershipGrid = byId('badgeMembershipGrid');
+    const cards = membershipGrid ? membershipGrid.querySelectorAll('.badge-card') : [];
     cards.forEach(function (card) {
       card.classList.toggle('selected', card.getAttribute('data-house') === String(houseId));
     });
-  }
-
-  function pickLegacy(type) {
-    state.selectedLegacy = type;
-    state.selectedHouse = null;
-    const cards = document.querySelectorAll('.badge-card');
-    cards.forEach(function (card) {
-      card.classList.toggle('selected', card.getAttribute('data-legacy') === type);
-    });
-  }
-
-  function resultToast(res, okMsg) {
-    if (res.status >= 200 && res.status < 300) {
-      toast(okMsg, 'success');
-    } else {
-      toast(handleAuthError(res.data || {}), 'error');
-    }
   }
 
   /* ---------- Settings ---------- */
@@ -6092,12 +6103,259 @@ window.manager = {
 
   }
 
+  function badgeDirectoryOrder(badges, settings) {
+    const normalized = copyBadgeSettings(settings);
+    const order = normalized.display_order;
+    const hiddenIds = normalized.hidden_badges;
+    const rank = new Map();
+    order.forEach(function (id, index) {
+      rank.set(Number(id), index);
+    });
+    return badges.slice().sort(function (a, b) {
+      const aId = Number(a.badge_id);
+      const bId = Number(b.badge_id);
+      if (aId === bId) {
+        return 0;
+      }
+      if (aId === 22 || bId === 22) {
+        return aId === 22 ? -1 : 1;
+      }
+      const aHidden = hiddenIds.indexOf(aId) !== -1;
+      const bHidden = hiddenIds.indexOf(bId) !== -1;
+      if (aHidden !== bHidden) {
+        return aHidden ? 1 : -1;
+      }
+      const aRank = rank.has(aId) ? rank.get(aId) : Number.MAX_SAFE_INTEGER;
+      const bRank = rank.has(bId) ? rank.get(bId) : Number.MAX_SAFE_INTEGER;
+      return aRank === bRank ? 0 : aRank - bRank;
+    });
+  }
+
+  function updateBadgeDirectoryActions() {
+    const saveBtn = byId('badgeSaveBtn');
+    const resetBtn = byId('badgeResetBtn');
+    const refreshBtn = byId('badgeRefreshBtn');
+    const summary = byId('badgeSettingsSummary');
+    const owned = (state.badgeCatalog || []).filter(function (badge) { return badge && badge.owned === true; });
+    const draft = copyBadgeSettings(state.badgeSettingsDraft || state.badgeSettings);
+    const visibleCount = owned.filter(function (badge) {
+      return badgeIsProtected(badge.badge_id) || draft.hidden_badges.indexOf(Number(badge.badge_id)) === -1;
+    }).length;
+    const hiddenCount = owned.length - visibleCount;
+    const hasChanges = state.badgeCatalogLoaded && !badgeSettingsEqual(draft, state.badgeSettings);
+
+    if (summary) {
+      summary.textContent = owned.length
+        ? visibleCount + ' visible · ' + hiddenCount + ' hidden · ' + owned.length + ' earned'
+        : '';
+    }
+    if (hasChanges && !state.badgeSettingsSaving && !state.badgeDirectoryError) {
+      setBadgeDirectoryStatus('Unsaved visibility changes. Save them to update your Discord profile.', false);
+    }
+    if (saveBtn) {
+      saveBtn.disabled = !hasChanges || state.badgeSettingsSaving || state.badgeDirectoryLoading;
+    }
+    if (resetBtn) {
+      resetBtn.disabled = !hasChanges || state.badgeSettingsSaving || state.badgeDirectoryLoading;
+    }
+    if (refreshBtn) {
+      refreshBtn.disabled = hasChanges || state.badgeSettingsSaving || state.badgeDirectoryLoading;
+    }
+  }
+
+  function renderBadgeDirectory() {
+    const grid = byId('badgeGrid');
+    if (!grid) {
+      return;
+    }
+    grid.innerHTML = '';
+    if (state.badgeDirectoryLoading && !state.badgeCatalogLoaded) {
+      const loading = document.createElement('div');
+      loading.className = 'badge-directory-empty';
+      loading.textContent = 'Loading your earned badges...';
+      grid.appendChild(loading);
+      updateBadgeDirectoryActions();
+      return;
+    }
+    if (!state.badgeCatalogLoaded) {
+      const message = document.createElement('div');
+      message.className = 'badge-directory-empty';
+      message.textContent = state.badgeDirectoryError
+        ? 'Badge details are unavailable. Use Refresh to try again.'
+        : 'Log in to load your profile badges.';
+      grid.appendChild(message);
+      updateBadgeDirectoryActions();
+      return;
+    }
+
+    const owned = (state.badgeCatalog || []).filter(function (badge) { return badge && badge.owned === true; });
+    const settings = copyBadgeSettings(state.badgeSettingsDraft || state.badgeSettings);
+    const ordered = badgeDirectoryOrder(owned, settings);
+    if (!ordered.length) {
+      const empty = document.createElement('div');
+      empty.className = 'badge-directory-empty';
+      empty.textContent = 'No earned badges were returned for this account.';
+      grid.appendChild(empty);
+      updateBadgeDirectoryActions();
+      return;
+    }
+
+    ordered.forEach(function (badge) {
+      const id = Number(badge.badge_id);
+      const hidden = settings.hidden_badges.indexOf(id) !== -1 && !badgeIsProtected(id);
+      const card = document.createElement('article');
+      const icon = document.createElement('div');
+      const image = document.createElement('img');
+      const copy = document.createElement('div');
+      const name = document.createElement('strong');
+      const description = document.createElement('span');
+      const status = document.createElement('span');
+      const toggle = document.createElement('button');
+      const title = String(badge.name || badge.description || 'Profile badge');
+      const imageUrl = badge.simple_icon_raster_url || badge.simple_icon_url || badge.complex_icon_static_url || '';
+
+      card.className = 'badge-directory-card' + (hidden ? ' is-hidden' : '');
+      icon.className = 'badge-directory-icon';
+      image.alt = '';
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      image.src = getBadgeImageUrl({ imageUrl: imageUrl });
+      image.onerror = function () {
+        image.onerror = null;
+        const fallback = PROFILE_BADGE_MAP[String(badge.name || '').toLowerCase()];
+        if (fallback && fallback.path) {
+          image.src = fallback.path;
+        } else {
+          icon.hidden = true;
+        }
+      };
+      icon.appendChild(image);
+
+      copy.className = 'badge-directory-copy';
+      name.className = 'badge-directory-name';
+      name.textContent = title;
+      description.className = 'badge-directory-description';
+      description.textContent = badge.info_label || badge.description || 'Earned profile badge';
+      status.className = 'badge-directory-state';
+      status.textContent = hidden ? 'Hidden from your profile' : 'Visible on your profile';
+      copy.appendChild(name);
+      copy.appendChild(description);
+      copy.appendChild(status);
+
+      if (badgeIsProtected(id)) {
+        const protectedLabel = document.createElement('span');
+        protectedLabel.className = 'badge-directory-protected';
+        protectedLabel.textContent = id === 1 ? 'Always visible' : 'Pinned';
+        card.appendChild(icon);
+        card.appendChild(copy);
+        card.appendChild(protectedLabel);
+      } else {
+        toggle.type = 'button';
+        toggle.className = 'badge-directory-toggle';
+        toggle.dataset.badgeToggle = String(id);
+        toggle.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+        toggle.setAttribute('aria-label', (hidden ? 'Show ' : 'Hide ') + title + (hidden ? ' on profile' : ' from profile'));
+        toggle.textContent = hidden ? 'Show' : 'Hide';
+        toggle.disabled = state.badgeSettingsSaving || state.badgeDirectoryLoading;
+        card.appendChild(icon);
+        card.appendChild(copy);
+        card.appendChild(toggle);
+      }
+      grid.appendChild(card);
+    });
+    updateBadgeDirectoryActions();
+  }
+
+  function toggleBadgeVisibility(id) {
+    if (!state.badgeCatalogLoaded || state.badgeSettingsSaving || badgeIsProtected(id)) {
+      return;
+    }
+    const settings = copyBadgeSettings(state.badgeSettingsDraft || state.badgeSettings);
+    const badgeId = Number(id);
+    const hiddenIndex = settings.hidden_badges.indexOf(badgeId);
+    if (hiddenIndex !== -1) {
+      settings.hidden_badges.splice(hiddenIndex, 1);
+      if (settings.display_order.indexOf(badgeId) === -1) {
+        settings.display_order.push(badgeId);
+      }
+    } else {
+      settings.display_order = settings.display_order.filter(function (entry) { return Number(entry) !== badgeId; });
+      settings.hidden_badges.push(badgeId);
+    }
+    state.badgeSettingsDraft = settings;
+    state.badgeDirectoryError = '';
+    renderBadgeDirectory();
+  }
+
+  function saveBadgeVisibility() {
+    if (state.running || state.badgeSettingsSaving || !state.badgeCatalogLoaded) {
+      if (state.running) {
+        toast('An operation is already running.', 'error');
+      }
+      return;
+    }
+    const accountRevision = activeAccountRevision;
+    const settings = copyBadgeSettings(state.badgeSettingsDraft);
+    if (badgeSettingsEqual(settings, state.badgeSettings)) {
+      return;
+    }
+    state.badgeSettingsSaving = true;
+    setBadgeDirectoryStatus('Saving badge visibility...', false);
+    renderBadgeDirectory();
+
+    const request = apiCall('PATCH', '/users/@me/badges/settings', settings)
+      .then(function (res) {
+        if (activeAccountRevision !== accountRevision) {
+          return false;
+        }
+        if (!res || res.status < 200 || res.status >= 300) {
+          throw new Error(handleAuthError((res && res.data) || {}) || 'Discord could not save badge visibility.');
+        }
+        state.badgeSettings = copyBadgeSettings(settings);
+        state.badgeSettingsDraft = copyBadgeSettings(settings);
+        state.badgeDirectoryError = '';
+        state.badgeCatalog.forEach(function (badge) {
+          const id = Number(badge.badge_id);
+          if (badge.owned === true) {
+            badge.hidden = !badgeIsProtected(id) && settings.hidden_badges.indexOf(id) !== -1;
+          }
+        });
+        state.badgeCatalog = badgeDirectoryOrder(state.badgeCatalog, settings);
+        renderBadgeDirectory();
+        renderProfileBadges();
+        renderDetailsView();
+        renderDashboardEvolution();
+        setBadgeDirectoryStatus('Badge visibility saved to your Discord profile.', false);
+        toast('Badge visibility saved.', 'success');
+      })
+      .catch(function (err) {
+        if (activeAccountRevision !== accountRevision) {
+          return false;
+        }
+        const message = (err && err.message) || 'Could not save badge visibility.';
+        state.badgeDirectoryError = message;
+        setBadgeDirectoryStatus(message + ' Your changes are still available to retry.', true);
+        toast(message, 'error');
+      })
+      .finally(function () {
+        if (badgeSettingsRequest === request) {
+          badgeSettingsRequest = null;
+          state.badgeSettingsSaving = false;
+          renderBadgeDirectory();
+        }
+      });
+    badgeSettingsRequest = request;
+  }
+
   function initBadges() {
     const backBtn = byId('badgeSelectionBackBtn');
-    const grid = byId('badgeGrid');
+    const grid = byId('badgeMembershipGrid');
+    const directoryGrid = byId('badgeGrid');
     const equipBtn = byId('equipBadgeBtn');
     const removeBtn = byId('removeBadgeBtn');
-    const hideBtn = byId('hideAllBadgesBtn');
+    const refreshBtn = byId('badgeRefreshBtn');
+    const saveBtn = byId('badgeSaveBtn');
+    const resetBtn = byId('badgeResetBtn');
 
     // Badge image paths
     const badgeImages = {
@@ -6109,14 +6367,13 @@ window.manager = {
 
     function renderBadgeCards() {
       const badgeInfo = getEquippedBadgeInfo();
-      const cards = document.querySelectorAll('.badge-card');
+      const cards = grid ? grid.querySelectorAll('.badge-card') : [];
       
       cards.forEach(function (card) {
         const houseId = card.getAttribute('data-house');
-        const isLegacyUsername = card.getAttribute('data-legacy') === 'username';
         const emblem = card.querySelector('.badge-emblem');
         
-        if (emblem && !isLegacyUsername) {
+        if (emblem) {
           const imagePath = badgeImages[houseId];
           if (imagePath) {
             if (emblem.querySelector('img')) {
@@ -6135,12 +6392,7 @@ window.manager = {
         }
         
         // Mark card as equipped if applicable
-        let isEquipped = false;
-        if (isLegacyUsername) {
-          isEquipped = badgeInfo.hasLegacyUsername;
-        } else if (houseId) {
-          isEquipped = badgeInfo.equippedHouseId === Number(houseId);
-        }
+        const isEquipped = houseId && badgeInfo.equippedHouseId === Number(houseId);
         card.classList.toggle('equipped', isEquipped);
       });
     }
@@ -6148,54 +6400,22 @@ window.manager = {
     function updateButtonState() {
       const badgeInfo = getEquippedBadgeInfo();
       const selectedHouse = state.selectedHouse;
-      const selectedLegacy = state.selectedLegacy;
       
-      const isHypesquadSelected = !!selectedHouse;
-      const isLegacySelected = !!selectedLegacy;
-      
-      let isSelectedEquipped = false;
-      if (isLegacySelected) {
-        isSelectedEquipped = badgeInfo.hasLegacyUsername;
-      } else if (isHypesquadSelected) {
-        isSelectedEquipped = badgeInfo.equippedHouseId === Number(selectedHouse);
-      }
-      
-      const hasAnyEquipped = badgeInfo.equippedHouseId !== null || badgeInfo.hasLegacyUsername;
+      const isSelectedEquipped = !!selectedHouse && badgeInfo.equippedHouseId === Number(selectedHouse);
       
       if (equipBtn) {
-        if (isLegacySelected) {
-          equipBtn.style.display = isSelectedEquipped ? 'none' : 'block';
-        } else if (!selectedHouse) {
-          equipBtn.style.display = 'none';
-        } else if (isSelectedEquipped) {
-          equipBtn.style.display = 'none';
-        } else {
-          equipBtn.style.display = 'block';
-        }
+        equipBtn.style.display = !selectedHouse || isSelectedEquipped ? 'none' : 'block';
       }
       
       if (removeBtn) {
-        removeBtn.style.display = isSelectedEquipped ? 'block' : 'none';
-        if (removeBtn.style.display === 'block') {
-          const btnText = removeBtn.querySelector('span');
-          if (btnText) {
-            if (isLegacySelected) {
-              btnText.textContent = 'Remove Legacy Username Badge';
-            } else {
-              btnText.textContent = 'Remove HypeSquad Badge';
-            }
-          }
-        }
-      }
-      
-      if (hideBtn) {
-        hideBtn.style.display = hasAnyEquipped ? 'block' : 'none';
+        removeBtn.style.display = badgeInfo.equippedHouseId === null ? 'none' : 'block';
       }
     }
 
     window.refreshBadgeView = function () {
       renderBadgeCards();
       updateButtonState();
+      renderBadgeDirectory();
     };
 
     if (backBtn) {
@@ -6212,11 +6432,7 @@ window.manager = {
         const card = e.target && e.target.closest ? e.target.closest('.badge-card') : null;
         if (card) {
           const houseId = card.getAttribute('data-house');
-          const legacyType = card.getAttribute('data-legacy');
-          
-          if (legacyType) {
-            pickLegacy(legacyType);
-          } else if (houseId) {
+          if (houseId) {
             pickHouse(houseId);
           }
           updateButtonState();
@@ -6224,39 +6440,38 @@ window.manager = {
       });
     }
 
+    if (directoryGrid) {
+      directoryGrid.addEventListener('click', function (e) {
+        const toggle = e.target && e.target.closest ? e.target.closest('[data-badge-toggle]') : null;
+        if (toggle) {
+          toggleBadgeVisibility(toggle.getAttribute('data-badge-toggle'));
+        }
+      });
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', function () {
+        loadBadgeDirectory();
+      });
+    }
+    if (saveBtn) {
+      saveBtn.addEventListener('click', saveBadgeVisibility);
+    }
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        if (state.badgeSettingsSaving) return;
+        state.badgeSettingsDraft = copyBadgeSettings(state.badgeSettings);
+        state.badgeDirectoryError = '';
+        renderBadgeDirectory();
+      });
+    }
+
     if (equipBtn) {
       equipBtn.addEventListener('click', function () {
-        if (state.selectedLegacy === 'username') {
-          if (getEquippedBadgeInfo().hasLegacyUsername) {
-            toast('Legacy username badge is already equipped.', 'info');
-            return;
-          }
-          setBusy(equipBtn, true);
-          patchLegacyUsernameBadge(true)
-            .then(function (res) {
-              if (res.status >= 200 && res.status < 300) {
-                toast('Legacy username badge equipped.', 'success');
-                state.legacyUsernameOverride = true;
-                state.protobufSettings = { settings: 'QgWyAQIIAA==' };
-                renderBadgeCards();
-                updateButtonState();
-                return loadAccountData().then(function () {
-                  renderBadgeCards();
-                  updateButtonState();
-                });
-              } else {
-                toast((res.data && res.data.message) || 'Failed to equip legacy username badge.', 'error');
-              }
-            })
-            .catch(function () {
-              toast('Cannot reach Discord API.', 'error');
-            })
-            .finally(function () {
-              setBusy(equipBtn, false);
-            });
+        if (state.running) {
+          toast('An operation is already running.', 'error');
           return;
         }
-
         if (!state.selectedHouse) {
           toast('Select a badge card first.', 'error');
           return;
@@ -6293,178 +6508,33 @@ window.manager = {
 
     if (removeBtn) {
       removeBtn.addEventListener('click', function () {
-        const isLegacy = state.selectedLegacy === 'username';
-        
-        setBusy(removeBtn, true);
-        
-        if (isLegacy) {
-          patchLegacyUsernameBadge(false)
-            .then(function (res) {
-              if (res.status >= 200 && res.status < 300) {
-                toast('Legacy username badge hidden.', 'success');
-                state.legacyUsernameOverride = false;
-                if (Array.isArray(state.profileData.badges)) {
-                  state.profileData.badges = state.profileData.badges.filter(function (badge) {
-                    const badgeId = String(badge && (badge.id || badge.key || badge.name) || '').toLowerCase();
-                    return badgeId !== 'legacy_username' && badgeId.indexOf('legacy') === -1 && badgeId.indexOf('username') === -1;
-                  });
-                }
-                if (state.profileData.user) {
-                  delete state.profileData.user.legacy_username;
-                }
-                if (state.user) {
-                  delete state.user.legacy_username;
-                }
-                state.protobufSettings = { settings: 'QgWyAQIIAQ==' };
-                state.selectedLegacy = null;
-                renderBadgeCards();
-                updateButtonState();
-                return loadAccountData().then(function () {
-                  renderBadgeCards();
-                  updateButtonState();
-                });
-              } else {
-                toast((res.data && res.data.message) || 'Failed to hide legacy username badge.', 'error');
-              }
-            })
-            .catch(function () {
-              toast('Cannot reach Discord API.', 'error');
-            })
-            .finally(function () {
-              setBusy(removeBtn, false);
-            });
-        } else {
-          // HypeSquad badges are removed via /hypesquad/online
-          apiCall('DELETE', '/hypesquad/online')
-            .then(function (res) {
-              if (res.status >= 200 && res.status < 300) {
-                toast('HypeSquad badge removed.', 'success');
-                // Refresh account data to get updated profile
-                return loadAccountData().then(function () {
-                  state.selectedHouse = null;
-                  renderBadgeCards();
-                  updateButtonState();
-                });
-              } else {
-                toast(handleAuthError(res.data || {}), 'error');
-              }
-            })
-            .catch(function () {
-              toast('Cannot reach Discord API.', 'error');
-            })
-            .finally(function () {
-              setBusy(removeBtn, false);
-            });
-        }
-      });
-    }
-
-    if (hideBtn) {
-      hideBtn.addEventListener('click', function () {
-        const badgeInfo = getEquippedBadgeInfo();
-        
-        const hasHypesquad = badgeInfo.equippedHouseId !== null;
-        const hasLegacy = badgeInfo.hasLegacyUsername;
-        
-        if (!hasHypesquad && !hasLegacy) {
-          toast('No equipped badges to remove.', 'info');
+        if (state.running) {
+          toast('An operation is already running.', 'error');
           return;
         }
-
-        setBusy(hideBtn, true);
-        
-        let completed = 0;
-        let total = (hasHypesquad ? 1 : 0) + (hasLegacy ? 1 : 0);
-        let successCount = 0;
-        
-        function checkIfDone() {
-          completed += 1;
-          if (completed === total) {
-            // Refresh account data to ensure all state is in sync
-            loadAccountData().then(function () {
-              renderBadgeCards();
-              updateButtonState();
-              setBusy(hideBtn, false);
-              
-              if (successCount === total) {
-                const msg = (hasHypesquad && hasLegacy) ? 'All badges removed.' : 
-                           (hasHypesquad ? 'HypeSquad badge removed.' : 'Legacy username badge hidden.');
-                toast(msg, 'success');
-              } else {
-                toast('Some badges could not be removed.', 'error');
-              }
-            }).catch(function () {
-              renderBadgeCards();
-              updateButtonState();
-              setBusy(hideBtn, false);
-              toast('Badges removed but profile refresh failed.', 'warning');
-            });
-          }
+        if (getEquippedBadgeInfo().equippedHouseId === null) {
+          toast('No HypeSquad badge is equipped.', 'info');
+          return;
         }
-        
-        if (hasHypesquad) {
-          apiCall('DELETE', '/hypesquad/online')
-            .then(function (res) {
-              if (res.status >= 200 && res.status < 300) {
-                const houseFlags = (1 << 6) | (1 << 7) | (1 << 8);
-                if (state.user) {
-                  state.user.flags = (state.user.flags || 0) & ~houseFlags;
-                  state.user.public_flags = (state.user.public_flags || 0) & ~houseFlags;
-                }
-                if (state.profileData && Array.isArray(state.profileData.badges)) {
-                  state.profileData.badges = state.profileData.badges.filter(function (badge) {
-                    const badgeId = String(badge && (badge.id || badge.key || badge.name) || '').toLowerCase();
-                    return badgeId.indexOf('hypesquad') === -1 && badgeId.indexOf('house_') === -1;
-                  });
-                }
-                successCount += 1;
-              }
-              checkIfDone();
-            })
-            .catch(function () {
-              console.error('Failed to remove HypeSquad badge');
-              checkIfDone();
-            });
-        }
-        
-        if (hasLegacy) {
-          patchLegacyUsernameBadge(false)
-            .then(function (res) {
-              if (!res || res.status < 200 || res.status >= 300) {
-                checkIfDone();
-                return;
-              }
-              state.legacyUsernameOverride = false;
-              // Update local state with the hidden payload
-              if (!state.protobufSettings) {
-                state.protobufSettings = {};
-              }
-              state.protobufSettings.settings = 'QgWyAQIIAQ==';
-              // Also update profile to remove the legacy_username badge
-              if (state.profileData && state.profileData.user) {
-                delete state.profileData.user.legacy_username;
-              }
-              if (state.user && state.user.legacy_username) {
-                delete state.user.legacy_username;
-              }
-              if (Array.isArray(state.profileData.badges)) {
-                state.profileData.badges = state.profileData.badges.filter(function (badge) {
-                  const badgeId = String(badge && (badge.id || badge.key || badge.name) || '').toLowerCase();
-                  return badgeId !== 'legacy_username' && badgeId.indexOf('legacy') === -1 && badgeId.indexOf('username') === -1;
-                });
-              }
-              successCount += 1;
-              checkIfDone();
-            })
-            .catch(function () {
-              console.error('Failed to hide legacy username badge');
-              checkIfDone();
-            });
-        }
-        
-        if (total === 0) {
-          setBusy(hideBtn, false);
-        }
+        setBusy(removeBtn, true);
+        apiCall('DELETE', '/hypesquad/online')
+          .then(function (res) {
+            if (res.status >= 200 && res.status < 300) {
+              toast('HypeSquad badge removed.', 'success');
+              return loadAccountData().then(function () {
+                state.selectedHouse = null;
+                renderBadgeCards();
+                updateButtonState();
+              });
+            }
+            toast(handleAuthError(res.data || {}), 'error');
+          })
+          .catch(function () {
+            toast('Cannot reach Discord API.', 'error');
+          })
+          .finally(function () {
+            setBusy(removeBtn, false);
+          });
       });
     }
   }
@@ -6534,6 +6604,11 @@ window.manager = {
     }
     if (closeDmsConfirmBtn) {
       closeDmsConfirmBtn.addEventListener('click', function () {
+        if (state.running) {
+          closeCloseDmsConfirmModal();
+          toast('An operation is already running.', 'error');
+          return;
+        }
         closeCloseDmsConfirmModal();
         showView('operation', { persist: true });
         resetTerminal('Close DMs');
@@ -6557,6 +6632,11 @@ window.manager = {
     if (operationConfirmBtn) {
       operationConfirmBtn.addEventListener('click', function () {
         if (!pendingOperation) return;
+        if (state.running) {
+          closeOperationConfirmModal();
+          toast('An operation is already running.', 'error');
+          return;
+        }
         const operation = pendingOperation;
         closeOperationConfirmModal();
         if (operation.allInOne) {
@@ -6603,6 +6683,11 @@ window.manager = {
     const leaveCancelBtn = byId('leaveServersCancelBtn');
     if (leaveConfirmBtn) {
       leaveConfirmBtn.addEventListener('click', function () {
+        if (state.running) {
+          closeLeaveServersConfirmModal();
+          toast('An operation is already running.', 'error');
+          return;
+        }
         const modal = byId('leaveServersConfirmModal');
         const targetId = modal && modal.dataset.leaveTargetId ? modal.dataset.leaveTargetId : '';
         const targetRowId = modal && modal.dataset.leaveTargetRow ? modal.dataset.leaveTargetRow : '';
@@ -6634,6 +6719,11 @@ window.manager = {
     const removeFriendsCancelBtn = byId('removeFriendsCancelBtn');
     if (removeFriendsConfirmBtn) {
       removeFriendsConfirmBtn.addEventListener('click', function () {
+        if (state.running) {
+          closeRemoveFriendsConfirmModal();
+          toast('An operation is already running.', 'error');
+          return;
+        }
         closeRemoveFriendsConfirmModal();
         runRemoveFriendsOperation();
       });
@@ -7953,23 +8043,27 @@ window.manager = {
       return;
     }
     if (!window.confirm('Block user "' + name + '"?')) return;
-    rowEl.classList.add('removing');
-    apiCall('PUT', '/users/@me/relationships/' + id, { type: 2 })
-      .then(function (res) {
-        if (res.status >= 200 && res.status < 300) {
-          state.rel = (state.rel || []).filter(function (r) { return r.id !== id; });
-          updateMetricsFrom(state);
-          setTimeout(renderInspector, 200);
-          toast('Blocked user: ' + name, 'success');
-        } else {
-          rowEl.classList.remove('removing');
-          toast(handleAuthError(res.data || {}), 'error');
-        }
-      })
-      .catch(function () {
-        rowEl.classList.remove('removing');
-        toast('Cannot reach Discord API.', 'error');
-      });
+    startInspectorOperation('Block Friend', {
+      label: 'Block user: ' + name,
+      action: function () {
+        rowEl.classList.add('removing');
+        return apiCall('PUT', '/users/@me/relationships/' + id, { type: 2 })
+          .then(function (res) {
+            if (res.status >= 200 && res.status < 300) {
+              state.rel = (state.rel || []).filter(function (r) { return r.id !== id; });
+              updateMetricsFrom(state);
+              setTimeout(renderInspector, 200);
+            } else {
+              rowEl.classList.remove('removing');
+            }
+            return res;
+          })
+          .catch(function (err) {
+            rowEl.classList.remove('removing');
+            throw err;
+          });
+      }
+    });
   }
 
   function handleSingleLeaveServer(id, name, rowEl) {
@@ -7987,23 +8081,40 @@ window.manager = {
 
   function handleSingleDeleteServer(id, name, rowEl) {
     if (!window.confirm('Permanently delete owned server "' + name + '"? This cannot be undone.')) return;
-    rowEl.classList.add('removing');
-    apiCall('DELETE', '/guilds/' + id)
-      .then(function (res) {
-        if (res.status >= 200 && res.status < 300) {
-          state.guilds = (state.guilds || []).filter(function (g) { return g.id !== id; });
-          updateMetricsFrom(state);
-          setTimeout(renderInspector, 200);
-          toast('Deleted server: ' + name, 'success');
-        } else {
-          rowEl.classList.remove('removing');
-          toast(handleAuthError(res.data || {}), 'error');
-        }
-      })
-      .catch(function () {
-        rowEl.classList.remove('removing');
-        toast('Cannot reach Discord API.', 'error');
-      });
+    startInspectorOperation('Delete Server', {
+      label: 'Delete server: ' + name,
+      action: function () {
+        rowEl.classList.add('removing');
+        return apiCall('DELETE', '/guilds/' + id)
+          .then(function (res) {
+            if (res.status >= 200 && res.status < 300) {
+              state.guilds = (state.guilds || []).filter(function (g) { return g.id !== id; });
+              updateMetricsFrom(state);
+              setTimeout(renderInspector, 200);
+            } else {
+              rowEl.classList.remove('removing');
+            }
+            return res;
+          })
+          .catch(function (err) {
+            rowEl.classList.remove('removing');
+            throw err;
+          });
+      }
+    });
+  }
+
+  function startInspectorOperation(title, item) {
+    if (state.running) {
+      toast('An operation is already running.', 'error');
+      return;
+    }
+    closeInspector();
+    showView('operation', { persist: true });
+    resetTerminal(title);
+    if (opPill) opPill.textContent = 'preparing';
+    emitLine('Preparing ' + title + '...');
+    prepareOperation(title, function () { return [item]; }, null);
   }
 
   function closeDmChannel(channelId) {
@@ -8021,22 +8132,24 @@ window.manager = {
       toast('This DM is whitelisted. Remove the whitelist first.', 'warning');
       return;
     }
-    rowEl.classList.add('removing');
-    closeDmChannel(channelId)
-      .then(function (res) {
-        if (res.ok) {
-          updateMetricsFrom(state);
-          setTimeout(renderInspector, 200);
-          toast('Closed DM with ' + name, 'success');
-        } else {
+    startInspectorOperation('Close DM', {
+      label: 'Close DM with ' + name,
+      action: function () {
+        rowEl.classList.add('removing');
+        return closeDmChannel(channelId).then(function (res) {
+          if (res.ok) {
+            updateMetricsFrom(state);
+            setTimeout(renderInspector, 200);
+          } else {
+            rowEl.classList.remove('removing');
+          }
+          return res;
+        }).catch(function (err) {
           rowEl.classList.remove('removing');
-          toast(handleAuthError(res.data || {}), 'error');
-        }
-      })
-      .catch(function () {
-        rowEl.classList.remove('removing');
-        toast('Cannot reach Discord API.', 'error');
-      });
+          throw err;
+        });
+      }
+    });
   }
 
   function handleSingleIgnoreDM(channelId, recipientId, name, rowEl) {
@@ -8044,31 +8157,42 @@ window.manager = {
       toast('This DM is whitelisted. Remove the whitelist first.', 'warning');
       return;
     }
-    rowEl.classList.add('removing');
-    const blockPromise = recipientId ? apiCall('PUT', '/users/@me/relationships/' + recipientId, { type: 2 }) : Promise.resolve();
-    blockPromise.then(function () {
-      return closeDmChannel(channelId);
-    }).then(function (res) {
-      if (res.ok) {
-        if (recipientId) {
-          state.rel = (state.rel || []).filter(function (r) { return r.id !== recipientId; });
-        }
-        updateMetricsFrom(state);
-        setTimeout(renderInspector, 200);
-        toast('Ignored & closed DM with ' + name, 'success');
-      } else {
-        rowEl.classList.remove('removing');
-        toast(handleAuthError(res.data || {}), 'error');
+    startInspectorOperation('Ignore & Close DM', {
+      label: 'Ignore & close DM with ' + name,
+      action: function () {
+        rowEl.classList.add('removing');
+        const blockPromise = recipientId ? apiCall('PUT', '/users/@me/relationships/' + recipientId, { type: 2 }) : Promise.resolve();
+        return blockPromise.then(function (res) {
+          if (res && (res.status < 200 || res.status >= 300)) {
+            throw new Error(handleAuthError(res.data || {}) || 'Could not ignore user.');
+          }
+          if (recipientId) {
+            state.rel = (state.rel || []).filter(function (r) { return r.id !== recipientId; });
+          }
+          return closeDmChannel(channelId);
+        }).then(function (res) {
+          if (res.ok) {
+            updateMetricsFrom(state);
+            setTimeout(renderInspector, 200);
+          } else {
+            rowEl.classList.remove('removing');
+          }
+          return res;
+        }).catch(function (err) {
+          rowEl.classList.remove('removing');
+          throw err;
+        });
       }
-    }).catch(function () {
-      rowEl.classList.remove('removing');
-      toast('Cannot reach Discord API.', 'error');
     });
   }
 
   /* Batch Actions */
 
   function executeBatchAction(title, items, processFn, onFinish) {
+    if (state.running) {
+      toast('An operation is already running.', 'error');
+      return;
+    }
     if (!items || !items.length) {
       toast('Select at least one item first.', 'info');
       return;
@@ -8076,26 +8200,23 @@ window.manager = {
     if (!window.confirm('Confirm ' + title + ' for ' + items.length + ' item(s)?')) {
       return;
     }
-    let index = 0;
-    toast('Starting: ' + title + ' (' + items.length + ')...', 'info');
-
-    const step = function () {
-      if (index >= items.length) {
-        toast('Completed: ' + title, 'success');
-        state.inspectSelected = [];
-        state.inspectSelectMode = false;
-        updateMetricsFrom(state);
-        renderInspector();
-        if (onFinish) onFinish();
-        return;
-      }
-      const currentId = items[index];
-      index += 1;
-      processFn(currentId).catch(function () { }).finally(function () {
-        setTimeout(step, currentDelay());
-      });
-    };
-    step();
+    const operationItems = items.map(function (id) {
+      return {
+        label: title + ': ' + id,
+        action: function () {
+          return processFn(id);
+        }
+      };
+    });
+    closeInspector();
+    showView('operation', { persist: true });
+    runOperation(title, operationItems, null, false, function () {
+      state.inspectSelected = [];
+      state.inspectSelectMode = false;
+      updateMetricsFrom(state);
+      renderInspector();
+      if (onFinish) onFinish();
+    });
   }
 
   function handleBatchRemoveFriends() {
@@ -8110,6 +8231,7 @@ window.manager = {
         if (res.status >= 200 && res.status < 300) {
           state.rel = (state.rel || []).filter(function (r) { return r.id !== id; });
         }
+        return res;
       });
     });
   }
@@ -8127,6 +8249,7 @@ window.manager = {
         if (res.status >= 200 && res.status < 300) {
           state.rel = (state.rel || []).filter(function (r) { return r.id !== id; });
         }
+        return res;
       });
     });
   }
@@ -8149,6 +8272,7 @@ window.manager = {
         if (res.status >= 200 && res.status < 300) {
           state.guilds = (state.guilds || []).filter(function (g) { return g.id !== id; });
         }
+        return res;
       });
     });
   }
@@ -8160,6 +8284,7 @@ window.manager = {
         if (res.status >= 200 && res.status < 300) {
           state.guilds = (state.guilds || []).filter(function (g) { return g.id !== id; });
         }
+        return res;
       });
     });
   }
@@ -8178,6 +8303,7 @@ window.manager = {
         if (!res.ok) {
           throw new Error('Close DM failed');
         }
+        return res;
       });
     });
   }
@@ -8195,7 +8321,10 @@ window.manager = {
       const ch = (state.channels || []).filter(function (c) { return c.id === channelId; })[0];
       const recId = (ch && ch.recipients && ch.recipients[0]) ? ch.recipients[0].id : null;
       const blockPromise = recId ? apiCall('PUT', '/users/@me/relationships/' + recId, { type: 2 }) : Promise.resolve();
-      return blockPromise.then(function () {
+      return blockPromise.then(function (res) {
+        if (res && (res.status < 200 || res.status >= 300)) {
+          throw new Error(handleAuthError(res.data || {}) || 'Could not ignore user.');
+        }
         return closeDmChannel(channelId);
       }).then(function (res) {
         if (res.ok) {
@@ -8203,6 +8332,7 @@ window.manager = {
             state.rel = (state.rel || []).filter(function (r) { return r.id !== recId; });
           }
         }
+        return res;
       });
     });
   }
