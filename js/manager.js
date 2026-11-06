@@ -4246,8 +4246,11 @@ window.manager = {
           if (before === oldestId) {
             return null;
           }
+          if (pages >= MAX_PAGES) {
+            throw new Error('History scan reached the ' + MAX_PAGES + '-page safety limit in ' + channelName + '.');
+          }
           before = oldestId;
-          return pages < MAX_PAGES;
+          return true;
         });
     }
     function step() {
@@ -4262,6 +4265,28 @@ window.manager = {
       emitLine('[' + channelName + '] Full history fetched: ' + total + ' message(s), ' + own.length + ' from you.');
       return own;
     });
+  }
+
+  function fetchMatchingMyDMMessages(channelId, channelName, query, channel) {
+    if (state.stopped) {
+      return Promise.reject(new Error('Operation stopped.'));
+    }
+    if (dmWhitelisted(channel)) {
+      return Promise.reject(new Error('DM was added to the whitelist; message search was stopped.'));
+    }
+    return apiCall('GET', '/channels/' + channelId + '/messages?limit=100')
+      .then(function (res) {
+        if (!res || res.status !== 200 || !Array.isArray(res.data)) {
+          throw new Error('Could not read messages in ' + channelName + '.');
+        }
+        const matches = res.data.filter(function (message) {
+          return isOwnMessage(message) &&
+            typeof message.content === 'string' &&
+            message.content.toLowerCase().indexOf(query) !== -1;
+        });
+        emitLine('[' + channelName + '] Checked the latest ' + res.data.length + ' message(s); found ' + matches.length + ' match(es).');
+        return matches;
+      });
   }
 
   function messagePreview(m) {
@@ -4468,8 +4493,7 @@ window.manager = {
   }
 
   function buildTextSearchChannelWalkItems(text) {
-    const items = [];
-    const query = String(text || '').toLowerCase();
+    const groups = [];
     const channels = (state.channels || []).filter(function (c) {
       return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
     });
@@ -4479,33 +4503,80 @@ window.manager = {
         const recipientName = isGroup
           ? (c.name || 'Group Chat (' + ((c.recipients && c.recipients.length) || 0) + ' members)')
           : ((c.recipients && c.recipients[0] && (c.recipients[0].username || c.recipients[0].id)) || c.name || c.id);
-        items.push({
-          label: 'Check DM: ' + recipientName + ' (' + c.id + ')',
+        groups.push({
           channelId: c.id,
           channelName: recipientName,
-          action: function () {
-            if (dmWhitelisted(c)) {
-              return Promise.reject(new Error('DM is whitelisted; message search was stopped.'));
-            }
-            return fetchAllMyDMMessages(c.id, recipientName).then(function (myMessages) {
-              if (state.stopped) {
-                return null;
-              }
-              const matches = (Array.isArray(myMessages) ? myMessages : []).filter(function (m) {
-                return typeof m.content === 'string' && m.content.toLowerCase().indexOf(query) !== -1;
-              });
-              if (matches.length === 0) {
-                emitLine('[' + recipientName + '] No messages found containing "' + text + '".');
-                return null;
-              }
-              emitLine('[' + recipientName + '] ' + matches.length + ' message(s) containing "' + text + '" found.');
-              return deleteOwnMessagesInChannel(c.id, recipientName, matches);
-            });
-          }
+          channel: c
         });
       });
     }
-    return items;
+    return groups;
+  }
+
+  function scanAndDeleteTextMatches(groups, text) {
+    const query = String(text || '').toLowerCase();
+    const matchesByGroup = new Array(groups.length);
+    const concurrency = Math.min(3, groups.length);
+    const progressTotal = groups.length * 2;
+    let progressComplete = 0;
+    let completedScans = 0;
+    let nextIndex = 0;
+
+    function advanceProgress() {
+      progressComplete += 1;
+      updateProgress(progressComplete, progressTotal);
+    }
+
+    function scanWorker() {
+      if (state.stopped) {
+        return Promise.reject(new Error('Operation stopped.'));
+      }
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= groups.length) {
+        return Promise.resolve();
+      }
+      const group = groups[index];
+      if (dmWhitelisted(group.channel)) {
+        return Promise.reject(new Error('DM was added to the whitelist; message search was stopped.'));
+      }
+      return fetchMatchingMyDMMessages(group.channelId, group.channelName, query, group.channel)
+        .then(function (matches) {
+          matchesByGroup[index] = matches;
+          completedScans += 1;
+          advanceProgress();
+          emitLine('Search progress: ' + completedScans + ' of ' + groups.length + ' conversation(s) scanned.');
+          return scanWorker();
+        });
+    }
+
+    updateProgress(0, progressTotal);
+    const workers = [];
+    for (let i = 0; i < concurrency; i += 1) {
+      workers.push(scanWorker());
+    }
+    return Promise.all(workers).then(function () {
+      let deletion = Promise.resolve();
+      groups.forEach(function (group, index) {
+        deletion = deletion.then(function () {
+          if (state.stopped) {
+            throw new Error('Operation stopped.');
+          }
+          if (dmWhitelisted(group.channel)) {
+            throw new Error('DM was added to the whitelist; remaining messages were not deleted.');
+          }
+          const matches = matchesByGroup[index] || [];
+          if (matches.length === 0) {
+            emitLine('[' + group.channelName + '] No messages found containing "' + text + '".');
+            advanceProgress();
+            return;
+          }
+          emitLine('[' + group.channelName + '] ' + matches.length + ' message(s) containing "' + text + '" found.');
+          return deleteOwnMessagesInChannel(group.channelId, group.channelName, matches).then(advanceProgress);
+        });
+      });
+      return deletion;
+    });
   }
 
   function buildCleanDMsItems() {
@@ -4852,10 +4923,7 @@ window.manager = {
     }
   }
 
-  // Runs the deterministic DM-by-DM channel walk for a text query. Unlike the
-  // Discord search-index flow this never queries the search API, so it is immune
-  // to index lag and tokenization gaps. Every non-whitelisted DM conversation is
-  // fetched in full and filtered locally by content match.
+  // Scans full DM histories locally to avoid missing messages due to search-index lag.
   function runTextWalkOperation(text) {
     const opPill = byId('opStatPill');
     showView('operation', { persist: true });
@@ -4888,25 +4956,29 @@ window.manager = {
           return;
         }
         if (opPill) opPill.textContent = 'preparing';
-        emitLine('Scan pass queued for ' + groups.length + ' conversation(s) - each is fetched in full and filtered locally.');
+        emitLine('Scan pass queued for ' + groups.length + ' conversation(s). The latest 100 messages in each DM will be checked; up to 3 DMs at once.');
         openOperationConfirmModal(
           'Delete Messages Containing "' + text + '"',
           function () {
-            return groups.map(function (group) {
-              const c = group.channel;
-              const cId = group.channelId || (c && c.id);
-              const cName = group.channelName || (c && c.name) || cId;
-              return {
-                label: 'Check DM: ' + cName + ' (' + cId + ')',
-                channelId: cId,
-                channelName: cName,
-                action: group.action
-              };
-            });
+            return [{
+              label: 'Search and delete matching messages in ' + groups.length + ' conversation(s)',
+              action: function () {
+                return scanAndDeleteTextMatches(groups, text);
+              }
+            }];
           },
           btn,
-          'Each conversation is fetched in full and checked locally, then every message you sent containing "' + text + '" is deleted. No search index is used. This can be slow on accounts with long conversations.',
-          { preload: false }
+          'The latest 100 messages in each non-whitelisted DM are checked locally for your messages containing "' + text + '". Up to 3 conversations are scanned at once; matching messages are deleted sequentially with the selected rate-limit-safe delay. Older messages are not checked.',
+          {
+            preload: false,
+            overrides: function (countEl, skippedEl, estimateEl) {
+              if (countEl) countEl.textContent = String(groups.length);
+              if (skippedEl) skippedEl.textContent = '• whitelisted conversations are skipped';
+              if (estimateEl) {
+                estimateEl.textContent = 'Checks the latest 100 messages in each conversation; total time depends on the number of matches.';
+              }
+            }
+          }
         );
       })
       .catch(function (err) {
@@ -6182,8 +6254,20 @@ window.manager = {
     const targetError = byId('deleteDmTargetError');
     const textInput = byId('deleteDmTextInput');
     const textError = byId('deleteDmTextError');
+    const historyOption = byId('deleteDmHistoryOption');
     const purgeBtn = byId('deleteDmPurgeBtn');
     const closeAllBtn = byId('deleteDmCloseAllBtn');
+
+    function updateDeleteHistoryOption() {
+      if (historyOption) {
+        historyOption.hidden = !!(textInput && textInput.value.trim());
+      }
+    }
+
+    if (textInput) {
+      textInput.addEventListener('input', updateDeleteHistoryOption);
+      updateDeleteHistoryOption();
+    }
 
     function clearDmFilterErrors() {
       if (targetError) targetError.textContent = '';
