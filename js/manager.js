@@ -2195,7 +2195,7 @@ window.manager = {
   // for about a minute first, so reaching here means the hold genuinely did not
   // lift. Saving again is safe and usually succeeds, so say that rather than
   // sending them looking for a button that does not exist.
-  function describeProfileWriteError(res) {
+  function describeProfileWriteError(res, status) {
     if (res && res.code === UNKNOWN_SESSION_CODE) {
       return 'Discord held this change for about a minute and still has not accepted it. Press Save once more - it usually goes through.';
     }
@@ -2208,7 +2208,19 @@ window.manager = {
     if (res && res.code === 4006) {
       return 'That image is too large or not a supported format.';
     }
-    return (res && res.message) || handleAuthError(res || {});
+    if (status === 401) {
+      return 'Discord rejected the active account token (HTTP 401). Log in to this account again, then retry.';
+    }
+    if (status === 403) {
+      return 'Discord denied this profile change (HTTP 403).';
+    }
+    if (res && res.message) {
+      return res.message;
+    }
+    if (status) {
+      return 'Discord rejected the update (HTTP ' + status + ').';
+    }
+    return 'Discord did not return an error response. Check your connection and try again.';
   }
 
   function normalizeToken(raw) {
@@ -4321,25 +4333,68 @@ window.manager = {
     if (state.stopped) {
       return Promise.reject(new Error('Operation stopped.'));
     }
+    if (!state.user || !state.user.id) {
+      return Promise.reject(new Error('Could not verify the active account before searching messages.'));
+    }
     if (dmWhitelisted(channel)) {
       return Promise.reject(new Error('DM was added to the whitelist; message search was stopped.'));
     }
-    return apiCall('GET', '/channels/' + channelId + '/messages?limit=50')
-      .then(function (res) {
-        if (state.stopped) {
-          throw new Error('Operation stopped.');
-        }
-        if (!res || res.status !== 200 || !Array.isArray(res.data)) {
-          throw new Error('Could not read the latest 50 messages in ' + channelName + '.');
-        }
-        const matches = res.data.filter(function (message) {
-          return isOwnMessage(message) &&
-            typeof message.content === 'string' &&
-            message.content.toLowerCase().indexOf(query) !== -1;
+    let before = null;
+    let pages = 0;
+    const ownMessages = [];
+    const pageSize = 100;
+    const maxPages = 5000;
+
+    function fetchPage() {
+      if (state.stopped) {
+        return Promise.reject(new Error('Operation stopped.'));
+      }
+      if (dmWhitelisted(channel)) {
+        return Promise.reject(new Error('DM was added to the whitelist; message search was stopped.'));
+      }
+      const suffix = before ? '&before=' + encodeURIComponent(before) : '';
+      return apiCall('GET', '/channels/' + encodeURIComponent(channelId) + '/messages?limit=' + pageSize + suffix)
+        .then(function (response) {
+          if (state.stopped) {
+            throw new Error('Operation stopped.');
+          }
+          if (!response || response.status !== 200 || !Array.isArray(response.data)) {
+            throw new Error('Could not read messages in ' + channelName + '.');
+          }
+          const page = response.data;
+          pages += 1;
+          page.some(function (message) {
+            if (isOwnMessage(message)) {
+              ownMessages.push(message);
+            }
+            return ownMessages.length >= 50;
+          });
+          if (ownMessages.length >= 50 || page.length < pageSize) {
+            return;
+          }
+          const oldestId = page.length ? String(page[page.length - 1].id || '') : '';
+          if (!oldestId || oldestId === before) {
+            throw new Error('Could not continue searching message history in ' + channelName + '.');
+          }
+          if (pages >= maxPages) {
+            throw new Error('Message search reached the ' + maxPages + '-page safety limit in ' + channelName + '.');
+          }
+          before = oldestId;
+          return delay(currentDelay()).then(fetchPage);
         });
-        emitLine('[' + channelName + '] Checked the latest ' + res.data.length + ' message(s) (up to 50); found ' + matches.length + ' match(es).');
-        return matches;
+    }
+
+    return fetchPage().then(function () {
+      const normalizedQuery = String(query || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const matches = ownMessages.filter(function (message) {
+        const content = typeof message.content === 'string'
+          ? message.content.replace(/\s+/g, ' ').trim().toLowerCase()
+          : '';
+        return normalizedQuery && content.indexOf(normalizedQuery) !== -1;
       });
+      emitLine('[' + channelName + '] Checked ' + ownMessages.length + ' of your latest messages (up to 50); found ' + matches.length + ' match(es).');
+      return matches;
+    });
   }
 
   function messagePreview(m) {
@@ -5014,14 +5069,14 @@ window.manager = {
     }
   }
 
-  // Searches the latest 50 messages in each DM locally to avoid search-index lag.
+  // Searches the latest 50 messages sent by this account in each DM.
   function runTextWalkOperation(text) {
     const opPill = byId('opStatPill');
     showView('operation', { persist: true });
     resetTerminal('Delete Messages Containing "' + text + '"');
     if (opPill) opPill.textContent = 'preparing';
     const btn = byId('deleteUserDMsBtn');
-    emitLine('Preparing a search of the latest 50 messages in each DM for "' + text + '"...');
+    emitLine('Preparing a search of your latest 50 messages in each DM for "' + text + '"...');
     openOperationConfirmModal(
       'Delete Messages Containing "' + text + '"',
       function () {
@@ -5037,14 +5092,14 @@ window.manager = {
         }];
       },
       btn,
-      'The latest 50 messages in each non-whitelisted open DM are checked one conversation at a time. Only messages sent by this account that contain the search text are deleted, then the next conversation is checked. Discord rate limits are respected and the operation can be stopped.',
+      'Up to 50 of your latest messages in each non-whitelisted open DM are checked one conversation at a time. Text can match part of a message. Matching messages are deleted before the next conversation is checked. Discord rate limits are respected and the operation can be stopped.',
       {
         overrides: function (countEl, skippedEl, estimateEl) {
           const groups = buildTextSearchChannelWalkItems(text);
           if (countEl) countEl.textContent = String(groups.length);
           if (skippedEl) skippedEl.textContent = '• whitelisted conversations are skipped';
           if (estimateEl) {
-            estimateEl.textContent = 'Checks up to 50 messages per conversation; duration depends on the number of matches.';
+            estimateEl.textContent = 'Checks up to 50 messages sent by this account per conversation; duration depends on matches and history paging.';
           }
         }
       }
@@ -7644,8 +7699,11 @@ window.manager = {
         const profileChanged = !!profileAvatarData || nameChanged || bioChanged || styleChanged;
         let customStatus = null;
         if (profileChanged) {
-          writes.push(function () {
-            return apiCall('PATCH', '/users/@me', body, deadline);
+          writes.push({
+            label: 'Profile details',
+            run: function () {
+              return apiCall('PATCH', '/users/@me', body, deadline);
+            }
           });
         }
         if (statusChanged) {
@@ -7658,10 +7716,13 @@ window.manager = {
                 expires_at: existing.expires_at || null
               }
             : null;
-          writes.push(function () {
-            return apiCall('PATCH', '/users/@me/settings', {
-              custom_status: customStatus
-            }, deadline);
+          writes.push({
+            label: 'Custom status',
+            run: function () {
+              return apiCall('PATCH', '/users/@me/settings', {
+                custom_status: customStatus
+              }, deadline);
+            }
           });
         }
         const failures = [];
@@ -7670,14 +7731,14 @@ window.manager = {
         let statusSaved = false;
         let refreshFailed = false;
         let writeChain = Promise.resolve();
-        writes.forEach(function (write, index) {
+        writes.forEach(function (write) {
           writeChain = writeChain.then(function () {
-            return write().then(function (res) {
+            return write.run().then(function (res) {
               if (!res || res.status < 200 || res.status >= 300) {
-                throw new Error(describeProfileWriteError((res && res.data) || {}) || 'Profile update failed.');
+                throw new Error(describeProfileWriteError((res && res.data) || {}, res && res.status));
               }
               successfulWrites += 1;
-              if (index === 0 && profileChanged) {
+              if (write.label === 'Profile details') {
                 profileSaved = true;
                 const responseUser = res.data && typeof res.data === 'object' ? res.data : {};
                 state.user = Object.assign({}, state.user || {}, responseUser);
@@ -7695,7 +7756,7 @@ window.manager = {
                 });
               }
             }).catch(function (err) {
-              failures.push((err && err.message) || 'Profile update failed.');
+              failures.push(write.label + ' update failed: ' + ((err && err.message) || 'Unexpected error.'));
             });
           });
         });
