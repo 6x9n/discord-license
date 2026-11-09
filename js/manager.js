@@ -4494,6 +4494,61 @@ window.manager = {
     }];
   }
 
+  function buildDeleteSpecificMessageItems(targetId, messageId) {
+    const cleanTarget = String(targetId || '').trim();
+    const cleanMessageId = String(messageId || '').trim();
+    const needle = cleanTarget.toLowerCase();
+    const channel = (state.channels || []).find(function (c) {
+      if (c.type !== 1 && c.type !== 3) {
+        return false;
+      }
+      return String(c.id) === cleanTarget || (c.recipients || []).some(function (r) {
+        return String(r.id) === cleanTarget ||
+          String(r.username || '').toLowerCase() === needle ||
+          String(r.global_name || '').toLowerCase() === needle;
+      });
+    });
+    if (!channel) {
+      return [{
+        label: 'Delete message ' + cleanMessageId + ' in ' + cleanTarget,
+        skip: 'No open DM conversation found'
+      }];
+    }
+
+    const channelName = channel.type === 3
+      ? (channel.name || 'Group Chat')
+      : ((channel.recipients && channel.recipients[0] &&
+        (channel.recipients[0].username || channel.recipients[0].id)) || channel.id);
+    const label = 'Delete message ' + cleanMessageId + ' in ' + channelName + ' (' + channel.id + ')';
+    if (dmWhitelisted(channel)) {
+      return [{ label: label, skip: 'Whitelisted' }];
+    }
+
+    return [{
+      label: label,
+      action: function () {
+        if (dmTargetWhitelisted(channel.id)) {
+          return Promise.reject(new Error('This DM is whitelisted; remove it from the whitelist before deleting messages.'));
+        }
+        return apiCall('GET', '/channels/' + encodeURIComponent(channel.id) + '/messages/' + encodeURIComponent(cleanMessageId))
+          .then(function (res) {
+            if (!res || res.status !== 200 || !res.data || String(res.data.id) !== cleanMessageId) {
+              const reason = res && res.data && res.data.message;
+              if (res && res.status === 404) {
+                throw new Error('Message ' + cleanMessageId + ' was not found in ' + channelName + '.');
+              }
+              throw new Error('Could not read message ' + cleanMessageId + ' in ' + channelName + '.' +
+                (reason ? ' ' + reason : ''));
+            }
+            if (!isOwnMessage(res.data)) {
+              throw new Error('This message was not sent by the active account and cannot be deleted here.');
+            }
+            return deleteOwnMessagesInChannel(channel.id, channelName, [res.data]);
+          });
+      }
+    }];
+  }
+
   function isOwnMessage(m) {
     return !!(m && m.author && state.user && state.user.id &&
       String(m.author.id) === String(state.user.id));
@@ -6259,6 +6314,8 @@ window.manager = {
 
     const targetInput = byId('deleteDmTargetInput');
     const targetError = byId('deleteDmTargetError');
+    const messageIdInput = byId('deleteDmMessageIdInput');
+    const messageIdError = byId('deleteDmMessageIdError');
     const textInput = byId('deleteDmTextInput');
     const textError = byId('deleteDmTextError');
     const historyOption = byId('deleteDmHistoryOption');
@@ -6267,7 +6324,8 @@ window.manager = {
 
     function updateDeleteHistoryOption() {
       if (historyOption) {
-        historyOption.hidden = !!(textInput && textInput.value.trim());
+        historyOption.hidden = !!((textInput && textInput.value.trim()) ||
+          (messageIdInput && messageIdInput.value.trim()));
       }
     }
 
@@ -6275,9 +6333,14 @@ window.manager = {
       textInput.addEventListener('input', updateDeleteHistoryOption);
       updateDeleteHistoryOption();
     }
+    if (messageIdInput) {
+      messageIdInput.addEventListener('input', updateDeleteHistoryOption);
+      updateDeleteHistoryOption();
+    }
 
     function clearDmFilterErrors() {
       if (targetError) targetError.textContent = '';
+      if (messageIdError) messageIdError.textContent = '';
       if (textError) textError.textContent = '';
     }
 
@@ -6288,10 +6351,21 @@ window.manager = {
           return;
         }
         const target = targetInput ? targetInput.value.trim() : '';
+        const messageId = messageIdInput ? messageIdInput.value.trim() : '';
         const text = textInput ? textInput.value.trim() : '';
-        if (target && text) {
-          if (textError) textError.textContent = 'Use either a user or message text, not both.';
+        if ((target && text) || (messageId && text)) {
+          if (textError) textError.textContent = 'Use either a conversation and message ID, a user, or message text.';
           if (textInput) textInput.focus();
+          return;
+        }
+        if (messageId && !target) {
+          if (targetError) targetError.textContent = 'Enter the user or conversation ID for this message.';
+          if (targetInput) targetInput.focus();
+          return;
+        }
+        if (messageId && !/^\d+$/.test(messageId)) {
+          if (messageIdError) messageIdError.textContent = 'Enter a numeric Discord message ID.';
+          if (messageIdInput) messageIdInput.focus();
           return;
         }
         clearDmFilterErrors();
@@ -6299,6 +6373,15 @@ window.manager = {
         const btn = byId('deleteUserDMsBtn');
         closeDeleteDmModal();
         showView('operation', { persist: true });
+        if (messageId) {
+          resetTerminal('Delete Specific Message');
+          if (opPill) opPill.textContent = 'preparing';
+          emitLine('Preparing to verify and delete the specified message...');
+          openOperationConfirmModal('Delete Specific Message', function () {
+            return buildDeleteSpecificMessageItems(target, messageId);
+          }, btn, 'Only the specified message is checked. It will be deleted only if it was sent by the active account and belongs to a non-whitelisted open DM.');
+          return;
+        }
         if (target) {
           resetTerminal('Delete All Sent Messages');
           if (opPill) opPill.textContent = 'preparing';

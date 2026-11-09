@@ -731,9 +731,14 @@
           </div>
           <p class="subtitle" style="margin-bottom: 20px; font-size: 0.88em; color: var(--muted);">Everything message-related lives here now, so the main menu stays short.</p>
           <div class="delete-dm-target-field">
-            <label for="deleteDmTargetInput" class="field-label">User ID or username</label>
-            <input id="deleteDmTargetInput" class="text-input" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. 123456789012345678 or username">
+            <label for="deleteDmTargetInput" class="field-label">User ID, username, or conversation ID</label>
+            <input id="deleteDmTargetInput" class="text-input" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. user ID, conversation ID, or username">
             <div id="deleteDmTargetError" class="delete-dm-target-error" role="alert"></div>
+          </div>
+          <div class="delete-dm-target-field">
+            <label for="deleteDmMessageIdInput" class="field-label">Specific message ID (requires a conversation above)</label>
+            <input id="deleteDmMessageIdInput" class="text-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="e.g. 123456789012345678">
+            <div id="deleteDmMessageIdError" class="delete-dm-target-error" role="alert"></div>
           </div>
           <div class="delete-dm-target-field">
             <label for="deleteDmTextInput" class="field-label">Message text to search for</label>
