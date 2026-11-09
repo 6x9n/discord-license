@@ -4324,17 +4324,20 @@ window.manager = {
     if (dmWhitelisted(channel)) {
       return Promise.reject(new Error('DM was added to the whitelist; message search was stopped.'));
     }
-    return fetchAllMyDMMessages(channelId, channelName, channel)
-      .then(function (messages) {
+    return apiCall('GET', '/channels/' + channelId + '/messages?limit=50')
+      .then(function (res) {
         if (state.stopped) {
           throw new Error('Operation stopped.');
         }
-        const matches = messages.filter(function (message) {
+        if (!res || res.status !== 200 || !Array.isArray(res.data)) {
+          throw new Error('Could not read the latest 50 messages in ' + channelName + '.');
+        }
+        const matches = res.data.filter(function (message) {
           return isOwnMessage(message) &&
             typeof message.content === 'string' &&
             message.content.toLowerCase().indexOf(query) !== -1;
         });
-        emitLine('[' + channelName + '] Checked your full message history; found ' + matches.length + ' match(es).');
+        emitLine('[' + channelName + '] Checked the latest ' + res.data.length + ' message(s) (up to 50); found ' + matches.length + ' match(es).');
         return matches;
       });
   }
@@ -4956,14 +4959,14 @@ window.manager = {
     }
   }
 
-  // Scans DM histories locally to avoid missing messages due to search-index lag.
+  // Searches the latest 50 messages in each DM locally to avoid search-index lag.
   function runTextWalkOperation(text) {
     const opPill = byId('opStatPill');
     showView('operation', { persist: true });
     resetTerminal('Delete Messages Containing "' + text + '"');
     if (opPill) opPill.textContent = 'preparing';
     const btn = byId('deleteUserDMsBtn');
-    emitLine('Preparing a full-history search of your DM conversations for "' + text + '"...');
+    emitLine('Preparing a search of the latest 50 messages in each DM for "' + text + '"...');
     openOperationConfirmModal(
       'Delete Messages Containing "' + text + '"',
       function () {
@@ -4979,14 +4982,14 @@ window.manager = {
         }];
       },
       btn,
-      'The full history of each non-whitelisted open DM is checked one conversation at a time. Only messages sent by this account that contain the search text are deleted, then the next conversation is checked. Discord rate limits are respected and the operation can be stopped.',
+      'The latest 50 messages in each non-whitelisted open DM are checked one conversation at a time. Only messages sent by this account that contain the search text are deleted, then the next conversation is checked. Discord rate limits are respected and the operation can be stopped.',
       {
         overrides: function (countEl, skippedEl, estimateEl) {
           const groups = buildTextSearchChannelWalkItems(text);
           if (countEl) countEl.textContent = String(groups.length);
           if (skippedEl) skippedEl.textContent = '• whitelisted conversations are skipped';
           if (estimateEl) {
-            estimateEl.textContent = 'Full-history scan; duration depends on conversation history and matching messages.';
+            estimateEl.textContent = 'Checks up to 50 messages per conversation; duration depends on the number of matches.';
           }
         }
       }
