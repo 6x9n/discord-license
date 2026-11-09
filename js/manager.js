@@ -3102,9 +3102,47 @@ window.manager = {
         : 'No active cycle';
     }
 
+    const startDateLabel = byId('evoStartDateLabel');
+    const durationLabel = byId('evoDurationLabel');
+    const startDateEl = byId('evoStartDate');
+    const durationEl = byId('evoDuration');
+    const membershipType = activeType === 'boost' ? 'Boost' : 'Subscription';
+    if (startDateLabel) {
+      startDateLabel.textContent = membershipType + ' Start Date';
+    }
+    if (durationLabel) {
+      durationLabel.textContent = 'Total ' + membershipType + ' Duration';
+    }
+    if (startDateEl) {
+      startDateEl.textContent = evoData.startDate
+        ? evoData.startDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+        : 'Not available';
+    }
+    if (durationEl) {
+      if (evoData.hasActive && evoData.startDate) {
+        const elapsedMonths = Math.floor(evoData.totalDays / 30.4375);
+        const elapsedDays = Math.max(0, evoData.totalDays - Math.floor(elapsedMonths * 30.4375));
+        const durationParts = [];
+        if (elapsedMonths) {
+          durationParts.push(elapsedMonths + (elapsedMonths === 1 ? ' month' : ' months'));
+        }
+        if (elapsedDays || !durationParts.length) {
+          durationParts.push(elapsedDays + (elapsedDays === 1 ? ' day' : ' days'));
+        }
+        durationEl.textContent = durationParts.join(' and ');
+      } else {
+        durationEl.textContent = 'Not available';
+      }
+    }
+
     const fillEl = byId('evoProgressFill');
     if (fillEl) {
-      fillEl.style.width = evoData.hasActive ? ((evoData.progressPct || 0) + '%') : '0%';
+      const progress = evoData.hasActive ? (evoData.progressPct || 0) : 0;
+      fillEl.style.width = progress + '%';
+      const progressBar = fillEl.parentElement;
+      if (progressBar) {
+        progressBar.setAttribute('aria-valuenow', String(progress));
+      }
     }
 
     const valueEl = byId('evoProgressText');

@@ -6088,6 +6088,295 @@ html[data-theme="light"] .btn-ops:hover {
   }
 }
 
+.evolution-redesign {
+  width: min(980px, 100%);
+}
+
+.evolution-redesign .evolution-panel {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.78fr) minmax(0, 1.65fr);
+  align-items: stretch;
+  gap: 18px;
+  width: 100%;
+  padding: 18px;
+  border: 0;
+  border-radius: 24px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.evolution-profile-card,
+.evolution-stats {
+  min-width: 0;
+  border-radius: 22px;
+  background: #101528;
+}
+
+.evolution-profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+  padding: 26px 18px;
+  text-align: center;
+}
+
+.evolution-redesign .evo-user-avatar {
+  width: 120px;
+  height: 120px;
+  border: 3px solid #df45f5;
+  box-shadow: 0 0 0 5px rgba(223, 69, 245, 0.08), 0 0 24px rgba(208, 48, 239, 0.12);
+}
+
+.evolution-redesign .evo-user-name {
+  margin-top: 20px;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.evolution-redesign .evo-user-status {
+  margin-top: 6px;
+  color: #a4abc0;
+  font-size: 0.82rem;
+}
+
+.evolution-redesign .evolution-badge-stage {
+  gap: 10px;
+  margin: 0;
+}
+
+.evolution-redesign .evo-badge-ring {
+  width: 98px;
+  height: 98px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.evolution-redesign .evo-badge-ring::before,
+.evolution-redesign .evo-badge-ring::after {
+  display: none;
+}
+
+.evolution-redesign .evo-badge-inner {
+  width: 90px;
+  height: 90px;
+  border: 0;
+  background: transparent;
+  box-shadow: 0 0 24px rgba(210, 65, 243, 0.2);
+}
+
+.evolution-redesign .evo-badge-inner img {
+  width: 82px;
+  height: 82px;
+}
+
+.evolution-redesign .evo-current-label {
+  color: #e246f4;
+  font-size: 1.55rem;
+}
+
+.evolution-redesign .evolution-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  background: #101528;
+}
+
+.evolution-stats-title {
+  margin: 0;
+  color: #f7f8ff;
+  font-size: clamp(1.45rem, 2.5vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.evo-membership-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.evo-stat-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-height: 84px;
+  padding: 14px 18px;
+  border-radius: 17px;
+  background: #1a223c;
+}
+
+.evo-stat-label {
+  color: #a4abc0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.evo-stat-value {
+  color: #f6f7ff;
+  font-size: clamp(1rem, 1.7vw, 1.4rem);
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.evo-progress-card {
+  display: flex;
+  min-height: 202px;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: #1a223c;
+}
+
+.evo-progress-title {
+  margin: 0;
+  color: #f6f7ff;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.evolution-redesign .evo-timeline-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 0;
+}
+
+.evolution-redesign .evo-timeline-node {
+  gap: 3px;
+  min-width: 0;
+}
+
+.evolution-redesign .evo-timeline-node .evo-node-icon {
+  width: 30px;
+  height: 30px;
+  border-color: rgba(222, 90, 245, 0.26);
+}
+
+.evolution-redesign .evo-timeline-node .evo-node-icon img {
+  width: 19px;
+  height: 19px;
+}
+
+.evolution-redesign .evo-timeline-node .evo-node-title {
+  font-size: 0.58rem;
+}
+
+.evolution-redesign .evo-progress-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: auto;
+}
+
+.evolution-redesign .evo-finish-text {
+  grid-column: 1 / -1;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.evolution-redesign .evo-progress-pill {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.evolution-redesign .evo-progress-value {
+  color: #e246f4;
+  font-size: 1.25rem;
+}
+
+.evolution-redesign .evo-progress-track {
+  grid-column: 1;
+  grid-row: 2;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.evolution-redesign .evo-progress-fill {
+  background: linear-gradient(90deg, #8738ff, #ec16cc);
+  box-shadow: 0 0 18px rgba(219, 35, 229, 0.38);
+}
+
+.evolution-redesign .evolution-panel.is-inactive .evo-progress-fill {
+  background: linear-gradient(90deg, rgba(255, 110, 110, 0.9), rgba(255, 72, 72, 0.86));
+}
+
+@media (max-width: 767px) {
+  .evolution-redesign .evolution-panel {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px;
+  }
+
+  .evolution-profile-card {
+    gap: 18px;
+    padding: 22px 14px;
+  }
+
+  .evolution-redesign .evo-user-avatar {
+    width: 92px;
+    height: 92px;
+  }
+
+  .evolution-redesign .evo-user-name {
+    margin-top: 12px;
+    font-size: 1.25rem;
+  }
+
+  .evolution-redesign .evo-badge-ring {
+    width: 78px;
+    height: 78px;
+  }
+
+  .evolution-redesign .evo-badge-inner {
+    width: 72px;
+    height: 72px;
+  }
+
+  .evolution-redesign .evo-badge-inner img {
+    width: 66px;
+    height: 66px;
+  }
+
+  .evolution-redesign .evo-current-label {
+    font-size: 1.25rem;
+  }
+
+  .evolution-redesign .evolution-stats {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .evolution-redesign .evo-progress-card {
+    min-height: 0;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .evo-membership-stats {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .evolution-redesign .evo-timeline-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 4px;
+  }
+}
+
 /* ============================================================
    License Gate
    ============================================================ */

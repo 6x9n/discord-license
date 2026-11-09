@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=10">
+  <link rel="stylesheet" href="css/styles.css?v=11">
 </head>
 <body>
   <div id="licenseGate" class="lic-gate" role="dialog" aria-modal="true" aria-labelledby="licTitle" hidden>
@@ -446,32 +446,51 @@
               </button>
             </div>
 
-            <div class="evolution-shell">
+            <div class="evolution-shell evolution-redesign">
               <div class="evolution-panel">
-                <div class="evolution-header-center">
-                  <div id="evoUserAvatar" class="evo-user-avatar" aria-label="Current user avatar"></div>
-                  <div id="evoUserName" class="evo-user-name">Discord User</div>
-                  <div id="evoUserStatus" class="evo-user-status">Nitro active</div>
-                </div>
+                <section class="evolution-profile-card" aria-label="Account profile">
+                  <div class="evolution-header-center">
+                    <div id="evoUserAvatar" class="evo-user-avatar" aria-label="Current user avatar"></div>
+                    <div id="evoUserName" class="evo-user-name">Discord User</div>
+                    <div id="evoUserStatus" class="evo-user-status">Nitro active</div>
+                  </div>
 
-                <div class="evolution-badge-stage">
-                  <div class="evo-badge-ring">
-                    <div class="evo-badge-inner">
-                      <img id="evoCurrentBadge" src="assets/images/badges/nitro_badges/bronze.png" alt="Current badge" />
+                  <div class="evolution-badge-stage">
+                    <div class="evo-badge-ring">
+                      <div class="evo-badge-inner">
+                        <img id="evoCurrentBadge" src="assets/images/badges/nitro_badges/bronze.png" alt="Current badge" />
+                      </div>
+                    </div>
+                    <div id="evoProgressLabel" class="evo-current-label">Bronze</div>
+                  </div>
+                </section>
+
+                <section class="evolution-stats" aria-labelledby="evoStatsTitle">
+                  <h2 id="evoStatsTitle" class="evolution-stats-title">Badge Evolution Stats</h2>
+
+                  <div class="evo-membership-stats">
+                    <div class="evo-stat-card">
+                      <span id="evoStartDateLabel" class="evo-stat-label">Subscription Start Date</span>
+                      <strong id="evoStartDate" class="evo-stat-value">Not available</strong>
+                    </div>
+                    <div class="evo-stat-card">
+                      <span id="evoDurationLabel" class="evo-stat-label">Total Subscription Duration</span>
+                      <strong id="evoDuration" class="evo-stat-value">Not available</strong>
                     </div>
                   </div>
-                  <div id="evoProgressLabel" class="evo-current-label">Bronze</div>
-                </div>
 
-                <div id="evoTimelineNodes" class="evo-timeline-grid" aria-live="polite"></div>
-
-                <div class="evo-progress-wrap">
-                  <div class="evo-progress-pill"><span id="evoProgressText" class="evo-progress-value">0%</span></div>
-                  <div class="progress-track evo-progress-track">
-                    <div id="evoProgressFill" class="progress-bar-fill evo-progress-fill" style="width: 0%;"></div>
+                  <div class="evo-progress-card">
+                    <h3 class="evo-progress-title">Progress to Next Badge</h3>
+                    <div id="evoTimelineNodes" class="evo-timeline-grid" aria-live="polite"></div>
+                    <div class="evo-progress-wrap">
+                      <div id="evoProgressMeta" class="evo-finish-text">Next badge: Bronze • Active status</div>
+                      <div class="evo-progress-pill"><span id="evoProgressText" class="evo-progress-value">0%</span></div>
+                      <div class="progress-track evo-progress-track" role="progressbar" aria-label="Progress to next badge" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div id="evoProgressFill" class="progress-bar-fill evo-progress-fill" style="width: 0%;"></div>
+                      </div>
+                    </div>
                   </div>
-                  <div id="evoProgressMeta" class="evo-finish-text">Next badge: Bronze • Active status</div>
-                </div>
+                </section>
               </div>
             </div>
           </div>
