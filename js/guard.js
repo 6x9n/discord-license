@@ -111,7 +111,7 @@
     document.body.appendChild(modal);
   }
 
-  function interval() {
+  function checkWindowSize() {
     var widthDiff = window.outerWidth - window.innerWidth;
     var heightDiff = window.outerHeight - window.innerHeight;
     var popped = widthDiff >= MIN_GAP || heightDiff >= MIN_GAP;
@@ -129,7 +129,6 @@
       detected = false;
     }
   }
-  if (window.setInterval) {
-    window.setInterval(interval, 3000);
-  }
+  window.addEventListener('resize', checkWindowSize, { passive: true });
+  checkWindowSize();
 })();

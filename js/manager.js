@@ -3553,12 +3553,34 @@ window.manager = {
     return SPEED_MS[speed] || SPEED_MS.normal;
   }
 
+  let whitelistCacheAccountId = null;
+  let whitelistCache = null;
+
+  function invalidateWhitelistCache() {
+    whitelistCacheAccountId = null;
+    whitelistCache = null;
+  }
+
+  window.addEventListener('storage', function (event) {
+    if (!event.key ||
+        event.key === CONFIG.dsc.whitelistsByAccount ||
+        event.key === CONFIG.dsc.whitelists ||
+        event.key === CONFIG.dsc.whitelists + '.migrated') {
+      invalidateWhitelistCache();
+    }
+  });
+
   function loadWhitelists() {
     const empty = { servers: [], friends: [], dms: [] };
     const accountId = state.user && state.user.id ? String(state.user.id) : '';
+    if (whitelistCache && whitelistCacheAccountId === accountId) {
+      return whitelistCache;
+    }
     const all = jsonGet(localStorage, CONFIG.dsc.whitelistsByAccount) || {};
     if (!accountId) {
-      return empty;
+      whitelistCacheAccountId = accountId;
+      whitelistCache = empty;
+      return whitelistCache;
     }
     if (!all[accountId]) {
       const legacy = jsonGet(localStorage, CONFIG.dsc.whitelists);
@@ -3574,11 +3596,13 @@ window.manager = {
       }
     }
     const accountWhitelist = all[accountId] || empty;
-    return {
+    whitelistCacheAccountId = accountId;
+    whitelistCache = {
       servers: Array.isArray(accountWhitelist.servers) ? accountWhitelist.servers : [],
       friends: Array.isArray(accountWhitelist.friends) ? accountWhitelist.friends : [],
       dms: Array.isArray(accountWhitelist.dms) ? accountWhitelist.dms : []
     };
+    return whitelistCache;
   }
 
   function inWl(kind, value) {
@@ -3641,6 +3665,10 @@ window.manager = {
     return !!(channel && (channel.recipients || []).some(friendWhitelisted));
   }
 
+  function dmOrRecipientWhitelisted(channel) {
+    return dmWhitelisted(channel) || dmHasWhitelistedFriend(channel);
+  }
+
   function serverWhitelisted(serverOrId) {
     const server = serverOrId && typeof serverOrId === 'object'
       ? serverOrId
@@ -3661,7 +3689,12 @@ window.manager = {
     if (!value) {
       return;
     }
-    const wl = loadWhitelists();
+    const loaded = loadWhitelists();
+    const wl = {
+      servers: loaded.servers.slice(),
+      friends: loaded.friends.slice(),
+      dms: loaded.dms.slice()
+    };
     const list = Array.isArray(wl[kind]) ? wl[kind].slice() : [];
     const needle = String(value).trim().toLowerCase();
     const index = list.findIndex(function (entry) {
@@ -3681,6 +3714,7 @@ window.manager = {
     const all = jsonGet(localStorage, CONFIG.dsc.whitelistsByAccount) || {};
     all[accountId] = wl;
     jsonSet(localStorage, CONFIG.dsc.whitelistsByAccount, all);
+    invalidateWhitelistCache();
     applyWhitelists();
   }
 
@@ -4222,7 +4256,7 @@ window.manager = {
   function buildDmItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
-      return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
+      return (c.type === 1 || c.type === 3) && !dmOrRecipientWhitelisted(c);
     });
     if (channels.length > 0) {
       channels.forEach(function (c) {
@@ -4235,8 +4269,8 @@ window.manager = {
           dmName: recipientName,
           dmId: c.id,
           action: function () {
-            if (dmWhitelisted(c)) {
-              return Promise.reject(new Error('DM is whitelisted; remove it from the whitelist before closing.'));
+            if (dmOrRecipientWhitelisted(c)) {
+              return Promise.reject(new Error('DM or recipient is whitelisted; remove it from the whitelist before closing.'));
             }
             return apiCall('DELETE', '/channels/' + c.id).then(function (res) {
               if (res.status >= 200 && res.status < 300) {
@@ -4253,7 +4287,7 @@ window.manager = {
     } else {
       (state.rel || []).forEach(function (r) {
         const ru = (r && r.user) || {};
-        const wlMatch = inWl('dms', r.id) || inWl('dms', ru.username) || inWl('dms', ru.global_name);
+        const wlMatch = friendWhitelisted(r) || inWl('dms', r.id) || inWl('dms', ru.username) || inWl('dms', ru.global_name);
         if (r.type === 1 && !wlMatch) {
           items.push({
             label: 'Close DM: ' + friendName(r),
@@ -4638,7 +4672,7 @@ window.manager = {
     const name = ch.type === 3
       ? (ch.name || 'Group Chat')
       : ((ch.recipients && ch.recipients[0] && (ch.recipients[0].username || ch.recipients[0].id)) || ch.name || ch.id);
-    if (dmWhitelisted(ch)) {
+    if (dmOrRecipientWhitelisted(ch)) {
       return [{
         label: 'Close DM: ' + name + ' (' + ch.id + ')',
         skip: 'Whitelisted'
@@ -4647,8 +4681,8 @@ window.manager = {
     return [{
       label: 'Close DM: ' + name + ' (' + ch.id + ')',
       action: function () {
-        if (dmWhitelisted(ch)) {
-          return Promise.reject(new Error('DM is whitelisted; remove it from the whitelist before closing.'));
+        if (dmOrRecipientWhitelisted(ch)) {
+          return Promise.reject(new Error('DM or recipient is whitelisted; remove it from the whitelist before closing.'));
         }
         return apiCall('DELETE', '/channels/' + ch.id).then(function (res) {
           if (res && res.status >= 200 && res.status < 300) {
@@ -4728,7 +4762,7 @@ window.manager = {
   function buildCleanDMsItems() {
     const items = [];
     const channels = (state.channels || []).filter(function (c) {
-      return (c.type === 1 || c.type === 3) && !dmWhitelisted(c);
+      return (c.type === 1 || c.type === 3) && !dmOrRecipientWhitelisted(c);
     });
     if (channels.length > 0) {
       channels.forEach(function (c) {
@@ -4739,8 +4773,8 @@ window.manager = {
         items.push({
           label: (isGroup ? 'Leave Group DM: ' : 'Close DM: ') + recipientName + ' (' + c.id + ')',
           action: function () {
-            if (dmWhitelisted(c)) {
-              return Promise.reject(new Error('DM is whitelisted; remove it from the whitelist before closing.'));
+            if (dmOrRecipientWhitelisted(c)) {
+              return Promise.reject(new Error('DM or recipient is whitelisted; remove it from the whitelist before closing.'));
             }
             return apiCall('DELETE', '/channels/' + c.id).then(function (res) {
               if (res.status >= 200 && res.status < 300) {
@@ -4755,7 +4789,7 @@ window.manager = {
     } else {
       (state.rel || []).forEach(function (r) {
         const ru = (r && r.user) || {};
-        const wlMatch = inWl('dms', r.id) || inWl('dms', ru.username) || inWl('dms', ru.global_name);
+        const wlMatch = friendWhitelisted(r) || inWl('dms', r.id) || inWl('dms', ru.username) || inWl('dms', ru.global_name);
         if (r.type === 1 && !wlMatch) {
           items.push({
             label: 'Close DM: ' + friendName(r),
@@ -7294,6 +7328,7 @@ window.manager = {
         const all = jsonGet(localStorage, CONFIG.dsc.whitelistsByAccount) || {};
         all[accountId] = wl;
         jsonSet(localStorage, CONFIG.dsc.whitelistsByAccount, all);
+        invalidateWhitelistCache();
         toast('Whitelist saved for this account.', 'success');
       });
     }
@@ -8771,11 +8806,11 @@ window.manager = {
   function handleBatchCloseDMs() {
     const ids = state.inspectSelected.filter(function (id) {
       const ch = (state.channels || []).filter(function (c) { return c.id === id; })[0];
-      const wl = ch ? dmWhitelisted(ch) : inWl('dms', id);
+      const wl = ch ? dmOrRecipientWhitelisted(ch) : inWl('dms', id);
       return !wl;
     });
     if (ids.length !== state.inspectSelected.length) {
-      toast('Whitelisted DMs were skipped.', 'warning');
+      toast('Whitelisted DMs or recipients were skipped.', 'warning');
     }
     executeBatchAction('Hide / Close DMs', ids, function (id) {
       return closeDmChannel(id).then(function (res) {

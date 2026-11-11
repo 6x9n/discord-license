@@ -439,14 +439,13 @@
         (String(k.label || '').toLowerCase().indexOf(q) !== -1);
     });
 
-    el.keysBody.innerHTML = '';
-    filtered.forEach(function (k) {
-      const tr = document.createElement('tr');
+    el.keysBody.innerHTML = filtered.map(function (k) {
       const activations = (k.activationCount || 0);
       const maxAccounts = (k.max_activations || 1);
-      const duration = k.expires_at ? (daysLeft(k.expires_at) === null ? '�' : ((k.revoked ? '<span class="muted-text">' : '') + daysLeft(k.expires_at) + 'd' + (k.revoked ? '</span>' : ''))) : '<span class="badge badge-lifetime">Lifetime</span>';
+      const remainingDays = k.expires_at ? daysLeft(k.expires_at) : null;
+      const duration = k.expires_at ? (remainingDays === null ? '�' : ((k.revoked ? '<span class="muted-text">' : '') + remainingDays + 'd' + (k.revoked ? '</span>' : ''))) : '<span class="badge badge-lifetime">Lifetime</span>';
       const usedWidth = Math.min(100, Math.round((activations / maxAccounts) * 100));
-      tr.innerHTML =
+      return '<tr>' +
         '<td class="key-cell">' + esc(k.plain_key || k.key_hash) + '</td>' +
         '<td>' + (esc(k.owner || '�')) + '</td>' +
         '<td>' + esc(k.label || '�') + '</td>' +
@@ -466,14 +465,9 @@
         '<button class="btn btn-ghost mini-btn" data-act="edit" data-id="' + esc(k.id) + '">Edit</button>' +
         '<button class="btn btn-ghost mini-btn" data-act="clear" data-id="' + esc(k.id) + '">Reset</button>' +
         '<button class="btn btn-danger mini-btn" data-act="delete" data-id="' + esc(k.id) + '">Delete</button>' +
-        '</div></td>';
-      tr.querySelector('[data-act="copy"]').addEventListener('click', function () { copyKey(k); });
-      tr.querySelector('[data-act="extend"]').addEventListener('click', function () { extendKey(k); });
-      tr.querySelector('[data-act="edit"]').addEventListener('click', function () { openEdit(k); });
-      tr.querySelector('[data-act="clear"]').addEventListener('click', function () { confirmClear(k); });
-      tr.querySelector('[data-act="delete"]').addEventListener('click', function () { confirmDelete(k); });
-      el.keysBody.appendChild(tr);
-    });
+        '</div></td>' +
+        '</tr>';
+    }).join('');
 
     el.emptyMsg.hidden = filtered.length !== 0;
     el.resultCount.textContent = filtered.length + ' of ' + keys.length;
@@ -1067,6 +1061,35 @@
     if (el.exportKeysBtn) {
       el.exportKeysBtn.addEventListener('click', exportKeysCsv);
     }
+    el.keysBody.addEventListener('click', function (event) {
+      const button = event.target.closest('button[data-act][data-id]');
+      if (!button || !el.keysBody.contains(button)) {
+        return;
+      }
+      const key = keys.find(function (item) {
+        return String(item.id) === button.getAttribute('data-id');
+      });
+      if (!key) {
+        return;
+      }
+      switch (button.getAttribute('data-act')) {
+        case 'copy':
+          copyKey(key);
+          break;
+        case 'extend':
+          extendKey(key);
+          break;
+        case 'edit':
+          openEdit(key);
+          break;
+        case 'clear':
+          confirmClear(key);
+          break;
+        case 'delete':
+          confirmDelete(key);
+          break;
+      }
+    });
 
     el.openCreateBtn.addEventListener('click', openCreate);
     el.applyPresetBtn.addEventListener('click', function () {
