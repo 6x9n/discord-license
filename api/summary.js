@@ -1072,8 +1072,8 @@ async function opTokenAdd(req, res) {
     return json(res, 200, { success: true, preview: true, data: profile });
   }
 
-  // Optional sale data entered alongside the token. Existing accounts keep
-  // their saved prices and buyer, so these values only apply to new rows.
+  // Existing accounts keep their financial, status, note and buyer fields.
+  // Non-empty credentials can be refreshed; blank values never erase them.
   const buyRaw = body.buyPrice;
   let buyPrice = null;
   if (buyRaw !== undefined && buyRaw !== null && String(buyRaw).trim() !== '') {
@@ -1108,6 +1108,22 @@ async function opTokenAdd(req, res) {
   const source = String(body.source || '').trim();
   if (source.length > 300) {
     return json(res, 400, { success: false, error: 'Source is too long (max 300 characters).' });
+  }
+  const statusLabel = String(body.statusLabel || '').trim();
+  if (statusLabel.length > 60) {
+    return json(res, 400, { success: false, error: 'Status is too long (max 60 characters).' });
+  }
+  const emailPassword = body.emailPassword === undefined || body.emailPassword === null
+    ? ''
+    : String(body.emailPassword);
+  if (emailPassword.length > 200) {
+    return json(res, 400, { success: false, error: 'Email password is too long (max 200 characters).' });
+  }
+  const discordPassword = body.discordPassword === undefined || body.discordPassword === null
+    ? ''
+    : String(body.discordPassword);
+  if (discordPassword.length > 200) {
+    return json(res, 400, { success: false, error: 'Discord password is too long (max 200 characters).' });
   }
 
   let encrypted;
@@ -1161,8 +1177,8 @@ async function opTokenAdd(req, res) {
 
   if (existing && existing.length) {
     // Re-adding the same Discord account refreshes the stored token instead of
-    // creating a duplicate. Prices, buyer, status and notes are untouched, so
-    // a refresh can never erase the sales record.
+    // creating a duplicate. Prices, status, status label, buyer and notes are
+    // untouched, so a refresh cannot erase the saved account record.
     const patch = Object.assign({}, profileFields, tokenFields);
     // A token without the email scope returns no email. Keep the address the
     // operator already has rather than blanking it.
@@ -1174,6 +1190,8 @@ async function opTokenAdd(req, res) {
     // Source is purchase provenance, not sale data, so a newly entered seller
     // is useful on a refresh. Leaving the field empty keeps the saved value.
     if (source) patch.source = source;
+    if (emailPassword) patch.email_password = emailPassword;
+    if (discordPassword) patch.discord_password = discordPassword;
     if (!existing[0].creation_date && profile.creationDate) {
       patch.creation_date = profile.creationDate;
     }
@@ -1204,8 +1222,10 @@ async function opTokenAdd(req, res) {
     sell_price: sellPrice,
     status: requestedStatus,
     sold_at: requestedStatus === 'SOLD' ? new Date().toISOString() : null,
-    status_label: '',
+    status_label: statusLabel,
     source: source,
+    email_password: emailPassword,
+    discord_password: discordPassword,
     notes: '',
     buyer_name: buyerName,
     buyer_telegram: buyerTelegram,

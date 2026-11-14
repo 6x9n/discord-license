@@ -195,12 +195,10 @@
       tokenSaveBtn: g('tokenSaveBtn'),
       tokenCancelBtn: g('tokenCancelBtn'),
       tokenBuyPrice: g('tokenBuyPrice'),
-      tokenStatus: g('tokenStatus'),
       tokenSource: g('tokenSource'),
-      tokenSoldFields: g('tokenSoldFields'),
-      tokenSellPrice: g('tokenSellPrice'),
-      tokenBuyerName: g('tokenBuyerName'),
-      tokenBuyerTelegram: g('tokenBuyerTelegram'),
+      tokenStatusLabel: g('tokenStatusLabel'),
+      tokenEmailPassword: g('tokenEmailPassword'),
+      tokenDiscordPassword: g('tokenDiscordPassword'),
       keyModal: g('keyModal'),
       modalTitle: g('modalTitle'),
       newKeyBox: g('newKeyBox'),
@@ -1172,6 +1170,7 @@
   // after a successful fetch, so a token is never written without the admin
   // having seen which account it belongs to.
   var tokenProfile = null;
+  var tokenManualFor = '';
   // Guards against a double submit (Enter twice, or a double click landing
   // before the disabled attribute paints) creating two rows.
   var quickAddSaving = false;
@@ -3400,26 +3399,23 @@ function syncBucketRoleFields() {
     el.tokenMsg.className = 'msg' + (kind ? ' msg-' + kind : '');
   }
 
-  function syncTokenSoldFields() {
-    var sold = !!(el.tokenStatus && String(el.tokenStatus.value || '').toUpperCase() === 'SOLD');
-    if (el.tokenSoldFields) el.tokenSoldFields.hidden = !sold;
+  function clearTokenManualFields() {
+    [el.tokenBuyPrice, el.tokenSource, el.tokenStatusLabel, el.tokenEmailPassword, el.tokenDiscordPassword]
+      .forEach(function (node) {
+        if (node) node.value = '';
+      });
   }
 
   function resetTokenAdd() {
     tokenProfile = null;
+    tokenManualFor = '';
     if (el.tokenInput) el.tokenInput.value = '';
     if (el.tokenHint) el.tokenHint.textContent = '';
     if (el.tokenPreview) {
       el.tokenPreview.hidden = true;
       el.tokenPreview.innerHTML = '';
     }
-    // Prices start empty on purpose. The operator types what was actually paid
-    // or received; the account editor stays available for later edits.
-    [el.tokenBuyPrice, el.tokenSellPrice, el.tokenSource, el.tokenBuyerName, el.tokenBuyerTelegram].forEach(function (node) {
-      if (node) node.value = '';
-    });
-    if (el.tokenStatus) el.tokenStatus.value = 'AVAILABLE';
-    syncTokenSoldFields();
+    clearTokenManualFields();
     if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
     setTokenMsg('');
   }
@@ -3464,7 +3460,8 @@ function syncBucketRoleFields() {
       ['Verified', profile.verified ? 'Yes' : 'No'],
       ['Created', profile.creationDate ? fmtDate(profile.creationDate) : '-']
     ];
-    el.tokenPreview.innerHTML = '<div class="token-preview-head">' + avatar
+    el.tokenPreview.innerHTML = '<div class="field-label">Auto-filled from Discord</div>'
+      + '<div class="token-preview-head">' + avatar
       + '<div><strong>' + esc(profile.globalName || profile.username || 'Discord account') + '</strong>'
       + '<div class="muted-text">' + esc(profile.username ? '@' + profile.username : '') + '</div></div></div>'
       + '<div class="token-fields">' + fields.map(function (f) {
@@ -3479,13 +3476,17 @@ function syncBucketRoleFields() {
   async function fetchTokenProfile() {
     if (tokenFetching) return;
     setTokenMsg('');
-    tokenProfile = null;
-    if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
-    if (el.tokenPreview) el.tokenPreview.hidden = true;
     var token = normalizeTokenValue(el.tokenInput && el.tokenInput.value || '');
     if (el.tokenInput && token !== el.tokenInput.value) {
       el.tokenInput.value = token;
     }
+    if (tokenManualFor && tokenManualFor !== token) {
+      clearTokenManualFields();
+      tokenManualFor = '';
+    }
+    tokenProfile = null;
+    if (el.tokenSaveBtn) el.tokenSaveBtn.disabled = true;
+    if (el.tokenPreview) el.tokenPreview.hidden = true;
     if (!token) {
       setTokenMsg('Paste the Discord token first.', 'error');
       if (el.tokenInput) el.tokenInput.focus();
@@ -3513,6 +3514,7 @@ function syncBucketRoleFields() {
         body: { token: token, previewOnly: true }
       });
       tokenProfile = { token: token, profile: res.data || {} };
+      tokenManualFor = token;
       renderTokenPreview(tokenProfile.profile);
       if (el.tokenHint) el.tokenHint.textContent = 'Verified ' + (tokenProfile.profile.username ? '@' + tokenProfile.profile.username : 'account') + ' · token' + (token.length > 4 ? ' ...' + token.slice(-4) : '');
       setTokenMsg('Profile fetched. Review it, then save the account.', 'success');
@@ -3558,33 +3560,21 @@ function syncBucketRoleFields() {
         return;
       }
     }
-    var status = el.tokenStatus ? String(el.tokenStatus.value || 'AVAILABLE').toUpperCase() : 'AVAILABLE';
-    if (status !== 'SOLD') status = 'AVAILABLE';
     var source = el.tokenSource ? String(el.tokenSource.value || '').trim() : '';
+    var statusLabel = el.tokenStatusLabel ? String(el.tokenStatusLabel.value || '').trim() : '';
+    var emailPassword = el.tokenEmailPassword ? String(el.tokenEmailPassword.value || '') : '';
+    var discordPassword = el.tokenDiscordPassword ? String(el.tokenDiscordPassword.value || '') : '';
     var payload = {
       token: tokenProfile.token,
       buyPrice: buyPrice,
-      status: status,
       source: source,
+      statusLabel: statusLabel,
+      emailPassword: emailPassword,
+      discordPassword: discordPassword,
       // Reuse the date the preview already fetched, so the save does not need a
       // second Discord billing request and cannot lose a valid expiry.
       nitroEnds: (tokenProfile.profile && tokenProfile.profile.nitroEnds) || ''
     };
-    if (status === 'SOLD') {
-      var sellRaw = el.tokenSellPrice ? String(el.tokenSellPrice.value || '').trim() : '';
-      var sellPrice = null;
-      if (sellRaw !== '') {
-        sellPrice = Number(sellRaw);
-        if (!isFinite(sellPrice) || sellPrice < 0) {
-          setTokenMsg('Sold price must be a valid non-negative number.', 'error');
-          if (el.tokenSellPrice) el.tokenSellPrice.focus();
-          return;
-        }
-      }
-      payload.sellPrice = sellPrice;
-      payload.buyerName = el.tokenBuyerName ? String(el.tokenBuyerName.value || '').trim() : '';
-      payload.buyerTelegram = el.tokenBuyerTelegram ? String(el.tokenBuyerTelegram.value || '').trim() : '';
-    }
 
     tokenSaving = true;
     if (el.tokenSaveBtn) {
@@ -3981,9 +3971,6 @@ function syncBucketRoleFields() {
     }
     if (el.tokenCancelBtn) {
       el.tokenCancelBtn.addEventListener('click', closeTokenModal);
-    }
-    if (el.tokenStatus) {
-      el.tokenStatus.addEventListener('change', syncTokenSoldFields);
     }
     if (el.tokenForm) {
       el.tokenForm.addEventListener('submit', submitTokenForm);
