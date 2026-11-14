@@ -48,6 +48,7 @@ const BADGE_MAP = [
 ];
 
 const PREMIUM_TIERS = { 0: 'None', 1: 'Nitro Classic', 2: 'Nitro', 3: 'Nitro Basic' };
+const MAX_ACCOUNT_MONEY = 9999999999.99;
 
 /* ---------------- helpers ---------------- */
 function authGuard(req, res) {
@@ -915,9 +916,19 @@ function sanitizeUpdate(body) {
     const n = Number(body.buyPrice);
     if (isFinite(n) && n >= 0) patch.buy_price = n;
   }
-  if (body.sellPrice !== undefined && body.sellPrice !== null && body.sellPrice !== '') {
-    const n = Number(body.sellPrice);
-    if (isFinite(n) && n >= 0) patch.sell_price = n;
+  if (body.sellPrice !== undefined && body.sellPrice !== null) {
+    const raw = String(body.sellPrice).trim();
+    if (raw === '') {
+      if (String(body.status || '').toUpperCase() === 'SOLD') {
+        reject400('Sale price is required when marking an account sold.');
+      }
+    } else {
+      const n = Number(raw);
+      if (!isFinite(n) || n < 0 || n > MAX_ACCOUNT_MONEY) {
+        reject400('Sale price must be between 0 and 9999999999.99.');
+      }
+      patch.sell_price = Math.round(n * 100) / 100;
+    }
   }
   // The two received instalments of a split sale. Only these are stored; the
   // second instalment and the outstanding balance are derived from them and
@@ -926,7 +937,10 @@ function sanitizeUpdate(body) {
     const raw = body[key];
     if (raw === undefined || raw === null || raw === '') return;
     const n = Number(raw);
-    if (isFinite(n) && n >= 0) patch[key === 'sellPaidFirst' ? 'sell_paid_first' : 'sell_paid_second'] = n;
+    if (!isFinite(n) || n < 0 || n > MAX_ACCOUNT_MONEY) {
+      reject400((key === 'sellPaidFirst' ? 'Part 1' : 'Part 2') + ' received must be between 0 and 9999999999.99.');
+    }
+    patch[key === 'sellPaidFirst' ? 'sell_paid_first' : 'sell_paid_second'] = Math.round(n * 100) / 100;
   });
   if (body.status) {
     const status = String(body.status).toUpperCase();
@@ -1466,7 +1480,15 @@ async function opCreate(req, res) {
 
 async function opUpdate(req, res, id) {
   const body = await readBody(req);
-  const patch = sanitizeUpdate(body);
+  let patch;
+  try {
+    patch = sanitizeUpdate(body);
+  } catch (err) {
+    return json(res, (err && err.status) || 400, {
+      success: false,
+      error: (err && err.message) || 'Invalid account update.'
+    });
+  }
   if (!Object.keys(patch).length) {
     return json(res, 400, { success: false, error: 'Nothing to update.' });
   }

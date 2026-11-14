@@ -2,6 +2,7 @@
   'use strict';
 
   const SES_KEY = 'dmt.admin.secret';
+  const MAX_ACCOUNT_MONEY = 9999999999.99;
 
   const el = (function () {
     function g(id) {
@@ -166,6 +167,7 @@
       soldForm: g('soldForm'),
       soldAccId: g('soldAccId'),
       soldPrice: g('soldPrice'),
+      soldPaidInFull: g('soldPaidInFull'),
       soldPaidFirst: g('soldPaidFirst'),
       soldPaidSecond: g('soldPaidSecond'),
       soldBalanceHint: g('soldBalanceHint'),
@@ -1174,6 +1176,7 @@
   // Guards against a double submit (Enter twice, or a double click landing
   // before the disabled attribute paints) creating two rows.
   var quickAddSaving = false;
+  var soldSaving = false;
   var tokenSaving = false;
   var tokenFetching = false;
 
@@ -2855,7 +2858,7 @@ function syncBucketRoleFields() {
     // shows one, since its sell price is only an asking price.
     if (split.remaining > 0) {
       payCell += '<div class="pay-due">' + accMoney(split.remaining) + ' owed</div>';
-    } else if (split.split) {
+    } else if (split.split || (row.sell_price != null && split.total === 0)) {
       payCell += '<div class="pay-clear">paid in full</div>';
     }
 
@@ -3130,7 +3133,7 @@ function syncBucketRoleFields() {
 
     function parsePrice(value, label) {
       var amount = quickMoney(value);
-      if (amount === null || amount > 9999999999.99) {
+      if (amount === null || amount > MAX_ACCOUNT_MONEY) {
         out.errors.push(label + ' must be between $0 and $9,999,999,999.99.');
         return null;
       }
@@ -3212,7 +3215,7 @@ function syncBucketRoleFields() {
         out.sellPrice = Math.round(payments * 100) / 100;
       }
     }
-    if (out.sellPrice != null && out.sellPrice > 9999999999.99) {
+    if (out.sellPrice != null && out.sellPrice > MAX_ACCOUNT_MONEY) {
       out.errors.push('Sale price must not exceed $9,999,999,999.99.');
     }
 
@@ -3820,10 +3823,11 @@ function syncBucketRoleFields() {
   function openSoldModal(row) {
     if (!el.soldModal) { markAccSoldLegacy(row); return; }
     el.soldAccId.value = row.id;
-    el.soldPrice.value = row.sell_price != null && Number(row.sell_price) ? String(row.sell_price) : '';
+    el.soldPrice.value = row.sell_price == null ? '' : String(money2(row.sell_price));
+    el.soldPaidInFull.checked = true;
     el.soldPaidFirst.value = money2(row.sell_paid_first) ? String(money2(row.sell_paid_first)) : '';
     el.soldPaidSecond.value = money2(row.sell_paid_second) ? String(money2(row.sell_paid_second)) : '';
-    updateBalanceHint(el.soldPrice, el.soldPaidFirst, el.soldPaidSecond, el.soldBalanceHint);
+    syncSoldPaymentInputs();
     el.soldBuyerName.value = row.buyer_name || '';
     el.soldBuyerTelegram.value = row.buyer_telegram || '';
     if (el.soldAccountLabel) {
@@ -3841,31 +3845,65 @@ function syncBucketRoleFields() {
     setSoldFormMsg('');
   }
 
+  function syncSoldPaymentInputs() {
+    var paidInFull = !!(el.soldPaidInFull && el.soldPaidInFull.checked);
+    if (paidInFull) {
+      var rawPrice = (el.soldPrice && el.soldPrice.value || '').trim();
+      if (el.soldPaidFirst) {
+        el.soldPaidFirst.value = rawPrice === '' ? '' : String(money2(rawPrice));
+      }
+      if (el.soldPaidSecond) el.soldPaidSecond.value = '0';
+    }
+    if (el.soldPaidFirst) el.soldPaidFirst.disabled = paidInFull;
+    if (el.soldPaidSecond) el.soldPaidSecond.disabled = paidInFull;
+    updateBalanceHint(el.soldPrice, el.soldPaidFirst, el.soldPaidSecond, el.soldBalanceHint);
+  }
+
+  function readSoldPaymentAmount(input, label) {
+    var raw = (input && input.value || '').trim();
+    if (raw === '') return 0;
+    var amount = Number(raw);
+    if (!isFinite(amount) || amount < 0 || amount > MAX_ACCOUNT_MONEY) {
+      setSoldFormMsg(label + ' must be between 0 and 9999999999.99.', 'error');
+      if (input) input.focus();
+      return null;
+    }
+    return money2(amount);
+  }
+
   async function submitSoldForm(e) {
     e.preventDefault();
+    if (soldSaving) return;
     const id = el.soldAccId.value;
     const raw = (el.soldPrice.value || '').trim();
-    const price = Number(raw);
-    if (raw === '' || !isFinite(price) || price < 0) {
-      setSoldFormMsg('Sale price must be a non-negative number.', 'error');
+    const enteredPrice = Number(raw);
+    if (raw === '' || !isFinite(enteredPrice) || enteredPrice < 0 || enteredPrice > MAX_ACCOUNT_MONEY) {
+      setSoldFormMsg(raw === ''
+        ? 'Sale price is required.'
+        : 'Sale price must be between 0 and 9999999999.99.', 'error');
       if (el.soldPrice) el.soldPrice.focus();
       return;
     }
+    const price = money2(enteredPrice);
+    const paidInFull = !!(el.soldPaidInFull && el.soldPaidInFull.checked);
+    const paidFirst = paidInFull ? price : readSoldPaymentAmount(el.soldPaidFirst, 'Part 1 received');
+    if (paidFirst === null) return;
+    const paidSecond = paidInFull ? 0 : readSoldPaymentAmount(el.soldPaidSecond, 'Part 2 received');
+    if (paidSecond === null) return;
 
     const patch = {
       status: 'SOLD',
       sellPrice: price,
       soldAt: new Date().toISOString()
     };
-    // Both instalments are always sent, including as 0, so re-confirming a sale
-    // cannot leave a stale part payment behind from an earlier attempt.
-    patch.sellPaidFirst = money2(el.soldPaidFirst ? el.soldPaidFirst.value : 0);
-    patch.sellPaidSecond = money2(el.soldPaidSecond ? el.soldPaidSecond.value : 0);
+    patch.sellPaidFirst = paidFirst;
+    patch.sellPaidSecond = paidSecond;
     const buyerName = (el.soldBuyerName.value || '').trim();
     const buyerTg = (el.soldBuyerTelegram.value || '').trim();
     if (buyerName) patch.buyerName = buyerName;
     if (buyerTg) patch.buyerTelegram = buyerTg;
 
+    soldSaving = true;
     el.soldSubmitBtn.disabled = true;
     setSoldFormMsg('Saving...');
     try {
@@ -3876,22 +3914,24 @@ function syncBucketRoleFields() {
     } catch (err) {
       setSoldFormMsg(err.message || 'Could not update the account.', 'error');
     } finally {
+      soldSaving = false;
       el.soldSubmitBtn.disabled = false;
     }
   }
 
   // Fallback for the unlikely case the sold modal markup is missing.
   function markAccSoldLegacy(row) {
-    var raw = window.prompt('Sale price for this account', row.sell_price != null && Number(row.sell_price) ? String(row.sell_price) : '');
+    var raw = window.prompt('Sale price for this account', row.sell_price == null ? '' : String(money2(row.sell_price)));
     if (raw === null) return;
     var price = Number(raw);
-    if (raw.trim() === '' || !isFinite(price) || price < 0) {
-      toast('Sale price must be a non-negative number.', 'error');
+    if (raw.trim() === '' || !isFinite(price) || price < 0 || price > MAX_ACCOUNT_MONEY) {
+      toast('Sale price must be between 0 and 9999999999.99.', 'error');
       return;
     }
+    price = money2(price);
     api('/api/summary?id=' + encodeURIComponent(row.id), {
       method: 'PATCH',
-      body: { status: 'SOLD', sellPrice: price, soldAt: new Date().toISOString() }
+      body: { status: 'SOLD', sellPrice: price, sellPaidFirst: price, sellPaidSecond: 0, soldAt: new Date().toISOString() }
     }).then(function () {
       toast('Marked as sold.', 'ok');
       return loadAccounts();
@@ -4161,6 +4201,12 @@ function syncBucketRoleFields() {
     });
     // Keep the outstanding balance visible while the operator types, in both
     // the sold dialog and the account editor.
+    if (el.soldPaidInFull) {
+      el.soldPaidInFull.addEventListener('change', syncSoldPaymentInputs);
+    }
+    if (el.soldPrice) {
+      el.soldPrice.addEventListener('input', syncSoldPaymentInputs);
+    }
     wireBalanceHint(el.soldPrice, el.soldPaidFirst, el.soldPaidSecond, el.soldBalanceHint);
     wireBalanceHint(el.accSell, el.accPaidFirst, el.accPaidSecond, el.accBalanceHint);
     if (el.accSearch) {
