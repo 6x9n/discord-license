@@ -506,16 +506,27 @@
   function copyToClipboard(text, okMsg) {
     const done = function () {
       toast(okMsg, 'success');
+      return true;
+    };
+    const useFallback = function () {
+      let copied = false;
+      try {
+        copied = fallbackCopy(text);
+      } catch (e) {
+        copied = false;
+      }
+      if (copied) return done();
+      toast('Could not copy to clipboard.', 'error');
+      return false;
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(function () {
-        fallbackCopy(text);
-        done();
-      });
-    } else {
-      fallbackCopy(text);
-      done();
+      try {
+        return Promise.resolve(navigator.clipboard.writeText(text)).then(done).catch(useFallback);
+      } catch (e) {
+        return Promise.resolve(useFallback());
+      }
     }
+    return Promise.resolve(useFallback());
   }
 
   function copyKey(k) {
@@ -528,16 +539,17 @@
   }
 
   function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
     try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
       ta.select();
-      document.execCommand('copy');
+      return !!document.execCommand('copy');
+    } finally {
       document.body.removeChild(ta);
-    } catch (e) { }
+    }
   }
 
   function extendKey(k) {
@@ -2625,6 +2637,45 @@ function syncBucketRoleFields() {
     copyToClipboard(text, 'Account details copied.');
   }
 
+  function accBuyerMessageText(row) {
+    var lines = [];
+    function add(label, value, preserveWhitespace) {
+      if (value === undefined || value === null) return;
+      var text = String(value);
+      if (preserveWhitespace ? text.length === 0 : text.trim() === '') return;
+      lines.push(label + ': ' + text);
+    }
+
+    add('Account ID', row.discord_id, false);
+    add('Email', row.email, false);
+    add('Email password', row.email_password, true);
+    add('Discord password', row.discord_password, true);
+    add('Status', row.status_label, false);
+
+    var nitroEnd = '-';
+    var rawNitroEnd = String(row.nitro_ends || '').trim();
+    if (rawNitroEnd) {
+      var dateOnly = rawNitroEnd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      var dateValue = rawNitroEnd;
+      if (dateOnly) {
+        var date = new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 12);
+        dateValue = date.getFullYear() === Number(dateOnly[1])
+          && date.getMonth() === Number(dateOnly[2]) - 1
+          && date.getDate() === Number(dateOnly[3])
+          ? rawNitroEnd + 'T12:00:00'
+          : '';
+      }
+      var formatted = dateValue ? fmtDate(dateValue) : '�';
+      if (formatted !== '�') nitroEnd = formatted;
+    }
+    lines.push('Nitro ends: ' + nitroEnd);
+    return lines.join('\n');
+  }
+
+  function copyAccBuyerMessage(row) {
+    copyToClipboard(accBuyerMessageText(row), 'Buyer message copied.');
+  }
+
   // ---------- split payment maths ----------
   // Only the two received instalments are stored in the database. The agreed
   // second instalment and the outstanding balance are always derived from them
@@ -2863,6 +2914,7 @@ function syncBucketRoleFields() {
     }
 
     var actions = '<button class="btn btn-ghost mini-btn" data-acc-act="export" data-id="' + esc(row.id) + '" title="Copy account details to the clipboard">Details</button>'
+      + '<button class="btn btn-ghost mini-btn" data-acc-act="copy-buyer-message" data-id="' + esc(row.id) + '" title="Copy buyer message">Copy buyer message</button>'
       + '<button class="btn btn-ghost mini-btn" data-acc-act="edit" data-id="' + esc(row.id) + '">Edit</button>'
       + (row.status === 'AVAILABLE'
         ? '<button class="btn btn-ghost mini-btn" data-acc-act="sold" data-id="' + esc(row.id) + '">Sold</button>'
@@ -4291,6 +4343,7 @@ function syncBucketRoleFields() {
         else if (act === 'sold') openSoldModal(row);
         else if (act === 'del') deleteAcc(row);
         else if (act === 'export') copyAccExport(row);
+        else if (act === 'copy-buyer-message') copyAccBuyerMessage(row);
         else if (act === 'register') registerAccInTool(row);
       });
     }
