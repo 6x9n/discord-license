@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .vercel/
+reports/
 
 # OS / editor
 Thumbs.db
