@@ -738,15 +738,16 @@
     <div class="modal-card modal-card-wide">
       <h3 class="modal-title">Quick Add (Paste Text)</h3>
       <p class="page-sub">Paste the account block exactly as you received it. Labels such as
+        <strong>account id</strong> (including <strong>account id [123]</strong>),
         <strong>email</strong>, <strong>email password</strong>, <strong>discord password</strong>,
-        <strong>Status</strong>, <strong>nitro end</strong>, <strong>paid</strong>, <strong>from</strong>,
+        <strong>Status</strong>, <strong>nitro end</strong>, <strong>paid</strong>, <strong>bought</strong>, <strong>from</strong>,
         <strong>buyer</strong>, <strong>sold</strong>, <strong>sold 1</strong> and <strong>sold 2</strong>
         are recognised.</p>
       <form id="quickAddForm" novalidate>
         <div class="form-field">
           <label class="field-label" for="quickAddText">Pasted account text</label>
           <textarea id="quickAddText" class="input textarea quick-text" rows="10" spellcheck="false"
-            placeholder="email : user@example.com&#10;email password : hidden&#10;discord password : hidden&#10;Status : Register Mail&#10;nitro end : Nov 8, 2026&#10;paid : 510$&#10;from : https://t.me/source&#10;buyer : https://t.me/buyer&#10;sold : 650$&#10;sold 1 : first payment&#10;sold 2 : first payment"></textarea>
+            placeholder="account id [ 123456789012345678 ] :&#10;email : user@example.com&#10;email password : hidden&#10;discord password : hidden&#10;Status : Register Mail&#10;nitro end : Nov 8, 2026&#10;bought : 510$&#10;from : https://t.me/source&#10;buyer : https://t.me/buyer&#10;sold : 650$&#10;sold 1 : first payment&#10;sold 2 : second payment"></textarea>
         </div>
         <div class="quick-preview-head">
           <span class="field-label">Live preview</span>
@@ -1204,7 +1205,7 @@
 
   <script src="/js/badge-icons.js?v=10"></script>
   <script src="/js/live-clock.js?v=1"></script>
-  <script src="/mythicisadminofthisapp/admin.js?v=28"></script>
+  <script src="/mythicisadminofthisapp/admin.js?v=29"></script>
   <script src="/mythicisadminofthisapp/guard.js?v=1"></script>
   <script>
     (function () {

@@ -3032,7 +3032,22 @@ function syncBucketRoleFields() {
       d = new Date(year, month - 1, day);
       if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return '';
     } else {
-      d = new Date(raw);
+      var named = raw.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$/);
+      if (named) {
+        var months = {
+          jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+          jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+        };
+        var monthName = named[1].slice(0, 3).toLowerCase();
+        var monthIndex = months[monthName];
+        var namedDay = Number(named[2]);
+        var namedYear = Number(named[3]);
+        if (monthIndex === undefined || namedDay < 1 || namedDay > 31) return '';
+        d = new Date(namedYear, monthIndex, namedDay);
+        if (d.getFullYear() !== namedYear || d.getMonth() !== monthIndex || d.getDate() !== namedDay) return '';
+      } else {
+        d = new Date(raw);
+      }
     }
     if (!d || isNaN(d.getTime())) return '';
     return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
@@ -3052,6 +3067,7 @@ function syncBucketRoleFields() {
       emailPassword: '',
       discordPassword: '',
       statusLabel: '',
+      nitroTier: '',
       nitroRaw: '',
       nitroEnds: '',
       buyPrice: null,
@@ -3066,6 +3082,8 @@ function syncBucketRoleFields() {
       discordId: '',
       username: '',
       notes: '',
+      present: {},
+      errors: [],
       recognized: 0,
       unknown: []
     };
@@ -3087,6 +3105,7 @@ function syncBucketRoleFields() {
       'paid': 'buyPrice',
       'buy': 'buyPrice',
       'buy price': 'buyPrice',
+      'bought': 'buyPrice',
       'purchase price': 'buyPrice',
       'cost': 'buyPrice',
       'from': 'source',
@@ -3110,27 +3129,47 @@ function syncBucketRoleFields() {
       'note': 'notes'
     };
 
+    function parsePrice(value, label) {
+      var amount = quickMoney(value);
+      if (amount === null || amount > 9999999999.99) {
+        out.errors.push(label + ' must be between $0 and $9,999,999,999.99.');
+        return null;
+      }
+      return amount;
+    }
+
     String(text || '').split(/\r?\n/).forEach(function (line) {
       var trimmed = line.trim();
       if (!trimmed) return;
-      var match = trimmed.match(/^([A-Za-z][A-Za-z0-9 _\/-]{0,40}?)\s*[:=]\s*(.*)$/);
+      var accountIdMatch = trimmed.match(
+        /^account\s+id(?:\s*\[\s*([^\]]*?)\s*\]|\s*([0-9]+))?\s*[:=]\s*(.*)$/i
+      );
+      var match = accountIdMatch
+        ? ['', 'account id', accountIdMatch[1] !== undefined
+          ? accountIdMatch[1]
+          : (accountIdMatch[2] !== undefined ? accountIdMatch[2] : accountIdMatch[3])]
+        : trimmed.match(/^([A-Za-z][A-Za-z0-9 _\/-]{0,40}?)\s*[:=]\s*(.*)$/);
       if (!match) {
         // A bare email is common when a seller sends one line per value.
         if (!out.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)) {
           out.email = trimmed;
+          out.present.email = true;
           out.recognized++;
         }
         return;
       }
       var key = match[1].toLowerCase().replace(/\s+/g, ' ').trim();
       var value = match[2].trim();
-      if (!value) return;
       var field = aliases[key];
       if (!field) {
+        if (!value) return;
         out.unknown.push(key);
         return;
       }
       out.recognized++;
+      out.present[field] = true;
+      if (field === 'buyer') out.present.buyerName = true;
+      if (!value) return;
       if (field === 'email') out.email = value;
       else if (field === 'emailPassword') out.emailPassword = value;
       else if (field === 'discordPassword') out.discordPassword = value;
@@ -3141,14 +3180,14 @@ function syncBucketRoleFields() {
       } else if (field === 'nitroEnds') {
         out.nitroRaw = value;
         out.nitroEnds = quickDate(value);
-      } else if (field === 'buyPrice') out.buyPrice = quickMoney(value);
+      } else if (field === 'buyPrice') out.buyPrice = parsePrice(value, 'Purchase price');
       else if (field === 'source') out.source = value;
       else if (field === 'buyer' || field === 'buyerName') {
         var buyerTag = quickTelegram(value);
         out.buyerName = buyerTag || value;
         out.buyerTelegram = out.buyerTelegram || buyerTag;
       } else if (field === 'buyerTelegram') out.buyerTelegram = quickTelegram(value) || value;
-      else if (field === 'sellPrice') out.sellPrice = quickMoney(value);
+      else if (field === 'sellPrice') out.sellPrice = parsePrice(value, 'Sale price');
       else if (field === 'sold1') {
         out.soldLink1 = value;
         // A link or a note is kept as text; only a value that reads as money
@@ -3158,8 +3197,10 @@ function syncBucketRoleFields() {
       } else if (field === 'sold2') {
         out.soldLink2 = value;
         out.sellPaidSecond = /https?:\/\/|t\.me\//i.test(value) ? null : quickMoney(value);
-      } else if (field === 'discordId') out.discordId = value;
-      else if (field === 'username') out.username = value;
+      } else if (field === 'discordId') {
+        var bracketedId = value.match(/^\[\s*([0-9]+)\s*\]$/);
+        out.discordId = bracketedId ? bracketedId[1] : value;
+      } else if (field === 'username') out.username = value;
       else if (field === 'notes') out.notes = value;
     });
 
@@ -3171,6 +3212,9 @@ function syncBucketRoleFields() {
       if (payments > 0) {
         out.sellPrice = Math.round(payments * 100) / 100;
       }
+    }
+    if (out.sellPrice != null && out.sellPrice > 9999999999.99) {
+      out.errors.push('Sale price must not exceed $9,999,999,999.99.');
     }
 
     return out;
@@ -3187,6 +3231,7 @@ function syncBucketRoleFields() {
     if (p.sellPrice != null && p.sellPrice > 0) {
       warnings.push('A sold price was found, so the record will be saved as SOLD.');
     }
+    warnings = warnings.concat(p.errors || []);
     return warnings;
   }
 
@@ -3195,27 +3240,28 @@ function syncBucketRoleFields() {
       return '<p class="quick-empty">Nothing parsed yet. Paste a block above to see the fields.</p>';
     }
     var rows = [
-      ['Email', p.email],
-      ['Email password', p.emailPassword],
-      ['Discord password', p.discordPassword],
-      ['Status', p.statusLabel],
-      ['Nitro end', p.nitroEnds],
-      ['Paid', p.buyPrice == null ? '' : accMoney(p.buyPrice)],
-      ['From', p.source],
-      ['Buyer', p.buyerName],
-      ['Buyer Telegram', p.buyerTelegram],
-      ['Sold', p.sellPrice == null ? '' : accMoney(p.sellPrice)],
-      ['Sold 1', p.soldLink1 + (p.sellPaidFirst == null ? '' : ' (' + accMoney(p.sellPaidFirst) + ')')],
-      ['Sold 2', p.soldLink2 + (p.sellPaidSecond == null ? '' : ' (' + accMoney(p.sellPaidSecond) + ')')],
-      ['Discord ID', p.discordId],
-      ['Username', p.username]
+      ['Email', p.email, 'email'],
+      ['Email password', p.emailPassword, 'emailPassword'],
+      ['Discord password', p.discordPassword, 'discordPassword'],
+      ['Status', p.statusLabel, 'statusLabel'],
+      ['Nitro end', p.nitroEnds, 'nitroEnds'],
+      ['Paid', p.buyPrice == null ? '' : accMoney(p.buyPrice), 'buyPrice'],
+      ['From', p.source, 'source'],
+      ['Buyer', p.buyerName, 'buyerName'],
+      ['Buyer Telegram', p.buyerTelegram, 'buyerTelegram'],
+      ['Sold', p.sellPrice == null ? '' : accMoney(p.sellPrice), 'sellPrice'],
+      ['Sold 1', p.soldLink1 + (p.sellPaidFirst == null ? '' : ' (' + accMoney(p.sellPaidFirst) + ')'), 'sold1'],
+      ['Sold 2', p.soldLink2 + (p.sellPaidSecond == null ? '' : ' (' + accMoney(p.sellPaidSecond) + ')'), 'sold2'],
+      ['Discord ID', p.discordId, 'discordId'],
+      ['Username', p.username, 'username']
     ];
     var html = '<div class="quick-grid">' + rows.map(function (row) {
       var value = String(row[1] == null ? '' : row[1]).trim();
+      var emptyValue = row[2] && p.present[row[2]];
       return '<div class="quick-row">'
         + '<span class="quick-key">' + esc(row[0]) + '</span>'
         + '<span class="quick-val' + (value ? '' : ' quick-empty-val') + '">'
-        + esc(value || 'not found') + '</span>'
+        + esc(value || (emptyValue ? '' : 'not found')) + '</span>'
         + '</div>';
     }).join('') + '</div>';
     var warnings = quickWarnings(p);
@@ -3246,7 +3292,7 @@ function syncBucketRoleFields() {
       }
     }
     if (el.quickAddSaveBtn) {
-      el.quickAddSaveBtn.disabled = !parsed.recognized;
+      el.quickAddSaveBtn.disabled = !parsed.recognized || parsed.errors.length > 0;
     }
     return parsed;
   }
@@ -3278,6 +3324,10 @@ function syncBucketRoleFields() {
     var parsed = renderQuickPreview();
     if (!parsed.recognized) {
       setQuickAddMsg('Paste at least one labelled field first.', 'error');
+      return;
+    }
+    if (parsed.errors.length) {
+      setQuickAddMsg(parsed.errors.join(' '), 'error');
       return;
     }
     var warnings = quickWarnings(parsed);
