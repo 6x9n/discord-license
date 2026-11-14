@@ -1175,11 +1175,29 @@ async function opTokenAdd(req, res) {
     });
   }
 
+  let existingTokenMatches = false;
+  if (existing && existing.length) {
+    let savedToken;
+    try {
+      savedToken = decryptToken(existing[0]);
+    } catch (err) {
+      return json(res, (err && err.status) || 500, {
+        success: false,
+        error: 'Could not verify the saved token before refreshing this account.'
+      });
+    }
+    existingTokenMatches = safeEqual(normalizeDiscordToken(savedToken), token);
+  }
+
   if (existing && existing.length) {
     // Re-adding the same Discord account refreshes the stored token instead of
     // creating a duplicate. Prices, status, status label, buyer and notes are
     // untouched, so a refresh cannot erase the saved account record.
     const patch = Object.assign({}, profileFields, tokenFields);
+    if (existingTokenMatches) {
+      patch.is_registered_in_tool = existing[0].is_registered_in_tool;
+      patch.tool_registered_at = existing[0].tool_registered_at;
+    }
     // A token without the email scope returns no email. Keep the address the
     // operator already has rather than blanking it.
     if (!profile.email) delete patch.email;
