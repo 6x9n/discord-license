@@ -57,43 +57,22 @@ function accountKey(account) {
   return String(account.discord_id || '').trim() || String(account.id || '');
 }
 
-// Account buys and sale payments always land in the trading bucket. Picking
-// "the oldest bucket" was wrong once roles existed: an account purchase drawing
-// on the Personal envelope is exactly the mistake the role split exists to
-// prevent. Falls back to the oldest live bucket only when the operator has not
-// created a trading bucket yet, so an early ledger still records something.
-const TRADING_ROLE = 'TRADING_CAPITAL';
-
-async function findBucketId() {
-  const trading = await rest(
-    'money_buckets?archived=eq.false&role=eq.' + encodeURIComponent(TRADING_ROLE) + '&select=id&order=created_at.asc&limit=1',
+// Account-derived movements use only the operator's canonical USDT wallet.
+// Never fall back to a differently named bucket or a different currency.
+async function findUSDTBucketId() {
+  const rows = await rest(
+    'money_buckets?name=eq.' + encodeURIComponent('USDT')
+      + '&currency=eq.' + encodeURIComponent('USDT')
+      + '&archived=eq.false&select=id&limit=1',
     {}
   );
-  if (trading && trading[0] && trading[0].id) return trading[0].id;
-  const any = await rest('money_buckets?archived=eq.false&select=id&order=created_at.asc&limit=1', {});
-  return (any && any[0] && any[0].id) || null;
+  return (rows && rows[0] && rows[0].id) || null;
 }
 
-// Ensure sale revenue lands in the main USDT Wallet bucket. The account ledger
-// credits trading, but sales need to also feed the USDT total. We prefer a
-// bucket named exactly 'USDT Wallet', otherwise any LIQUID_ASSETS bucket in USDT.
-// If neither exists, we fall back to the trading bucket.
-async function findUSDTWalletId() {
-  const named = await rest(
-    "money_buckets?archived=eq.false&name=ilike." + encodeURIComponent('USDT Wallet') + "&select=id&limit=1",
-    {}
-  );
-  if (named && named[0] && named[0].id) return named[0].id;
-  const usdt = await rest(
-    "money_buckets?archived=eq.false&currency=eq.USDT&role=eq.LIQUID_ASSETS&select=id&order=created_at.asc&limit=1",
-    {}
-  );
-  if (usdt && usdt[0] && usdt[0].id) return usdt[0].id;
-  return await findBucketId();
-}
 async function findEntry(sourceKey) {
   const rows = await rest(
-    'money_entries?source_key=eq.' + encodeURIComponent(sourceKey) + '&select=id,amount&limit=1',
+    'money_entries?source_key=eq.' + encodeURIComponent(sourceKey)
+      + '&select=id,amount,bucket_id&limit=1',
     {}
   );
   return (rows && rows[0]) || null;
@@ -111,61 +90,83 @@ async function reconcile(spec) {
     }
     return 'absent';
   }
-  if (existing) {
-    // Only write when the figure actually moved, so a no-op save does not churn
-    // rows or bump created_at semantics elsewhere.
-    if (cents(existing.amount) === spec.amount) return 'unchanged';
-    await rest('money_entries?id=eq.' + encodeURIComponent(existing.id), {
-      method: 'PATCH',
+  if (existing) return updateExistingEntry(existing, spec);
+
+  try {
+    await rest('money_entries', {
+      method: 'POST',
       body: {
+        bucket_id: spec.bucketId,
+        direction: spec.direction,
         amount: spec.amount,
+        scope: 'BUSINESS',
+        category: spec.category,
         occurred_on: spec.occurredOn,
         note: spec.note,
+        source: spec.source,
+        source_key: spec.sourceKey,
         account_id: spec.accountId
       }
     });
-    return 'updated';
+    return 'created';
+  } catch (err) {
+    // A concurrent save may win the unique source_key insert. Re-read and
+    // reconcile that row instead of reporting a false sync failure.
+    const concurrent = await findEntry(spec.sourceKey);
+    if (!concurrent) throw err;
+    return updateExistingEntry(concurrent, spec);
   }
-  await rest('money_entries', {
-    method: 'POST',
+}
+
+async function updateExistingEntry(existing, spec) {
+  // Re-saving also repairs a derived row left in an old bucket by a previous
+  // version of the account sync.
+  const sameAmount = cents(existing.amount) === spec.amount;
+  const sameBucket = existing.bucket_id === spec.bucketId;
+  if (sameAmount && sameBucket) return 'unchanged';
+  await rest('money_entries?id=eq.' + encodeURIComponent(existing.id), {
+    method: 'PATCH',
     body: {
       bucket_id: spec.bucketId,
-      direction: spec.direction,
       amount: spec.amount,
-      scope: 'BUSINESS',
-      category: spec.category,
       occurred_on: spec.occurredOn,
       note: spec.note,
-      source: spec.source,
-      source_key: spec.sourceKey,
       account_id: spec.accountId
     }
   });
-  return 'created';
+  return sameBucket ? 'updated' : 'moved';
 }
 
 /**
  * Reconcile the ledger for one account row.
  *
  * @param {object} account  A discord_accounts row, post-write.
- * @param {object} [opts]   { bucketId } to post into a specific bucket.
  * @returns {Promise<{ok: boolean, reason?: string, posted?: object}>}
  */
-async function syncAccountMoney(account, opts) {
-  const options = opts || {};
+async function syncAccountMoney(account) {
   if (!account || !account.id) {
     return { ok: false, reason: 'No account to reconcile.' };
   }
   try {
-    const bucketId = options.bucketId || await findBucketId();
+    const bucketId = await findUSDTBucketId();
     if (!bucketId) {
-      // No buckets yet. Not an error worth failing a save over; the operator just
-      // has not created one, or has not run the migration.
-      return { ok: false, reason: 'No live money bucket exists. Add a Trading Capital bucket on the Money page so account buys have somewhere to post.' };
+      return {
+        ok: false,
+        reason: 'The live "USDT" bucket with currency USDT was not found. Account money was not synced.'
+      };
     }
 
     const key = accountKey(account);
     if (!key) return { ok: false, reason: 'Account has no id to reconcile against.' };
+
+    const staleMirrorFirst = await findEntry('usdt:sale1:' + key);
+    const staleMirrorSecond = await findEntry('usdt:sale2:' + key);
+    if (staleMirrorFirst || staleMirrorSecond) {
+      return {
+        ok: false,
+        reason: 'A stale duplicate account-sale ledger entry exists. It was left unchanged; run the approved cleanup migration before reconciling this account.'
+      };
+    }
 
     const label = account.username
       ? '@' + account.username
@@ -205,28 +206,6 @@ async function syncAccountMoney(account, opts) {
         note: 'Part 2 from ' + label,
         source: 'ACCOUNT_SALE',
         sourceKey: 'sale2:' + key,
-        accountId: account.id
-      }),
-      usdtSaleFirst: await reconcile({
-        bucketId: await findUSDTWalletId(),
-        direction: 'IN',
-        amount: money(account.sell_paid_first),
-        category: CATEGORY_SALE,
-        occurredOn: soldAt || addedOn,
-        note: 'Sale Part 1 from ' + label,
-        source: 'ACCOUNT_SALE',
-        sourceKey: 'usdt:sale1:' + key,
-        accountId: account.id
-      }),
-      usdtSaleSecond: await reconcile({
-        bucketId: await findUSDTWalletId(),
-        direction: 'IN',
-        amount: money(account.sell_paid_second),
-        category: CATEGORY_SALE,
-        occurredOn: soldAt || addedOn,
-        note: 'Sale Part 2 from ' + label,
-        source: 'ACCOUNT_SALE',
-        sourceKey: 'usdt:sale2:' + key,
         accountId: account.id
       }),
     };
